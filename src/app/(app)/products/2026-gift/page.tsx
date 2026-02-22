@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 import { redirect } from "next/navigation";
 import { GiftPurchaseForm } from "@/components/GiftPurchaseForm";
 import { ConfigNotice } from "@/components/ConfigNotice";
@@ -14,10 +14,14 @@ export default async function Product2026GiftPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <Link href="/" className="text-sm text-zinc-600 hover:underline">
-        ← 홈
-      </Link>
+    <div className="space-y-8">
+      <div className="text-center sm:text-left">
+        <BackToHomeLink className="mb-4 block">홈</BackToHomeLink>
+        <h1 className="text-4xl font-bold text-zinc-900 mb-4">2026년 운세 선물하기</h1>
+        <p className="text-zinc-600">
+          소중한 사람에게 올 한 해 운세를 선물해보세요
+        </p>
+      </div>
       <ConfigNotice missingSupabase={!runtimeConfig.supabaseReady} missingToss={!runtimeConfig.tossReady} />
       <GiftPurchaseForm />
     </div>

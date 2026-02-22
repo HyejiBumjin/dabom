@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
@@ -56,25 +56,25 @@ function CheckoutSuccessContent() {
 
   if (status === "error") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+      <div className="text-center sm:text-left space-y-6">
+        <h1 className="text-4xl font-bold text-zinc-900 mb-4">결제 확인</h1>
         <p className="text-red-600">{error}</p>
-        <Link href="/" className="text-zinc-600 hover:underline">
-          홈으로
-        </Link>
+        <BackToHomeLink className="block" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <p className="text-zinc-600">결제 확인 중...</p>
+    <div className="text-center sm:text-left">
+      <h1 className="text-4xl font-bold text-zinc-900 mb-4">결제 확인 중</h1>
+      <p className="text-zinc-600">잠시만 기다려 주세요.</p>
     </div>
   );
 }
 
 export default function CheckoutSuccessPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+    <Suspense fallback={<div className="text-center text-zinc-600 py-12">로딩 중...</div>}>
       <CheckoutSuccessContent />
     </Suspense>
   );

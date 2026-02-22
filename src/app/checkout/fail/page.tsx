@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 function CheckoutFailContent() {
   const searchParams = useSearchParams();
@@ -10,20 +10,21 @@ function CheckoutFailContent() {
   const message = searchParams.get("message");
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
-      <h2 className="text-xl font-semibold text-zinc-900">결제 실패</h2>
+    <div className="text-center sm:text-left space-y-6">
+      <h1 className="text-4xl font-bold text-zinc-900 mb-4">결제 실패</h1>
+      <p className="text-zinc-600">
+        결제 처리 중 문제가 발생했습니다.
+      </p>
       {code && <p className="text-sm text-zinc-600">코드: {code}</p>}
       {message && <p className="text-sm text-zinc-600">{decodeURIComponent(message)}</p>}
-      <Link href="/" className="text-zinc-600 hover:underline">
-        홈으로
-      </Link>
+      <BackToHomeLink className="block" />
     </div>
   );
 }
 
 export default function CheckoutFailPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+    <Suspense fallback={<div className="text-center text-zinc-600 py-12">로딩 중...</div>}>
       <CheckoutFailContent />
     </Suspense>
   );

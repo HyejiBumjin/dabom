@@ -8,13 +8,14 @@ import { Label } from "@/components/ui/label";
 import { TossCheckoutWidget } from "./TossCheckoutWidget";
 import { runtimeConfig } from "@/lib/runtime-config";
 
-export function GiftPurchaseForm() {
+export function GiftPurchaseForm({ preview }: { preview?: boolean } = {}) {
   const [receiverName, setReceiverName] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const createOrder = async () => {
+    if (preview) return;
     setLoading(true);
     setError(null);
     try {
@@ -40,7 +41,7 @@ export function GiftPurchaseForm() {
     }
   };
 
-  if (!runtimeConfig.tossReady) {
+  if (!preview && !runtimeConfig.tossReady) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-zinc-500">

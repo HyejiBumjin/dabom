@@ -11,7 +11,7 @@ export default async function AppLayout({
   const { data: { user } } = await (supabase?.auth.getUser() ?? { data: { user: null } });
 
   return (
-    <div className="min-h-screen bg-zinc-50">
+    <div className="min-h-screen bg-[#f7f7f7]">
       <TopNav
         userEmail={user?.email ?? null}
         onLogout={async () => {
@@ -20,7 +20,7 @@ export default async function AppLayout({
           await s?.auth.signOut();
         }}
       />
-      <main className="mx-auto max-w-2xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-2xl px-4 py-16 sm:p-0 sm:flex sm:flex-col sm:items-center sm:justify-center sm:min-h-[calc(100vh-56px)] sm:-mt-[56px]">{children}</main>
     </div>
   );
 }

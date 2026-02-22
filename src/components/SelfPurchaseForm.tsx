@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { TossCheckoutWidget } from "./TossCheckoutWidget";
 import { runtimeConfig } from "@/lib/runtime-config";
 
-export function SelfPurchaseForm() {
+export function SelfPurchaseForm({ preview }: { preview?: boolean } = {}) {
   const [birthDate, setBirthDate] = useState("");
   const [birthTime, setBirthTime] = useState("");
   const [gender, setGender] = useState("");
@@ -19,6 +19,7 @@ export function SelfPurchaseForm() {
   const [error, setError] = useState<string | null>(null);
 
   const createOrder = async () => {
+    if (preview) return;
     if (!birthDate) {
       setError("생년월일을 입력해 주세요.");
       return;
@@ -53,7 +54,7 @@ export function SelfPurchaseForm() {
     }
   };
 
-  if (!runtimeConfig.tossReady) {
+  if (!preview && !runtimeConfig.tossReady) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-zinc-500">

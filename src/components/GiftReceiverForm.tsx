@@ -10,9 +10,15 @@ import { Select } from "@/components/ui/select";
 interface GiftReceiverFormProps {
   token: string;
   onSuccess?: (reportId: string) => void;
+  /** 화면 디자인 미리보기용 - 제출 비활성화 */
+  preview?: boolean;
 }
 
-export function GiftReceiverForm({ token, onSuccess }: GiftReceiverFormProps) {
+export function GiftReceiverForm({
+  token,
+  onSuccess,
+  preview,
+}: GiftReceiverFormProps) {
   const [birthDate, setBirthDate] = useState("");
   const [birthTime, setBirthTime] = useState("");
   const [gender, setGender] = useState("");
@@ -21,6 +27,7 @@ export function GiftReceiverForm({ token, onSuccess }: GiftReceiverFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (preview) return;
     if (!birthDate) {
       setError("생년월일을 입력해 주세요.");
       return;
@@ -59,7 +66,9 @@ export function GiftReceiverForm({ token, onSuccess }: GiftReceiverFormProps) {
     <Card>
       <CardHeader>
         <CardTitle>2026년 운세 선물을 받으셨습니다</CardTitle>
-        <p className="text-sm text-zinc-500">운세를 보려면 정보를 입력해 주세요.</p>
+        <p className="text-sm text-zinc-500">
+          운세를 보려면 정보를 입력해 주세요.
+        </p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

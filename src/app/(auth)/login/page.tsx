@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,10 @@ function LoginContent() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-4">
-      <div className="w-full max-w-sm space-y-4">
-        <h1 className="text-center text-2xl font-bold text-zinc-900">로그인</h1>
+    <div className="text-center w-full">
+      <div className="w-full max-w-sm mx-auto space-y-4">
+        <h1 className="text-4xl font-bold text-zinc-900 mb-4">로그인</h1>
+        <p className="text-zinc-600">카카오로 간편하게 시작하세요</p>
         <ConfigNotice
           missingSupabase={!runtimeConfig.supabaseReady}
         />
@@ -38,9 +39,7 @@ function LoginContent() {
           카카오로 로그인
         </Button>
         <p className="text-center">
-          <Link href="/" className="text-sm text-zinc-600 hover:underline">
-            홈으로
-          </Link>
+          <BackToHomeLink />
         </p>
       </div>
     </div>
@@ -49,7 +48,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+    <Suspense fallback={<div className="text-center text-zinc-600 py-12">로딩 중...</div>}>
       <LoginContent />
     </Suspense>
   );

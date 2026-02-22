@@ -35,7 +35,13 @@ export default async function ReportPage({
   const result = report.result as Parameters<typeof FortuneReport>[0]["result"];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      <div className="text-center sm:text-left">
+        <h1 className="text-4xl font-bold text-zinc-900 mb-4">2026년 운세</h1>
+        <p className="text-zinc-600">
+          흐름과 기회, 그리고 한 통의 편지
+        </p>
+      </div>
       <FortuneReport result={result} reportId={id} giftToken={giftToken} />
     </div>
   );
