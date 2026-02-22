@@ -20,7 +20,7 @@ export default async function LandingPage() {
         }}
       />
       <main className="mx-auto max-w-2xl px-4 py-16 sm:p-0 sm:flex sm:flex-col sm:items-center sm:justify-center sm:mt-16">
-        <div className="text-center">
+        <div className="text-center animate-fade-in-up">
           <h1 className="text-4xl font-bold text-zinc-900 mb-4 font-east-sea-dokdo">
             다봄
           </h1>
@@ -34,7 +34,7 @@ export default async function LandingPage() {
             className="w-full max-w-48 mx-auto mt-8 sm:max-w-55"
           />
         </div>
-        <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">
+        <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center animate-fade-in-up animate-delay-2">
           <Link href="/products/2026" className="w-full sm:w-[50%]">
             <Button
               size="lg"
@@ -62,7 +62,7 @@ export default async function LandingPage() {
           </Link>
         </div>
 
-        <div className="mt-24 pt-8 border-t border-zinc-200 w-full max-w-2xl sm:mb-20">
+        <div className="mt-24 pt-8 border-t border-zinc-200 w-full max-w-2xl sm:mb-20 animate-fade-in-up animate-delay-4">
           <p className="text-sm text-zinc-500 text-center mb-4">
             디자인 미리보기
           </p>

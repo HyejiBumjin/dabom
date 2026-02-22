@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import { CustomSelect } from "@/components/ui/custom-select";
+import { DateSelect } from "@/components/ui/date-select";
 
 interface GiftReceiverFormProps {
   token: string;
@@ -30,6 +30,14 @@ export function GiftReceiverForm({
     if (preview) return;
     if (!birthDate) {
       setError("생년월일을 입력해 주세요.");
+      return;
+    }
+    if (!birthTime) {
+      setError("출생시간을 선택해 주세요.");
+      return;
+    }
+    if (!gender) {
+      setError("성별을 선택해 주세요.");
       return;
     }
     setLoading(true);
@@ -72,36 +80,51 @@ export function GiftReceiverForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <DateSelect
+            id="birthDate"
+            label="생년월일 *"
+            value={birthDate}
+            onChange={setBirthDate}
+            required
+          />
           <div>
-            <Label htmlFor="birthDate">생년월일 *</Label>
-            <Input
-              id="birthDate"
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="birthTime">출생시간 (선택)</Label>
-            <Input
+            <Label htmlFor="birthTime">출생시간 *</Label>
+            <CustomSelect
               id="birthTime"
-              type="time"
               value={birthTime}
-              onChange={(e) => setBirthTime(e.target.value)}
+              onChange={setBirthTime}
+              placeholder="선택"
+              required
+              options={[
+                { value: "모름", label: "모름" },
+                { value: "23:00", label: "자시 (23:00~01:00)" },
+                { value: "01:00", label: "축시 (01:00~03:00)" },
+                { value: "03:00", label: "인시 (03:00~05:00)" },
+                { value: "05:00", label: "묘시 (05:00~07:00)" },
+                { value: "07:00", label: "진시 (07:00~09:00)" },
+                { value: "09:00", label: "사시 (09:00~11:00)" },
+                { value: "11:00", label: "오시 (11:00~13:00)" },
+                { value: "13:00", label: "미시 (13:00~15:00)" },
+                { value: "15:00", label: "신시 (15:00~17:00)" },
+                { value: "17:00", label: "유시 (17:00~19:00)" },
+                { value: "19:00", label: "술시 (19:00~21:00)" },
+                { value: "21:00", label: "해시 (21:00~23:00)" },
+              ]}
             />
           </div>
           <div>
-            <Label htmlFor="gender">성별 (선택)</Label>
-            <Select
+            <Label htmlFor="gender">성별 *</Label>
+            <CustomSelect
               id="gender"
               value={gender}
-              onChange={(e) => setGender(e.target.value)}
-            >
-              <option value="">선택</option>
-              <option value="M">남성</option>
-              <option value="F">여성</option>
-            </Select>
+              onChange={setGender}
+              placeholder="선택"
+              required
+              options={[
+                { value: "M", label: "남성" },
+                { value: "F", label: "여성" },
+              ]}
+            />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" disabled={loading} className="w-full">
