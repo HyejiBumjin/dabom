@@ -29,7 +29,7 @@ export const env = {
 } as const;
 
 export const hasSupabase = (): boolean =>
-  !!env.SUPABASE_URL && !!env.SUPABASE_ANON_KEY && !!env.SUPABASE_SERVICE_ROLE_KEY;
+  !!env.SUPABASE_URL && !!env.SUPABASE_ANON_KEY;
 
 export const hasToss = (): boolean =>
   !!env.TOSS_CLIENT_KEY && !!env.TOSS_SECRET_KEY && !!env.TOSS_CARD_VARIANT_KEY;
