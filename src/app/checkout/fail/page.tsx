@@ -1,13 +1,29 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 function CheckoutFailContent() {
   const searchParams = useSearchParams();
+  const orderId = searchParams.get("order_id") || searchParams.get("merchant_uid");
+  const paymentId = searchParams.get("payment_id") || searchParams.get("imp_uid");
+  const status = searchParams.get("status");
   const code = searchParams.get("code");
   const message = searchParams.get("message");
+
+  useEffect(() => {
+    if (!orderId) return;
+    fetch("/api/payments/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        order_id: orderId,
+        payment_id: paymentId || undefined,
+        payment_status: status === "canceled" ? "canceled" : "failed",
+      }),
+    }).catch(() => {});
+  }, [orderId, paymentId, status]);
 
   return (
     <div className="text-center sm:text-left space-y-6">

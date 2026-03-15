@@ -27,7 +27,7 @@ export async function canAccessReportByGiftToken(
     .from("gifts")
     .select("id")
     .eq("token", giftToken)
-    .eq("status", "used")
+    .eq("gift_status", "used")
     .single();
   if (!gift) return false;
   const { data: report } = await supabase

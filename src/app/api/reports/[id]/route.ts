@@ -1,14 +1,33 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { canAccessReport, canAccessReportByGiftToken } from "@/lib/fortune/access";
+
+const reportParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+const reportQuerySchema = z.object({
+  giftToken: z.string().optional(),
+});
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const parsedParams = reportParamsSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: "Invalid report id" }, { status: 400 });
+  }
+  const { id } = parsedParams.data;
   const { searchParams } = new URL(request.url);
-  const giftToken = searchParams.get("giftToken");
+  const parsedQuery = reportQuerySchema.safeParse({
+    giftToken: searchParams.get("giftToken") || undefined,
+  });
+  if (!parsedQuery.success) {
+    return NextResponse.json({ error: "Invalid query" }, { status: 400 });
+  }
+  const giftToken = parsedQuery.data.giftToken || null;
 
   const supabase = await createServiceRoleClient();
   if (!supabase) {

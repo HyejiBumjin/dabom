@@ -1,4 +1,4 @@
--- fortune-letter-2026 database schema
+-- dabom database schema
 -- Run in Supabase SQL Editor
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -17,19 +17,21 @@ CREATE TABLE orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   product_code TEXT NOT NULL,
-  toss_order_id TEXT NOT NULL UNIQUE,
+  order_id TEXT NOT NULL UNIQUE,
+  payment_id TEXT,
   amount INT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
-  payment_key TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','canceled')),
   gift_id UUID,
+  report_id UUID,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_orders_toss_order_id ON orders(toss_order_id);
+CREATE INDEX idx_orders_order_id ON orders(order_id);
 CREATE INDEX idx_orders_owner_id ON orders(owner_id);
 CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_report_id ON orders(report_id);
 
 -- gifts
 CREATE TABLE gifts (
@@ -37,15 +39,15 @@ CREATE TABLE gifts (
   token TEXT NOT NULL UNIQUE,
   buyer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   receiver_name TEXT,
-  status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created','active','used')),
-  used_at TIMESTAMPTZ,
+  gift_status TEXT NOT NULL DEFAULT 'created' CHECK (gift_status IN ('created','active','used')),
+  gift_opened_at TIMESTAMPTZ,
   report_id UUID,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_gifts_token ON gifts(token);
 CREATE INDEX idx_gifts_buyer_id ON gifts(buyer_id);
-CREATE INDEX idx_gifts_status ON gifts(status);
+CREATE INDEX idx_gifts_status ON gifts(gift_status);
 
 -- fortune_reports
 CREATE TABLE fortune_reports (
@@ -69,6 +71,22 @@ CREATE TABLE fortune_letters (
 );
 
 CREATE INDEX idx_fortune_letters_report_id ON fortune_letters(report_id);
+
+-- saju_calculations (provider cache)
+CREATE TABLE saju_calculations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  input_hash TEXT NOT NULL,
+  normalized_input JSONB NOT NULL,
+  provider TEXT NOT NULL,
+  provider_version TEXT NOT NULL,
+  canonical_json JSONB NOT NULL,
+  provider_raw JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_saju_calculations_input_hash_provider
+  ON saju_calculations(input_hash, provider);
+CREATE INDEX idx_saju_calculations_created_at ON saju_calculations(created_at DESC);
 
 -- updated_at trigger for orders
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -95,6 +113,7 @@ ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gifts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fortune_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fortune_letters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE saju_calculations ENABLE ROW LEVEL SECURITY;
 
 -- products: select all
 CREATE POLICY "products_select_all" ON products FOR SELECT USING (true);
@@ -124,3 +143,7 @@ CREATE POLICY "letters_select_via_report" ON fortune_letters FOR SELECT
     )
   );
 CREATE POLICY "letters_insert_service" ON fortune_letters FOR INSERT WITH CHECK (true);
+
+-- saju_calculations: service-only usage (service role bypasses RLS)
+CREATE POLICY "saju_calculations_select_service" ON saju_calculations FOR SELECT USING (true);
+CREATE POLICY "saju_calculations_insert_service" ON saju_calculations FOR INSERT WITH CHECK (true);

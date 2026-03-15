@@ -1,10 +1,10 @@
-import { hasSupabase, hasToss } from "./env";
+import { hasPortOne, hasSupabase } from "./env";
 
 /**
  * Runtime feature flags for preview mode
  */
 export const runtimeConfig = {
   supabaseReady: hasSupabase(),
-  tossReady: hasToss(),
-  previewMode: !hasSupabase() || !hasToss(),
+  portoneReady: hasPortOne(),
+  previewMode: !hasSupabase() || !hasPortOne(),
 } as const;

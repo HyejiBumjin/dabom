@@ -14,7 +14,7 @@ export default async function Product2026GiftPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full space-y-8">
       <div className="text-center sm:text-left">
         <BackToHomeLink className="mb-4 block">홈</BackToHomeLink>
         <h1 className="text-4xl font-bold text-zinc-900 mb-4">2026년 운세 선물하기</h1>
@@ -22,7 +22,7 @@ export default async function Product2026GiftPage() {
           소중한 사람에게 올 한 해 운세를 선물해보세요
         </p>
       </div>
-      <ConfigNotice missingSupabase={!runtimeConfig.supabaseReady} missingToss={!runtimeConfig.tossReady} />
+      <ConfigNotice missingSupabase={!runtimeConfig.supabaseReady} missingPortone={!runtimeConfig.portoneReady} />
       <GiftPurchaseForm />
     </div>
   );

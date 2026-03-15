@@ -1,4 +1,4 @@
-# 다봄 (fortune-letter-2026)
+# 다봄 (dabom)
 
 운세 서비스 - 본인용 및 선물하기
 
@@ -8,7 +8,7 @@
 - TypeScript (strict)
 - TailwindCSS
 - Supabase (Postgres + Auth)
-- 결제: 현재 Toss Payments (카드 결제 전용) 사용 중, **추후 변경 예정 (미정)**
+- 결제: PortOne 결제창 + KCP PG
 
 ## Setup
 
@@ -27,11 +27,11 @@ npm install
    - Supabase Redirect URL: `https://<project-ref>.supabase.co/auth/v1/callback`
    - Kakao Redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
 
-### 3. 결제 설정 (현재 Toss Payments, 추후 변경 예정)
+### 3. 결제 설정 (PortOne + KCP)
 
-1. [Toss Payments](https://www.tosspayments.com) 가입
-2. 테스트/라이브 키 발급
-3. **카드 결제 전용** 위젯용 Variant Key 생성 (위젯 설정에서 카드만 노출)
+1. [PortOne](https://portone.io) 계정 및 결제 연동 설정
+2. KCP 채널/가맹점 연동
+3. 결제창 호출용 가맹점 식별자(Store ID)와 서버 검증용 API Secret 발급
 
 ### 4. 환경 변수
 
@@ -42,10 +42,15 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_TOSS_CLIENT_KEY=
-TOSS_SECRET_KEY=
-NEXT_PUBLIC_TOSS_CARD_VARIANT_KEY=
-TOSS_WEBHOOK_SECRET=  # optional
+NEXT_PUBLIC_PORTONE_STORE_ID=
+NEXT_PUBLIC_PORTONE_CHANNEL_KEY=
+PORTONE_API_SECRET=
+ABLECITY_API_URL=
+ABLECITY_API_KEY=
+ABLECITY_CITY=서울특별시
+ABLECITY_TIMEOUT_MS=10000
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
 ### 5. 로컬 실행
@@ -65,7 +70,7 @@ http://localhost:3000 에서 확인
 | `/products/2026` | 본인용 운세 결제 |
 | `/products/2026-gift` | 선물하기 결제 |
 | `/products/2026-gift/sent?token=` | 선물 링크 공유 |
-| `/checkout/success` | 결제 성공 콜백 |
+| `/checkout/success` | PortOne 성공 콜백 처리 |
 | `/checkout/fail` | 결제 실패 |
 | `/reports/[id]` | 운세 결과 |
 | `/reports/[id]/letter` | 운세 편지 |
@@ -82,4 +87,5 @@ http://localhost:3000 에서 확인
 
 - `SUPABASE_SERVICE_ROLE_KEY`는 **절대 클라이언트에 노출 금지**
 - API 라우트에서만 사용
+- PortOne 결제 완료 처리는 반드시 `/api/payments/confirm` 서버 검증을 통과해야 함
 - 선물 토큰은 1회 사용 후 소멸

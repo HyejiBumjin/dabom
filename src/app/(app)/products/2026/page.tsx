@@ -16,7 +16,7 @@ export default async function Product2026Page() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full space-y-8">
       <div className="text-center sm:text-left">
         <BackToHomeLink className="mb-4 block" href="/"></BackToHomeLink>
         <h1 className="text-4xl font-bold text-zinc-900 mb-4">
@@ -26,7 +26,7 @@ export default async function Product2026Page() {
       </div>
       <ConfigNotice
         missingSupabase={!runtimeConfig.supabaseReady}
-        missingToss={!runtimeConfig.tossReady}
+        missingPortone={!runtimeConfig.portoneReady}
       />
       <SelfPurchaseForm />
     </div>

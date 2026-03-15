@@ -14,11 +14,11 @@ export default async function GiftTokenPage({
 
   const { data: gift } = await supabase
     .from("gifts")
-    .select("id, status")
+    .select("id, gift_status")
     .eq("token", token)
     .single();
 
-  if (!gift || gift.status !== "active") {
+  if (!gift || gift.gift_status !== "active") {
     notFound();
   }
 

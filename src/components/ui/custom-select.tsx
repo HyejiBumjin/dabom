@@ -91,7 +91,7 @@ export function CustomSelect({
               <button
                 type="button"
                 className={cn(
-                  "flex w-full items-center px-3 py-2.5 text-sm transition-colors hover:bg-zinc-100",
+                  "flex w-full items-center justify-center gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-zinc-100",
                   value === option.value
                     ? "bg-zinc-50 font-medium text-zinc-900"
                     : "text-zinc-700"
@@ -110,14 +110,13 @@ export function CustomSelect({
                     strokeWidth={2.5}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="mr-2 size-4 text-zinc-900"
+                    className="size-4 shrink-0 text-zinc-900"
                     aria-hidden
                   >
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
                 )}
-                {value !== option.value && <span className="mr-2 size-4" />}
-                {option.label}
+                <span className="text-center">{option.label}</span>
               </button>
             </li>
           ))}

@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TossCheckoutWidget } from "./TossCheckoutWidget";
+import { PortOneCheckoutWidget } from "./PortOneCheckoutWidget";
 import { runtimeConfig } from "@/lib/runtime-config";
 
 export function GiftPurchaseForm({ preview }: { preview?: boolean } = {}) {
   const [receiverName, setReceiverName] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [buyerEmail, setBuyerEmail] = useState<string | undefined>(undefined);
+  const [buyerPhone, setBuyerPhone] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +21,7 @@ export function GiftPurchaseForm({ preview }: { preview?: boolean } = {}) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/checkout/create", {
+      const res = await fetch("/api/payments/prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -33,7 +35,9 @@ export function GiftPurchaseForm({ preview }: { preview?: boolean } = {}) {
         setError(data.error || "주문 생성 실패");
         return;
       }
-      setOrderId(data.orderId);
+      setOrderId(data.order_id);
+      setBuyerEmail(data.buyer?.email ?? undefined);
+      setBuyerPhone(data.buyer?.phone ?? undefined);
     } catch {
       setError("주문 생성 중 오류가 발생했습니다.");
     } finally {
@@ -41,11 +45,11 @@ export function GiftPurchaseForm({ preview }: { preview?: boolean } = {}) {
     }
   };
 
-  if (!preview && !runtimeConfig.tossReady) {
+  if (!preview && !runtimeConfig.portoneReady) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-zinc-500">
-          Toss Payments가 설정되지 않았습니다.
+          PortOne 환경 변수가 설정되지 않았습니다.
         </CardContent>
       </Card>
     );
@@ -58,11 +62,12 @@ export function GiftPurchaseForm({ preview }: { preview?: boolean } = {}) {
           <CardTitle>결제</CardTitle>
         </CardHeader>
         <CardContent>
-          <TossCheckoutWidget
+          <PortOneCheckoutWidget
             orderId={orderId}
             amount={3900}
             orderName="2026년 운세 선물하기"
-            onReady={() => {}}
+            buyerEmail={buyerEmail}
+            buyerTel={buyerPhone}
           />
         </CardContent>
       </Card>

@@ -24,6 +24,9 @@ export function TopNav({ userEmail }: TopNavProps) {
         <div className="flex items-center gap-3">
           {userEmail ? (
             <>
+              <Link href="/reports" className="text-sm text-zinc-700 hover:underline">
+                내 운세
+              </Link>
               <span className="text-sm text-zinc-600">{userEmail}</span>
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 로그아웃

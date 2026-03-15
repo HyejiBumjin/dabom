@@ -6,53 +6,69 @@ import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
-  const orderId = searchParams.get("orderId");
-  const paymentKey = searchParams.get("paymentKey");
-  const amount = searchParams.get("amount");
+  const orderId = searchParams.get("order_id") || searchParams.get("merchant_uid");
+  const paymentId = searchParams.get("payment_id") || searchParams.get("imp_uid");
 
   const [status, setStatus] = useState<"loading" | "redirect" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!orderId || !paymentKey || !amount) {
+    if (!orderId || !paymentId) {
       setStatus("error");
       setError("결제 정보가 올바르지 않습니다.");
       return;
     }
 
+    const guardKey = `confirm:${orderId}:${paymentId}`;
+    if (typeof window !== "undefined" && sessionStorage.getItem(guardKey)) {
+      return;
+    }
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(guardKey, "inflight");
+    }
+
     const confirm = async () => {
-      const res = await fetch("/api/checkout/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paymentKey,
-          orderId,
-          amount: parseInt(amount, 10),
-        }),
-      });
+      try {
+        const res = await fetch("/api/payments/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            payment_id: paymentId,
+            order_id: orderId,
+          }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (!res.ok) {
+        if (!res.ok) {
+          setStatus("error");
+          setError(data.error || "결제 확인 실패");
+          if (typeof window !== "undefined") sessionStorage.removeItem(guardKey);
+          return;
+        }
+
+        if (data.reportId) {
+          sessionStorage.setItem(guardKey, "done");
+          window.location.href = `/reports/${data.reportId}`;
+          setStatus("redirect");
+        } else if (data.giftToken) {
+          sessionStorage.setItem(guardKey, "done");
+          window.location.href = `/products/2026-gift/sent?token=${encodeURIComponent(data.giftToken)}`;
+          setStatus("redirect");
+        } else {
+          setStatus("error");
+          setError("처리할 수 없는 응답입니다.");
+          if (typeof window !== "undefined") sessionStorage.removeItem(guardKey);
+        }
+      } catch {
         setStatus("error");
-        setError(data.error || "결제 확인 실패");
-        return;
-      }
-
-      if (data.reportId) {
-        window.location.href = `/reports/${data.reportId}`;
-        setStatus("redirect");
-      } else if (data.giftToken) {
-        window.location.href = `/products/2026-gift/sent?token=${encodeURIComponent(data.giftToken)}`;
-        setStatus("redirect");
-      } else {
-        setStatus("error");
-        setError("처리할 수 없는 응답입니다.");
+        setError("결제 확인 실패");
+        if (typeof window !== "undefined") sessionStorage.removeItem(guardKey);
       }
     };
 
     confirm();
-  }, [orderId, paymentKey, amount]);
+  }, [orderId, paymentId]);
 
   if (status === "error") {
     return (

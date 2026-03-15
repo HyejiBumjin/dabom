@@ -1,5 +1,5 @@
 {
-  "name": "fortune-letter-2026",
+  "name": "dabom",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,11 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@portone/browser-sdk": "^0.1.3",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
     "next": "14.2.35",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

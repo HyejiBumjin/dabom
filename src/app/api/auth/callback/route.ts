@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { env } from "@/lib/env";
+
+const callbackQuerySchema = z.object({
+  code: z.string().min(1),
+  next: z.string().optional(),
+});
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
-
-  if (!code) {
+  const parsed = callbackQuerySchema.safeParse({
+    code: searchParams.get("code"),
+    next: searchParams.get("next") ?? "/",
+  });
+  if (!parsed.success) {
     return NextResponse.redirect(`${origin}/login?error=no_code`);
   }
+  const { code, next } = parsed.data;
 
   const supabase = await createClient();
   if (!supabase) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CustomSelect } from "./custom-select";
 import { Label } from "./label";
 
@@ -29,10 +29,20 @@ export function DateSelect({
   yearFrom = 1930,
   yearTo = new Date().getFullYear(),
 }: DateSelectProps) {
-  const [yearStr, monthStr, dayStr] = value ? value.split("-") : ["", "", ""];
-  const year = yearStr ? parseInt(yearStr, 10) : 0;
-  const month = monthStr ? parseInt(monthStr, 10) : 0;
-  const day = dayStr ? parseInt(dayStr, 10) : 0;
+  const [selectedYear, setSelectedYear] = useState<number>(0);
+  const [selectedMonth, setSelectedMonth] = useState<number>(0);
+  const [selectedDay, setSelectedDay] = useState<number>(0);
+
+  useEffect(() => {
+    if (!value) return;
+    const [yearStr, monthStr, dayStr] = value.split("-");
+    const year = yearStr ? parseInt(yearStr, 10) : 0;
+    const month = monthStr ? parseInt(monthStr, 10) : 0;
+    const day = dayStr ? parseInt(dayStr, 10) : 0;
+    setSelectedYear(year);
+    setSelectedMonth(month);
+    setSelectedDay(day);
+  }, [value]);
 
   const yearOptions = useMemo(() => {
     const opts = [];
@@ -51,24 +61,21 @@ export function DateSelect({
   }, []);
 
   const dayOptions = useMemo(() => {
-    const maxDay = year && month ? getDaysInMonth(year, month) : 31;
+    const maxDay = selectedYear && selectedMonth ? getDaysInMonth(selectedYear, selectedMonth) : 31;
     const opts = [];
     for (let d = 1; d <= maxDay; d++) {
       opts.push({ value: String(d), label: `${d}일` });
     }
     return opts;
-  }, [year, month]);
+  }, [selectedYear, selectedMonth]);
 
   const update = (y: number, m: number, d: number) => {
+    setSelectedYear(y);
+    setSelectedMonth(m);
+    setSelectedDay(d);
+
     if (!y || !m || !d) {
-      const parts = [];
-      if (y) parts.push(String(y).padStart(4, "0"));
-      else parts.push("");
-      if (m) parts.push(String(m).padStart(2, "0"));
-      else parts.push("");
-      if (d) parts.push(String(d).padStart(2, "0"));
-      else parts.push("");
-      onChange(parts.some(Boolean) ? "" : "");
+      onChange("");
       return;
     }
     const maxDay = getDaysInMonth(y, m);
@@ -81,24 +88,24 @@ export function DateSelect({
   return (
     <div id={id}>
       {label && <Label>{label}</Label>}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-[2fr_1fr_1fr] sm:grid-cols-3 gap-2">
         <CustomSelect
-          value={year ? String(year) : ""}
-          onChange={(v) => update(parseInt(v, 10), month, day)}
+          value={selectedYear ? String(selectedYear) : ""}
+          onChange={(v) => update(parseInt(v, 10), selectedMonth, selectedDay)}
           options={yearOptions}
           placeholder="년"
           required={required}
         />
         <CustomSelect
-          value={month ? String(month) : ""}
-          onChange={(v) => update(year, parseInt(v, 10), day)}
+          value={selectedMonth ? String(selectedMonth) : ""}
+          onChange={(v) => update(selectedYear, parseInt(v, 10), selectedDay)}
           options={monthOptions}
           placeholder="월"
           required={required}
         />
         <CustomSelect
-          value={day ? String(day) : ""}
-          onChange={(v) => update(year, month, parseInt(v, 10))}
+          value={selectedDay ? String(selectedDay) : ""}
+          onChange={(v) => update(selectedYear, selectedMonth, parseInt(v, 10))}
           options={dayOptions}
           placeholder="일"
           required={required}

@@ -22,6 +22,8 @@ export function GiftReceiverForm({
   const [birthDate, setBirthDate] = useState("");
   const [birthTime, setBirthTime] = useState("");
   const [gender, setGender] = useState("");
+  const [calendarType, setCalendarType] = useState("");
+  const [leapMonthType, setLeapMonthType] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +42,14 @@ export function GiftReceiverForm({
       setError("성별을 선택해 주세요.");
       return;
     }
+    if (!calendarType) {
+      setError("양력/음력을 선택해 주세요.");
+      return;
+    }
+    if (!leapMonthType) {
+      setError("평달/윤달을 선택해 주세요.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -53,6 +63,8 @@ export function GiftReceiverForm({
             birthDate,
             birthTime: birthTime || undefined,
             gender: gender || undefined,
+            calendarType,
+            leapMonthType,
           },
         }),
       });
@@ -112,19 +124,49 @@ export function GiftReceiverForm({
               ]}
             />
           </div>
-          <div>
-            <Label htmlFor="gender">성별 *</Label>
-            <CustomSelect
-              id="gender"
-              value={gender}
-              onChange={setGender}
-              placeholder="선택"
-              required
-              options={[
-                { value: "M", label: "남성" },
-                { value: "F", label: "여성" },
-              ]}
-            />
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label htmlFor="gender">성별 *</Label>
+              <CustomSelect
+                id="gender"
+                value={gender}
+                onChange={setGender}
+                placeholder="선택"
+                required
+                options={[
+                  { value: "M", label: "남성" },
+                  { value: "F", label: "여성" },
+                ]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="calendarType">양력 / 음력 *</Label>
+              <CustomSelect
+                id="calendarType"
+                value={calendarType}
+                onChange={setCalendarType}
+                placeholder="선택"
+                required
+                options={[
+                  { value: "solar", label: "양력" },
+                  { value: "lunar", label: "음력" },
+                ]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="leapMonthType">평달 / 윤달 *</Label>
+              <CustomSelect
+                id="leapMonthType"
+                value={leapMonthType}
+                onChange={setLeapMonthType}
+                placeholder="선택"
+                required
+                options={[
+                  { value: "regular", label: "평달" },
+                  { value: "leap", label: "윤달" },
+                ]}
+              />
+            </div>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" disabled={loading} className="w-full">

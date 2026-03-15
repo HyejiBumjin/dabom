@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { generateLetter } from "@/lib/fortune/service";
 import { canAccessReport, canAccessReportByGiftToken } from "@/lib/fortune/access";
+
+const createLetterSchema = z.object({
+  reportId: z.string().uuid(),
+  giftToken: z.string().optional(),
+});
 
 export async function POST(request: Request) {
   const supabase = await createServiceRoleClient();
@@ -12,15 +18,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = await request.json();
-  const { reportId, giftToken } = body;
-
-  if (!reportId) {
-    return NextResponse.json(
-      { error: "reportId required" },
-      { status: 400 }
-    );
+  const raw = await request.json().catch(() => null);
+  const parsed = createLetterSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
+  const { reportId, giftToken } = parsed.data;
 
   const anonClient = await import("@/lib/supabase/server").then((m) => m.createClient());
   const {
@@ -54,7 +57,7 @@ export async function POST(request: Request) {
     .from("fortune_letters")
     .select("id, content")
     .eq("report_id", reportId)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     return NextResponse.json({
