@@ -121,7 +121,7 @@ export function FortuneReport({ result, reportId, giftToken, fromList, ablecityR
       <button
         type="button"
         onClick={() => setOpenLetter(true)}
-        className="block w-full rounded-lg border border-zinc-200 bg-white p-4 text-center font-medium text-zinc-900 transition-colors hover:bg-zinc-50"
+        className="block w-full rounded-lg border border-zinc-200 bg-white p-4 text-center font-medium text-zinc-900 transition-colors hover:bg-zinc-50 mb-10"
       >
         💌 나에게 보내는 운세 편지 열기
       </button>

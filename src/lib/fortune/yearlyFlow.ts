@@ -150,7 +150,7 @@ function deriveRelationshipSignal(signals: DerivedSignals, interaction: FireInte
     return {
       level: "cautious",
       keywords: ["감정 과열", "소통 전략", "거리 조절"],
-      coreMessage: "불의 해에 관계 긴장까지 겹치면서 감정이 쉽게 끓어오를 수 있습니다. 말 한마디가 불씨가 되기 쉬우니, 감정이 올라올 때 한 박자 쉬어가는 습관이 관계를 지켜줍니다.",
+      coreMessage: "불의 해에 관계 긴장까지 겹치면서 감정이 쉽게 끓어오를 수 있습니다. 말 한마디가 불씨가 되기 쉬우니 감정이 올라올 때 한 박자 쉬어가는 습관이 관계를 지켜주고, 그만큼 식은 뒤에 나누는 대화가 관계를 더 단단하게 만드는 계기가 됩니다.",
     };
   }
 
@@ -229,7 +229,7 @@ function deriveHealthSignal(signals: DerivedSignals, interaction: FireInteractio
   if (signals.weakElement === "water" || signals.weakElement === "metal") {
     fireYearBase.level = "challenging";
     fireYearBase.keywords.push("약한 오행 보강 필수");
-    fireYearBase.coreMessage += " 특히 수 기운이나 금 기운이 약한 사주에서는 열 관련 컨디션 저하가 더 빠르게 나타날 수 있으니, 충분한 수분 섭취와 규칙적인 휴식이 반드시 필요합니다.";
+    fireYearBase.coreMessage += " 수 기운이나 금 기운이 약한 사주에서는 열이 쌓일 때 컨디션 저하가 더 빨리 올 수 있으니, 수분과 규칙적인 휴식을 챙기면 이 부분을 잘 지킬 수 있고, 그만큼 올해 에너지를 오래 유지하기 좋습니다.";
   }
   if (signals.selfStrength === "weak") {
     fireYearBase.level = "challenging";
@@ -246,24 +246,24 @@ function deriveCautionSignal(signals: DerivedSignals, interaction: FireInteracti
   const base: YearlyAreaSignal = {
     level: "cautious",
     keywords: ["과열 방지", "감정적 결정 금지", "체력 선관리"],
-    coreMessage: "불의 해에 가장 위험한 것은 과열된 상태에서 내리는 판단입니다.",
+    coreMessage: "불의 해에 가장 위험한 것은 과열된 상태에서 내리는 판단입니다. 그럴 때는 하루 이틀 지나서 다시 보는 습관만 들여도 올해를 훨씬 안정적으로 보낼 수 있습니다.",
   };
 
   if (interaction === "fire_controls_metal") {
     base.level = "challenging";
     base.keywords.push("외부 압박 대응");
-    base.coreMessage = "올해는 외부에서 오는 압박이 클 수 있고, 그 압박 속에서 판단이 흐려지기 쉽습니다. 중요한 결정은 반드시 하루 이상 시간을 두고 다시 점검하는 습관이 필요합니다.";
+    base.coreMessage = "올해는 외부에서 오는 압박이 클 수 있고, 그 압박 속에서 판단이 흐려지기 쉽습니다. 중요한 결정은 하루 이상 시간을 두고 다시 점검하는 습관이 필요하고, 그만큼 이 시기를 잘 견디면 다음 단계로 넘어가는 실력이 쌓입니다.";
   }
   if (signals.hasClash) {
     base.keywords.push("충 주의");
-    base.coreMessage += " 사주에 충의 기운이 있어서 갑작스러운 환경 변화나 관계 갈등이 올 수 있습니다.";
+    base.coreMessage += " 사주에 충의 기운이 있어서 갑작스러운 환경 변화나 관계 갈등이 올 수 있지만, 미리 비상 자금과 대안을 생각해 두면 그때도 선택지를 넓게 가질 수 있습니다.";
   }
   if (signals.hasPunishment) {
     base.keywords.push("형/파 주의");
   }
   if (signals.hasGongmang) {
     base.keywords.push("공망 구간 주의");
-    base.coreMessage += " 공망의 에너지가 있어서 특정 시기에 기대 대비 결과가 미미할 수 있으니, 해당 구간에서는 투입량을 줄이고 관망하는 것이 유리합니다.";
+    base.coreMessage += " 공망의 에너지가 있어서 특정 시기에 기대 대비 결과가 미미하게 느껴질 수 있으니, 그 구간에서는 투입량을 줄이고 충전·준비의 시간으로 쓰는 것이 유리합니다.";
   }
   return base;
 }

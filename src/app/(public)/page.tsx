@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { TopNav } from "@/components/TopNav";
+import { GiftComingSoonButton } from "@/components/GiftComingSoonButton";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function LandingPage() {
@@ -47,71 +48,8 @@ export default async function LandingPage() {
               <span className="mt-4">지금 확인하기</span>
             </Button>
           </Link>
-          <Link href="/products/2026-gift" className="w-full sm:w-[50%]">
-            <Button
-              size="lg"
-              variant="outline"
-              className="w-full flex flex-col items-start justify-between h-auto py-8 cursor-pointer text-left sm:h-full bg-white"
-            >
-              <div className="flex flex-col items-start">
-                <h3 className="text-2xl font-bold">2026년 운세 선물하기</h3>
-                <p>소중한 사람에게 올 한 해 운세를 선물해보세요</p>
-              </div>
-              <span className="mt-4">선물하기</span>
-            </Button>
-          </Link>
-        </div>
-
-        <div className="mt-24 pt-8 border-t border-zinc-200 w-full max-w-2xl sm:mb-20 animate-fade-in-up animate-delay-4">
-          <p className="text-sm text-zinc-500 text-center mb-4">
-            디자인 미리보기
-          </p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            <Link href="/preview/gift-receiver">
-              <Button variant="outline" size="sm">
-                선물 받기
-              </Button>
-            </Link>
-            <Link href="/preview/login">
-              <Button variant="outline" size="sm">
-                로그인
-              </Button>
-            </Link>
-            <Link href="/preview/products-2026">
-              <Button variant="outline" size="sm">
-                2026 운세 보기
-              </Button>
-            </Link>
-            <Link href="/preview/products-2026-gift">
-              <Button variant="outline" size="sm">
-                2026 운세 선물하기
-              </Button>
-            </Link>
-            <Link href="/preview/gift-sent">
-              <Button variant="outline" size="sm">
-                선물 링크 생성
-              </Button>
-            </Link>
-            <Link href="/preview/report">
-              <Button variant="outline" size="sm">
-                운세 결과
-              </Button>
-            </Link>
-            <Link href="/preview/letter">
-              <Button variant="outline" size="sm">
-                편지 만들기
-              </Button>
-            </Link>
-            <Link href="/preview/checkout-success">
-              <Button variant="outline" size="sm">
-                결제 확인
-              </Button>
-            </Link>
-            <Link href="/preview/checkout-fail">
-              <Button variant="outline" size="sm">
-                결제 실패
-              </Button>
-            </Link>
+          <div className="w-full sm:w-[50%]">
+            <GiftComingSoonButton />
           </div>
         </div>
       </main>

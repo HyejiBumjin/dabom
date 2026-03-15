@@ -2,12 +2,23 @@
  * Interpretation rules: combines natal signals with 2026 yearly signals
  * to produce paragraph-level prose for each section of the fortune report.
  *
- * RULES:
- *  - No bullet lists
- *  - No numbered lists
- *  - Each section: at least 5 natural Korean prose sentences
- *  - Reads like a short essay
- *  - Avoids generic fortune phrases
+ * TONE: honest, slightly direct, realistic, ultimately constructive and positive.
+ * Avoid overly optimistic fortune-telling. Acknowledge pressure/stress/challenges
+ * when they exist, then guide toward positive use and practical strategy.
+ *
+ * PARAGRAPH STRUCTURE (per section):
+ *  1. Describe the real situation
+ *  2. Explain why it happens
+ *  3. Mention possible difficulty (without scaring)
+ *  4. Show positive potential / opportunity side
+ *  5. Provide practical mindset or strategy
+ *
+ * RULES: Do not scare; no disasters or fatalistic statements; always show
+ * opportunity; psychologically supportive. Reader should finish feeling:
+ * "I understand my year better, and I know how to approach it."
+ *
+ * FORMAT: No bullet lists, no numbered lists; at least 5 sentences per section;
+ * natural Korean prose, short essay style; avoid generic fortune phrases.
  */
 
 import type { DerivedSignals } from "./deriveSignals";
@@ -108,11 +119,11 @@ export function buildWhySection(natal: DerivedSignals, yearly: YearlySignals2026
   );
 
   const interactionExplanation: Record<string, string> = {
-    wood_feeds_fire: `목 기운이 강한 사주에 병오년의 강한 불이 만나면 목생화(木生火)의 원리로 에너지가 폭발적으로 분출됩니다. 이 상생 관계는 ${name}의 잠재력을 밖으로 끌어내는 역할을 하지만, 동시에 내부 자원이 빠르게 소진될 수 있는 양날의 검이기도 합니다`,
-    fire_amplifies: `사주에 이미 화 기운이 강한 상태에서 같은 화의 해를 만나면 비겁(比劫)의 에너지가 극대화됩니다. 이것은 자신감과 추진력이 최고조에 이르지만, 동시에 자기 과신이나 감정 과잉의 위험도 동반한다는 뜻입니다`,
+    wood_feeds_fire: `목 기운이 강한 사주에 병오년의 강한 불이 만나면 목생화(木生火)의 원리로 에너지가 폭발적으로 분출됩니다. 이 상생 관계는 ${name}의 잠재력을 밖으로 끌어내는 역할을 하지만, 동시에 내부 자원이 빠르게 소진될 수 있어서, 표현과 회복의 리듬을 같이 잡는 것이 중요합니다`,
+    fire_amplifies: `사주에 이미 화 기운이 강한 상태에서 같은 화의 해를 만나면 비겁(比劫)의 에너지가 극대화됩니다. 자신감과 추진력이 최고조에 이르는 반면, 과신이나 감정 과잉이 나오기 쉬우니, 잘 나갈 때일수록 한 단계만 끌어내리는 습관이 이 에너지를 오래 쓰는 비결입니다`,
     fire_produces_earth: `강한 화 에너지가 토 기운을 가진 사주를 만나면 화생토(火生土)의 원리로 안정적인 성장 에너지가 만들어집니다. 올해의 뜨거운 에너지가 ${name}의 기반을 단단하게 다져주는 좋은 구조입니다`,
-    fire_controls_metal: `병오년의 강렬한 화 에너지가 금 기운을 가진 사주를 만나면 화극금(火克金)의 관계가 성립합니다. 이것은 외부 환경이 ${name}에게 강한 압박과 변화를 요구하는 형태로 나타나며, 적응하는 과정에서 상당한 에너지가 소모됩니다`,
-    water_controls_fire: `수 기운이 강한 사주가 병오년의 불을 만나면 수극화(水克火)의 긴장이 생겨납니다. ${name}의 내부 에너지와 올해의 외부 에너지가 서로 다른 방향을 가리키기 때문에, 이 두 힘을 조율하는 것 자체가 올해의 핵심 과제입니다`,
+    fire_controls_metal: `병오년의 강렬한 화 에너지가 금 기운을 가진 사주를 만나면 화극금(火克金)의 관계가 성립합니다. 외부 환경이 ${name}에게 강한 압박과 변화를 요구하는 형태로 나타나서 적응 과정에서 에너지가 많이 소모되지만, 이 압박을 견디는 만큼 실력이 정리되고 다음 단계로 넘어가는 발판이 됩니다`,
+    water_controls_fire: `수 기운이 강한 사주가 병오년의 불을 만나면 수극화(水克火)의 긴장이 생겨납니다. ${name}의 내부 에너지와 올해의 외부 에너지가 서로 다른 방향을 가리키기 때문에, 무엇을 선택하고 무엇을 내려놓을지 결정하는 것이 올해의 핵심인데, 그만큼 한 해가 끝났을 때 방향이 선명해지는 해이기도 합니다`,
   };
   sentences.push(interactionExplanation[yearly.fireInteraction] || "");
 
@@ -122,7 +133,7 @@ export function buildWhySection(natal: DerivedSignals, yearly: YearlySignals2026
 
   if (natal.relationTensionLevel === "high") {
     sentences.push(
-      `사주 내에 관계 긴장 신호가 강하게 있어서, 올해 불의 에너지와 결합되면 감정적 충돌이 평소보다 더 격렬하게 나타날 수 있으니 대인관계에서 특히 조심이 필요합니다`
+      `사주 내에 관계 긴장 신호가 강하게 있어서, 올해 불의 에너지와 결합되면 감정이 쉽게 올라오고 말 한마디가 다툼으로 이어질 수 있습니다. 다만 이런 시기일수록 감정이 식은 뒤에 대화하는 습관을 들이면, 오히려 관계가 더 단단해지는 계기로 바꿀 수 있습니다`
     );
   }
 
@@ -147,13 +158,13 @@ export function buildCareerSection(natal: DerivedSignals, yearly: YearlySignals2
     );
   } else if (sig.level === "cautious" || sig.level === "challenging") {
     sentences.push(
-      `올해 커리어의 핵심 전략은 무너지지 않는 것입니다`
+      `올해는 해야 할 일이 갑자기 늘어나거나 요구 수준이 올라가서 피곤함을 느낄 수 있는 시기입니다`
     );
     sentences.push(
-      `외부 압박이 강한 만큼, 모든 요구에 응하기보다 핵심 업무에 에너지를 집중하고 나머지는 과감하게 위임하거나 거절하는 판단이 필요합니다`
+      `외부 압박이 강한 만큼, 모든 요구에 응하기보다 핵심 업무에 에너지를 집중하고 나머지는 위임하거나 시기를 나누는 판단이 필요합니다`
     );
     sentences.push(
-      `${monthsKor(yearly.cautionMonths)} 전후에는 업무 강도를 의식적으로 줄이고, 중요한 이직이나 전환 결정은 이 시기를 피하는 것이 안전합니다`
+      `이런 흐름은 보통 실력을 보여줄 기회와 함께 들어오는 경우가 많습니다. ${monthsKor(yearly.cautionMonths)} 전후에는 업무 강도를 의식적으로 줄이고, 이직·전환 같은 큰 결정은 하루 이틀 여유를 두고 다시 보는 것이 좋습니다`
     );
   } else {
     sentences.push(
@@ -192,7 +203,7 @@ export function buildRelationshipSection(natal: DerivedSignals, yearly: YearlySi
 
   if (natal.hasClash) {
     sentences.push(
-      `사주에 충의 기운이 있어서 관계에서 갑작스러운 변화가 올 수 있습니다. 이별, 새로운 만남, 관계의 재정의 등이 올해 안에 일어날 가능성이 있으니, 감정적으로 흔들릴 때 즉각적인 결정보다 며칠의 냉각기를 두는 것이 좋습니다`
+      `사주에 충의 기운이 있어서 관계에서 갑작스러운 변화나 재정의가 올 수 있습니다. 그럴 때 즉각적인 결론보다 며칠 냉각기를 두고 다시 보는 습관이, 관계를 정리하든 더 깊게 가든 모두에게 유리하게 작동합니다`
     );
   }
 
@@ -276,15 +287,15 @@ export function buildHealthSection(natal: DerivedSignals, yearly: YearlySignals2
 
   if (natal.weakElement === "water") {
     sentences.push(
-      `${name}의 사주에서 수 기운이 약한 편이기 때문에, 올해는 신장과 방광 계통의 컨디션 저하에 특히 주의가 필요합니다. 물을 자주 마시고, 짠 음식을 줄이며, 충분한 수면을 확보하는 것이 건강의 기본 방어선입니다`
+      `${name}의 사주에서 수 기운이 약한 편이기 때문에, 올해는 열이 쌓일 때 신장·방광 쪽이 먼저 신호를 보낼 수 있습니다. 물을 자주 마시고, 짠 음식을 줄이며, 수면을 확보하면 이 부분을 잘 지킬 수 있어서 컨디션을 안정적으로 유지하기 좋습니다`
     );
   } else if (natal.weakElement === "metal") {
     sentences.push(
-      `금 기운이 약한 사주에서 화의 해를 만나면 호흡기와 피부 쪽에서 민감해질 수 있습니다. 환절기 관리와 스트레스 해소에 의식적으로 신경 쓰는 것이 중요합니다`
+      `금 기운이 약한 사주에서 화의 해를 만나면 호흡기나 피부가 평소보다 민감해질 수 있습니다. 환절기 관리와 스트레스 해소만 의식적으로 챙겨도 큰 차이가 나는 해입니다`
     );
   } else if (natal.weakElement === "wood") {
     sentences.push(
-      `목 기운이 약한 상태에서 화의 해를 보내면 간담 계통의 피로가 누적되기 쉽습니다. 음주를 줄이고 충분한 녹색 채소를 섭취하며, 눈의 피로를 관리하는 것이 도움이 됩니다`
+      `목 기운이 약한 상태에서 화의 해를 보내면 간담 계통의 피로가 누적되기 쉽습니다. 음주를 줄이고 녹색 채소와 눈 피로 관리를 조금만 신경 쓰면, 올해 에너지를 오래 유지하는 데 도움이 됩니다`
     );
   }
 
@@ -334,10 +345,10 @@ export function buildCautionSection(natal: DerivedSignals, yearly: YearlySignals
   }
 
   sentences.push(
-    `감정이 과열된 상태에서는 절대로 중요한 결정을 내리지 마세요. 화가 나거나 불안한 순간에 내린 결정은 거의 대부분 나중에 후회하게 됩니다`
+    `감정이 과열된 상태에서 내린 결정은 나중에 후회로 이어지기 쉽습니다. 그럴 때는 당장 결론 내리지 말고, 하루 이틀 지나서 다시 보는 습관이 올해를 지키는 가장 확실한 방법입니다`
   );
   sentences.push(
-    `올해 자신을 지키는 가장 확실한 방법은 과열 신호를 빨리 알아차리고 속도를 줄이는 것입니다`
+    `어려운 구간이 와도 그건 일시적인 에너지 소모일 뿐입니다. 과열 신호를 빨리 알아차리고 속도를 줄이면, 그다음 구간에서 다시 흐름을 잡을 수 있습니다`
   );
 
   return prose(sentences);
@@ -426,7 +437,7 @@ export function buildStrategySection(natal: DerivedSignals, yearly: YearlySignal
   );
 
   sentences.push(
-    `결국 사주는 가능성의 지도이고 길을 걷는 것은 ${name} 자신입니다. 올해 어떤 선택을 하든, 한 번에 하나씩 차분하게 해나가면 반드시 좋은 곳에 도착하게 됩니다`
+    `사주는 올해의 흐름을 이해하는 지도이고, 실제로 어떻게 걸어갈지는 ${name}의 선택입니다. 이 리포트를 읽었다면 이미 한 해를 어떻게 대할지 방향을 잡은 셈이에요. 한 번에 하나씩 차분하게 나가면 됩니다`
   );
 
   return prose(sentences);

@@ -5,6 +5,7 @@
   src: url("/font/EastSeaDokdo-Regular.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
+  font-display: optional;
 }
 
 :root {

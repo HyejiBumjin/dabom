@@ -8,7 +8,7 @@ export function LetterReveal({ content }: LetterRevealProps) {
   return (
     <div className="flex min-h-[400px] flex-col items-center justify-center">
       <Card className="w-full max-w-lg">
-        <CardContent className="whitespace-pre-wrap py-8 font-serif text-zinc-700 leading-relaxed">
+        <CardContent className="whitespace-pre-wrap py-8 text-zinc-700 leading-relaxed">
           {content}
         </CardContent>
       </Card>
