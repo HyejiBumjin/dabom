@@ -40,6 +40,15 @@ import {
   generateStrategyTitle,
   generateMonthlyTitle,
 } from "./titleGenerator";
+import {
+  buildPersonalizedOpening,
+  getEmphasizedSections,
+  getCareerInterestProse,
+  getRelationshipInterestProse,
+  getWealthInterestProse,
+  getHealthInterestProse,
+  getStrategyInterestProse,
+} from "./interests";
 
 function monthsKor(months: number[]): string {
   return months.map((m) => `${m}월`).join(", ");
@@ -49,22 +58,41 @@ function formatNum(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-export function buildInterpretedReport(input: FortuneInput, canonical: SajuCanonical): FortuneResult {
+export function buildInterpretedReport(input: FortuneInput, canonical: SajuCanonical, interests?: string[]): FortuneResult {
   const natal = deriveSignals(canonical);
   const yearly = calculateYearlySignals(natal);
   const name = formatKoreanName(input.name || "");
+  const emphasized = getEmphasizedSections(interests);
 
   const headline = generateHeadline(natal, yearly);
+  const personalizedOpening = buildPersonalizedOpening(name, interests);
 
-  const overallProse = buildOverallMood(natal, yearly, name);
+  const overallProse = personalizedOpening + " " + buildOverallMood(natal, yearly, name);
   const whyProse = buildWhySection(natal, yearly, name);
-  const careerProse = buildCareerSection(natal, yearly, name);
-  const relationshipProse = buildRelationshipSection(natal, yearly, name);
-  const wealthProse = buildWealthSection(natal, yearly, name);
-  const healthProse = buildHealthSection(natal, yearly, name);
+
+  const careerExtra = emphasized.has("career") ? getCareerInterestProse(interests) : [];
+  const careerProse = buildCareerSection(natal, yearly, name) +
+    (careerExtra.length ? " " + careerExtra.map((s) => s.endsWith(".") || s.endsWith("요") ? s : s + ".").join(" ") : "");
+
+  const relExtra = emphasized.has("relationship") ? getRelationshipInterestProse(interests) : [];
+  const relationshipProse = buildRelationshipSection(natal, yearly, name) +
+    (relExtra.length ? " " + relExtra.map((s) => s.endsWith(".") || s.endsWith("요") ? s : s + ".").join(" ") : "");
+
+  const wealthExtra = emphasized.has("wealth") ? getWealthInterestProse(interests) : [];
+  const wealthProse = buildWealthSection(natal, yearly, name) +
+    (wealthExtra.length ? " " + wealthExtra.map((s) => s.endsWith(".") || s.endsWith("요") ? s : s + ".").join(" ") : "");
+
+  const healthExtra = emphasized.has("health") ? getHealthInterestProse(interests) : [];
+  const healthProse = buildHealthSection(natal, yearly, name) +
+    (healthExtra.length ? " " + healthExtra.map((s) => s.endsWith(".") || s.endsWith("요") ? s : s + ".").join(" ") : "");
+
   const cautionProse = buildCautionSection(natal, yearly, name);
   const opportunityProse = buildOpportunitySection(natal, yearly, name);
-  const strategyProse = buildStrategySection(natal, yearly, name);
+
+  const strategyExtra = emphasized.has("strategy") ? getStrategyInterestProse(interests) : [];
+  const strategyProse = buildStrategySection(natal, yearly, name) +
+    (strategyExtra.length ? " " + strategyExtra.map((s) => s.endsWith(".") || s.endsWith("요") ? s : s + ".").join(" ") : "");
+
   const monthlyParts = buildMonthlyProse(natal, yearly, name);
 
   const monthlyContent = monthlyParts

@@ -4,6 +4,19 @@
 
 export type FlowType = "상승" | "변화" | "정체" | "도전" | "회복";
 
+export const INTEREST_OPTIONS = [
+  { value: "job_change", label: "이직" },
+  { value: "getting_job", label: "취업" },
+  { value: "dating", label: "연애" },
+  { value: "marriage", label: "결혼" },
+  { value: "money", label: "재물" },
+  { value: "relationships", label: "인간관계" },
+  { value: "health", label: "건강" },
+  { value: "self_growth", label: "자기계발" },
+] as const;
+
+export type InterestValue = (typeof INTEREST_OPTIONS)[number]["value"];
+
 export interface FortuneInput {
   birthDate: string; // YYYY-MM-DD
   birthTime?: string; // HH:mm or "모름"
@@ -12,6 +25,7 @@ export interface FortuneInput {
   relationship?: string;
   calendarType?: "solar" | "lunar";
   leapMonthType?: "regular" | "leap";
+  interests?: string[];
 }
 
 export interface FortuneSection {

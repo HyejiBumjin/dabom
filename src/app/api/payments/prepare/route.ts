@@ -17,6 +17,7 @@ const prepareSchema = z.object({
       relationship: z.string().trim().min(1).max(50).optional(),
       calendarType: z.enum(["solar", "lunar"]).optional(),
       leapMonthType: z.enum(["regular", "leap"]).optional(),
+      interests: z.array(z.string()).max(3).optional(),
     })
     .optional(),
   receiverName: z.string().trim().max(100).optional(),

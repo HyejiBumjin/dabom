@@ -54,9 +54,9 @@ export async function buildFortuneReport({ input, supabase }: BuildFortuneParams
       }
     );
 
-    return buildFortuneReportFromAblecity(input, canonical);
+    return buildFortuneReportFromAblecity(input, canonical, input.interests);
   } catch (error) {
     console.error("[buildFortuneReport] falling back to local engine", error);
-    return generateFortune(input);
+    return generateFortune(input, input.interests);
   }
 }

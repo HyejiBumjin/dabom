@@ -15,6 +15,7 @@ const reportCreateSchema = z.object({
     relationship: z.string().optional(),
     calendarType: z.enum(["solar", "lunar"]).optional(),
     leapMonthType: z.enum(["regular", "leap"]).optional(),
+    interests: z.array(z.string()).max(3).optional(),
   }),
 });
 
@@ -73,13 +74,14 @@ export async function POST(request: Request) {
 
     const result = await buildFortuneReport({
       input: {
-      birthDate: input.birthDate,
-      birthTime: input.birthTime,
-      gender: input.gender,
-      name: input.name,
-      relationship: input.relationship,
-      calendarType: input.calendarType,
-      leapMonthType: input.leapMonthType,
+        birthDate: input.birthDate,
+        birthTime: input.birthTime,
+        gender: input.gender,
+        name: input.name,
+        relationship: input.relationship,
+        calendarType: input.calendarType,
+        leapMonthType: input.leapMonthType,
+        interests: input.interests,
       },
       supabase,
     });
@@ -124,13 +126,14 @@ export async function POST(request: Request) {
 
     const result = await buildFortuneReport({
       input: {
-      birthDate: input.birthDate,
-      birthTime: input.birthTime,
-      gender: input.gender,
-      name: input.name,
-      relationship: input.relationship,
-      calendarType: input.calendarType,
-      leapMonthType: input.leapMonthType,
+        birthDate: input.birthDate,
+        birthTime: input.birthTime,
+        gender: input.gender,
+        name: input.name,
+        relationship: input.relationship,
+        calendarType: input.calendarType,
+        leapMonthType: input.leapMonthType,
+        interests: input.interests,
       },
       supabase,
     });
