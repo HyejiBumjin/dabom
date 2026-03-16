@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { DateSelect } from "@/components/ui/date-select";
+import { InterestSelector } from "./InterestSelector";
 
 interface GiftReceiverFormProps {
   token: string;
@@ -24,6 +25,7 @@ export function GiftReceiverForm({
   const [gender, setGender] = useState("");
   const [calendarType, setCalendarType] = useState("");
   const [leapMonthType, setLeapMonthType] = useState("");
+  const [interests, setInterests] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +67,7 @@ export function GiftReceiverForm({
             gender: gender || undefined,
             calendarType,
             leapMonthType,
+            interests: interests.length > 0 ? interests : undefined,
           },
         }),
       });
@@ -168,6 +171,7 @@ export function GiftReceiverForm({
               />
             </div>
           </div>
+          <InterestSelector selected={interests} onChange={setInterests} />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "운세 만드는 중..." : "운세 보기"}

@@ -25,6 +25,7 @@ type SelfFortuneInput = {
   relationship?: string;
   calendarType?: "solar" | "lunar";
   leapMonthType?: "regular" | "leap";
+  interests?: string[];
 };
 
 function normalizeStatus(status?: string): string {
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
           relationship: input.relationship,
           calendarType: input.calendarType,
           leapMonthType: input.leapMonthType,
+          interests: input.interests,
         },
         supabase,
       });
@@ -177,6 +179,7 @@ export async function POST(request: Request) {
         relationship: input.relationship,
         calendarType: input.calendarType,
         leapMonthType: input.leapMonthType,
+        interests: input.interests,
       },
       supabase,
     });

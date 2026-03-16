@@ -4,6 +4,15 @@
  */
 import type { FlowType, FortuneInput, FortuneResult } from "./types";
 import { formatKoreanName } from "./types";
+import {
+  buildPersonalizedOpening,
+  getEmphasizedSections,
+  getCareerInterestProse,
+  getRelationshipInterestProse,
+  getWealthInterestProse,
+  getHealthInterestProse,
+  getStrategyInterestProse,
+} from "./interests";
 
 const FLOW_TYPES: FlowType[] = ["상승", "변화", "정체", "도전", "회복"];
 
@@ -113,10 +122,12 @@ function withMinTenSentences(base: string[], fillers: string[]): string {
   return joinSentences(all);
 }
 
-export function generateFortune(input: FortuneInput): FortuneResult {
+export function generateFortune(input: FortuneInput, interests?: string[]): FortuneResult {
   const flowType = pickFlow(input);
   const t = TEMPLATES[flowType];
   const name = formatKoreanName(input.name || "");
+  const emphasized = getEmphasizedSections(interests);
+  const personalizedOpening = buildPersonalizedOpening(name, interests);
 
   const elementalSection = withMinTenSentences([
     `${name}의 기본 기운은 ${t.elementalAnalysis}`,
@@ -132,6 +143,7 @@ export function generateFortune(input: FortuneInput): FortuneResult {
     "작은 습관의 반복이 올해 운의 체력을 만들어 줄 거예요",
   ]);
   const overallSection = withMinTenSentences([
+    personalizedOpening,
     t.overall,
     `${name}에게는 상반기보다 하반기에 성과 체감이 더 크게 들어올 수 있어요`,
     "눈앞의 속도보다 방향성을 우선으로 잡으면 후반 흐름이 안정됩니다",
@@ -144,8 +156,10 @@ export function generateFortune(input: FortuneInput): FortuneResult {
     "좋은 제안은 준비된 상태일 때 더 크게 체감될 가능성이 높아요",
     "결국 올해는 꾸준한 실행이 승부를 가를 거예요",
   ]);
+  const careerExtra = emphasized.has("career") ? getCareerInterestProse(interests) : [];
   const careerSection = withMinTenSentences([
     t.career,
+    ...careerExtra,
     "업무에서는 지금 잘하는 일 하나를 대표 강점으로 더 선명하게 만드는 전략이 좋아요",
     "협업 상황에서는 결론만 말하기보다 과정까지 공유하면 신뢰를 빨리 얻을 수 있어요",
     "새로운 제안은 단기성과보다 재현 가능한 구조를 기준으로 판단해 보세요",
@@ -157,8 +171,10 @@ export function generateFortune(input: FortuneInput): FortuneResult {
     "이직이나 이동은 타이밍보다 준비도 기준으로 결정하면 안정적이에요",
     "올해 커리어는 한 방보다 누적이 훨씬 강하게 먹힐 거예요",
   ]);
+  const relExtra = emphasized.has("relationship") ? getRelationshipInterestProse(interests) : [];
   const loveSection = withMinTenSentences([
     t.love,
+    ...relExtra,
     "연애 중이라면 감정 표현의 빈도를 조금만 높여도 관계 만족도가 크게 달라질 수 있어요",
     "새로운 만남을 원한다면 익숙한 생활권 밖에서 인연이 들어올 가능성이 커요",
     "결혼을 고민 중이라면 조건 비교보다 생활 리듬의 합을 먼저 점검해 보세요",
@@ -170,8 +186,10 @@ export function generateFortune(input: FortuneInput): FortuneResult {
     "불편한 주제일수록 짧게 자주 대화하는 방식이 훨씬 좋아요",
     "올해는 관계에서 조급함을 줄일수록 만족도가 높아질 거예요",
   ]);
+  const wealthExtra = emphasized.has("wealth") ? getWealthInterestProse(interests) : [];
   const moneySection = withMinTenSentences([
     t.money,
+    ...wealthExtra,
     "지출은 기분 소비와 필요 소비를 나눠서 관리하면 체감 여유가 빨리 늘어납니다",
     "투자는 단기 변동성보다 손실 허용 범위를 먼저 정하고 들어가는 게 안전해요",
     "수입 다변화가 가능하다면 본업을 흔들지 않는 작은 실험부터 시작해 보세요",

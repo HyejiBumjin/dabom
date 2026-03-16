@@ -50,6 +50,7 @@ CREATE INDEX idx_gifts_buyer_id ON gifts(buyer_id);
 CREATE INDEX idx_gifts_status ON gifts(gift_status);
 
 -- fortune_reports
+-- input JSONB includes: birthDate, birthTime, gender, name, relationship, calendarType, leapMonthType, interests (string[])
 CREATE TABLE fortune_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,

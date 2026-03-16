@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { DateSelect } from "@/components/ui/date-select";
+import { InterestSelector } from "./InterestSelector";
 import { PortOneCheckoutWidget } from "./PortOneCheckoutWidget";
 import { runtimeConfig } from "@/lib/runtime-config";
 
@@ -18,6 +19,7 @@ export function SelfPurchaseForm({ preview }: { preview?: boolean } = {}) {
   const [relationship, setRelationship] = useState("");
   const [calendarType, setCalendarType] = useState("");
   const [leapMonthType, setLeapMonthType] = useState("");
+  const [interests, setInterests] = useState<string[]>([]);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [buyerEmail, setBuyerEmail] = useState<string | undefined>(undefined);
   const [buyerPhone, setBuyerPhone] = useState<string | undefined>(undefined);
@@ -71,6 +73,7 @@ export function SelfPurchaseForm({ preview }: { preview?: boolean } = {}) {
             relationship,
             calendarType,
             leapMonthType,
+            interests: interests.length > 0 ? interests : undefined,
           },
         }),
       });
@@ -230,6 +233,7 @@ export function SelfPurchaseForm({ preview }: { preview?: boolean } = {}) {
             />
           </div>
         </div>
+        <InterestSelector selected={interests} onChange={setInterests} />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <Button
           onClick={createOrder}
