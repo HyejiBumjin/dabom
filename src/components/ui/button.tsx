@@ -18,8 +18,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             "bg-zinc-900 text-white hover:bg-zinc-800 focus-visible:ring-zinc-900",
           variant === "secondary" && "bg-zinc-200 text-zinc-900 hover:bg-zinc-300",
           variant === "outline" &&
-            "border border-zinc-300 bg-transparent hover:bg-zinc-50",
-          variant === "ghost" && "hover:bg-zinc-100",
+            "border border-zinc-300 bg-transparent text-zinc-900 hover:bg-zinc-50",
+          variant === "ghost" && "text-zinc-900 hover:bg-zinc-100",
           size === "sm" && "h-8 px-3 text-sm",
           size === "md" && "h-10 px-4 text-sm",
           size === "lg" && "h-12 px-6 text-base",
