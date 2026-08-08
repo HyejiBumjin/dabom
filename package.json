@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "saju:spike": "node scripts/saju-spike.cjs"
+    "saju:spike": "node scripts/saju-spike.cjs",
+    "saju:compare": "node scripts/saju-compare.cjs"
   },
   "dependencies": {
     "@portone/browser-sdk": "^0.1.3",
