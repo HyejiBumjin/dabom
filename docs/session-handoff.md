@@ -27,26 +27,19 @@
 - 리포트는 제목/번호/섹션 카드 없이 자연스럽게 이어지는 에세이·편지이며, DB에는 문단 배열로 저장한다.
 - 결제 웹훅과 서버 검증만 전체 리포트 생성의 트리거가 된다. 리포트는 `(sajuProfileId, productCode)`당 한 번만 생성한다.
 
-## 바로 다음에 할 일 — Step 1
+## 바로 다음에 할 일 — Step 2
 
-새 작업 브랜치를 `develop`에서 만들고, `docs/dev-steps/step-1-프로젝트-세팅-DB.md`를 기준으로 진행한다. 기존 Next.js 앱이 있으므로 프로젝트를 새로 만들기보다는 필요한 의존성·구조를 기존 저장소에 추가한다.
+Step 1을 완료했다. 다음 작업 브랜치를 `develop`에서 만들고, `docs/dev-steps/step-2-핵심-루프.md`를 기준으로 진행한다.
 
-1. Prisma와 PostgreSQL(docker compose)을 추가하고, `.env.example`을 만든다. 실제 비밀값은 커밋하지 않는다.
-2. `User`, `SajuProfile`, `Product`, `Order`, `Report` 모델과 enum·제약을 Prisma 스키마에 구현한다.
-   - `Report(sajuProfileId, productCode)` unique
-   - `Report.content`는 `{ paragraphs, meta }` 형태 JSON
-   - 비로그인 입력을 위해 `SajuProfile.userId`는 nullable
-3. `Product` seed에 `yearly_2026`(2026 운세) 1건을 넣는다.
-4. `src/lib/saju/`에 `KoreanPolicyAdapter`와 `Myeongsik` 타입의 골격을 만든다.
-   - Step 1에서는 입력 정규화·시간 정책·라이브러리 호출 경계를 만들고, 신살과 경도 보정의 실제 규칙은 별도 구현 항목으로 남긴다.
-5. Prisma migration, seed, `npm run build`, 가능한 범위의 단위 테스트를 통과시킨 뒤 Step 1 결과를 문서화하고 하나의 커밋으로 `develop`에 머지·push한다.
+1. 새 saju 입력 화면과 `SajuProfile` 생성 경로를 Prisma 기준으로 구현한다.
+2. 무료 티저 생성·캐시, 상품 표시, 결제 준비까지의 핵심 흐름을 Step 2 명세에 맞게 구현한다.
+3. 레거시 Supabase/Ablecity API를 새 경로로 확장하지 않는다.
 
-## Step 1에서 주의할 점
+## Step 2에서 주의할 점
 
-- `lunar-javascript` 결과를 DB 스키마의 장기 계약으로 그대로 노출하지 않는다. 어댑터가 서비스 `Myeongsik` JSON으로 변환한다.
-- 신살(도화·역마·형살 등)은 라이브러리 결과만 믿지 말고 한국식 규칙 테이블과 근거 값을 별도 설계해야 한다.
-- 출생지 경도 보정의 적용 여부·규칙은 아직 미결정이다. 적용 전에는 UX와 계산 기준을 문서화해야 한다.
+- `Myeongsik` JSON의 신살 상태는 아직 `pending-korean-rule-table`이며, 출생지 경도 보정은 미적용이다. 정책을 바꾸기 전에는 UX와 계산 기준을 문서화해야 한다.
 - 레거시 Supabase/Ablecity API를 새 구현에 끌고 가지 않는다. 기존 환경변수는 임시 배포를 위한 것이며, Step 1부터는 PostgreSQL/Prisma 기준이다.
+- Docker가 없는 환경에서는 migration SQL과 Prisma 정적 검증까지만 가능하다. 실제 DB 검증은 Docker가 있는 로컬/CI에서 수행한다.
 - Step 6 문서는 아직 Oracle Cloud 전제다. 실제 배포는 Vercel이므로 후속 단계에서 Vercel 기준으로 다시 쓴다.
 
 ## 유용한 명령과 문서
@@ -58,7 +51,8 @@ npm run build
 ```
 
 - Step 0 상세 결과: `docs/dev-steps/step-0-result.md`
-- 다음 구현 명세: `docs/dev-steps/step-1-프로젝트-세팅-DB.md`
+- Step 1 결과: `docs/dev-steps/step-1-result.md`
+- 다음 구현 명세: `docs/dev-steps/step-2-핵심-루프.md`
 - Vercel·도메인·카카오의 현재 상태: `docs/deployment.md`
 - 비교 fixture: `scripts/fixtures/sajuinfo-reference.json`
 - 비교 스크립트: `scripts/saju-compare.cjs`
@@ -68,4 +62,3 @@ npm run build
 - `c2453f2 test(saju): add external manseoryeok comparison fixtures`
 - `886a03c feat(saju): add lunar calculation spike`
 - `c414ef5 docs: 배포 구성 문서 추가 및 진행 상황 갱신`
-
