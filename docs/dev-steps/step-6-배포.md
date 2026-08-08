@@ -2,13 +2,13 @@
 
 ## 프로젝트 컨텍스트
 
-AI 사주 MVP. Next.js 풀스택 + Prisma/PostgreSQL, 카카오 로그인, PortOne 결제까지 Vercel에 배포한다. 데이터베이스는 Docker/VM이 아니라 Vercel Marketplace로 연결한 Neon 관리형 PostgreSQL을 사용한다.
+AI 사주 MVP. Next.js 풀스택 + Prisma/PostgreSQL, 카카오 로그인, PortOne 결제까지 Vercel에 배포한다. 데이터베이스는 Docker/VM이나 새 서비스가 아니라 기존 Supabase 관리형 PostgreSQL을 사용한다.
 
 ## 작업 요청
 
-1. Vercel + Neon 연결
-   - Vercel Marketplace로 Neon PostgreSQL을 연결하고 Production/Preview/Development 환경변수를 확인한다.
-   - 런타임은 pooled `DATABASE_URL`을 사용한다. migration은 trusted machine에서 unpooled URL을 `DATABASE_URL`로 넘겨 실행한다.
+1. Vercel + Supabase 연결
+   - Supabase Connect에서 Transaction pooler URL과 Direct connection URL을 복사한다.
+   - Vercel의 Production/Preview/Development에는 `pgbouncer=true`를 포함한 transaction-pooler `DATABASE_URL`을 저장한다. migration은 trusted machine에서 direct URL을 `DATABASE_URL`로 넘겨 실행한다.
    - Dockerfile, docker-compose, VM, Nginx, 서버 백업 크론은 만들지 않는다.
 
 2. 환경 분리

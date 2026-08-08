@@ -63,7 +63,7 @@
 
 1. `step-2`에서 입력 → 명식 → 티저의 핵심 흐름을 Prisma 기준으로 구현
 2. `/design/report-essay` 목업에서 확인한 레이아웃 결정사항을 step-2 문서로 옮기고 코드 삭제
-3. Vercel Marketplace에서 Neon을 연결한 뒤 migration·seed를 한 번 실행
+3. 기존 Supabase의 connection string으로 migration·seed를 한 번 실행
 
 ## 참고
 
