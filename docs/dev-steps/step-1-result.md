@@ -4,7 +4,7 @@
 
 ## 구현 내용
 
-- 로컬 PostgreSQL 16 개발 환경을 위한 `docker-compose.yml`과 비밀값 없는 `.env.example`을 추가했다.
+- Vercel + 관리형 PostgreSQL(Neon) 환경을 위한 비밀값 없는 `.env.example`을 추가했다.
 - Prisma 스키마와 첫 migration을 추가했다.
   - `User`, `SajuProfile`, `Product`, `Order`, `Report` 모델 및 상태 enum을 정의했다.
   - 비로그인 입력을 위해 `SajuProfile.userId`는 nullable이며, `Report(sajuProfileId, productCode)`는 unique다.
@@ -26,12 +26,10 @@
 - 어댑터의 1995-05-20 20:20 여성 입력이 Step 0 기준 원국 `乙亥 辛巳 辛亥 戊戌`과 일치함을 확인했다.
 - 1988-07-01 12:00 KDT 입력이 계산 전에 11:00 KST로 환산됨을 확인했다.
 
-이 실행 환경에는 Docker가 설치되어 있지 않아 실제 PostgreSQL 컨테이너에서 `prisma migrate dev` 및 seed를 실행하지는 못했다. 로컬에서는 아래 순서로 검증한다.
+실제 DB 검증은 Neon 연결 문자열을 준비한 뒤, Docker 없이 신뢰할 수 있는 개발 머신에서 실행한다.
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres
-npm run db:migrate
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:migrate
 npm run db:seed
 ```
 

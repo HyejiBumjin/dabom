@@ -13,7 +13,7 @@
 | 3 | `step-3-톤-프롬프트.md` | 리포트 톤 설계·튜닝 (**반복 세션 — 이게 제품**) |
 | 4 | `step-4-카카오-로그인.md` | Auth.js + 카카오, 비로그인 → 로그인 merge |
 | 5 | `step-5-결제-연동.md` | PortOne V2 + KCP, 웹훅 기반 생성 트리거 |
-| 6 | `step-6-배포.md` | Oracle Cloud + Docker + Nginx + HTTPS |
+| 6 | `step-6-배포.md` | Vercel + Neon PostgreSQL 배포 |
 
 ## 핵심 설계 결정 (모든 단계에서 유지)
 
@@ -47,9 +47,9 @@
 
 ## 진행 상황 (2026-08-08)
 
-**step-0 완료.** `lunar-javascript`를 채택하고 외부 만세력 30건을 대조했다.
+**step-0, step-1 완료.** `lunar-javascript`를 채택하고 외부 만세력 30건을 대조했다.
 29건은 정확히 일치했고, 입춘 당일 1건은 기준 사이트의 날짜 단위 전환과 서비스가 채택한 절입 시각 단위 전환의 정책 차이로 기록했다.
-세부 결과와 Step 1 이관 항목은 `step-0-result.md`에 남겼다.
+세부 결과는 `step-0-result.md`, Prisma/어댑터 결과는 `step-1-result.md`에 남겼다.
 
 - 리포트 형식을 섹션 카드형 → **에세이/편지 형식**으로 변경하고 관련 단계 문서에 반영 완료
   (step-0 명식 출력 범위, step-1 스키마, step-2 검증·렌더링, step-3 톤, step-5 티저)
@@ -61,9 +61,9 @@
 
 ### 다음 할 일
 
-1. `step-1`에서 Prisma 스키마와 `KoreanPolicyAdapter`의 골격을 구현
+1. `step-2`에서 입력 → 명식 → 티저의 핵심 흐름을 Prisma 기준으로 구현
 2. `/design/report-essay` 목업에서 확인한 레이아웃 결정사항을 step-2 문서로 옮기고 코드 삭제
-3. 배포 단계를 Vercel 기준으로 다시 쓰기 (`step-6`은 Oracle Cloud + Docker 전제로 작성돼 있음)
+3. Vercel Marketplace에서 Neon을 연결한 뒤 migration·seed를 한 번 실행
 
 ## 참고
 
