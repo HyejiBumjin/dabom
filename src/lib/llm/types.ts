@@ -4,6 +4,6 @@ export interface ReportContent {
   meta: {
     charCount: number;
     beats: string[];
-    termsUsed: string[];
+    termsUsed: Array<{ term: string; gloss: string }>;
   };
 }

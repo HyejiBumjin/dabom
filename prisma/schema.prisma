@@ -90,7 +90,7 @@ model Order {
 
 model Report {
   id            String       @id @default(cuid())
-  orderId       String       @unique
+  orderId       String?      @unique
   sajuProfileId String
   productCode   String
   status        ReportStatus @default(PENDING)
@@ -102,7 +102,7 @@ model Report {
   createdAt     DateTime     @default(now())
   completedAt   DateTime?
 
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  order       Order?      @relation(fields: [orderId], references: [id], onDelete: Restrict)
   sajuProfile SajuProfile @relation(fields: [sajuProfileId], references: [id], onDelete: Restrict)
 
   @@unique([sajuProfileId, productCode])
