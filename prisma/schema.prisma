@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum OrderStatus {
+  READY
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  kakaoId      String        @unique
+  nickname     String
+  email        String?       @unique
+  createdAt    DateTime      @default(now())
+  sajuProfiles SajuProfile[]
+  orders       Order[]
+}
+
+model SajuProfile {
+  id          String   @id @default(cuid())
+  userId      String?
+  name        String
+  gender      Gender
+  birthDate   DateTime @db.Date
+  birthTime   String?
+  isLunar     Boolean  @default(false)
+  isLeapMonth Boolean  @default(false)
+  myeongsik   Json
+  teaser      Json?
+  createdAt   DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orders  Order[]
+  reports Report[]
+
+  @@index([userId])
+}
+
+model Product {
+  id     String  @id @default(cuid())
+  code   String  @unique
+  name   String
+  price  Int
+  active Boolean @default(true)
+
+  orders Order[]
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  userId        String
+  productId     String
+  sajuProfileId String
+  merchantUid   String      @unique
+  status        OrderStatus @default(READY)
+  paidAmount    Int?
+  paidAt        DateTime?
+  pgTxId        String?
+  createdAt     DateTime    @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sajuProfile SajuProfile @relation(fields: [sajuProfileId], references: [id], onDelete: Restrict)
+  report      Report?
+
+  @@index([userId])
+  @@index([productId])
+  @@index([sajuProfileId])
+}
+
+model Report {
+  id            String       @id @default(cuid())
+  orderId       String       @unique
+  sajuProfileId String
+  productCode   String
+  status        ReportStatus @default(PENDING)
+  content       Json?
+  promptVersion String
+  model         String
+  retryCount    Int          @default(0)
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  completedAt   DateTime?
+
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  sajuProfile SajuProfile @relation(fields: [sajuProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([sajuProfileId, productCode])
+  @@index([status])
+}
