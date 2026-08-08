@@ -67,6 +67,7 @@ export async function generateReport(reportId: string): Promise<void> {
       const response = await client.responses.create({
         model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
         store: false,
+        max_output_tokens: 1600,
         input: buildEssayPrompt(report.sajuProfile.myeongsik as unknown as Myeongsik),
         text: { format: { type: "json_schema", name: "essay_report", strict: true, schema: outputSchema } },
       });

@@ -9,7 +9,7 @@ export function buildEssayPrompt(myeongsik: Myeongsik): string {
 제목, 소제목, 번호, 목록, 마크다운을 쓰지 마세요.
 opening, past, career, money_love, mental, ending의 여섯 서사 비트를 자연스럽게 모두 담으세요.
 명리 용어를 쓸 때는 첫 등장 직후 일상적인 한국어 풀이를 함께 쓰세요.
-총 1,700~2,600자의 한국어 본문을 여러 자연스러운 문단으로 나누세요.
+총 1,700~2,600자의 한국어 본문을 여러 자연스러운 문단으로 나누세요. 목표 분량은 공백을 포함해 약 2,200자이며, 2,600자를 절대 넘기지 마세요.
 
 명식 JSON:
 ${JSON.stringify(myeongsik)}`;
