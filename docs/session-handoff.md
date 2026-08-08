@@ -39,7 +39,7 @@ Step 1을 완료했다. 다음 작업 브랜치를 `develop`에서 만들고, `d
 
 - `Myeongsik` JSON의 신살 상태는 아직 `pending-korean-rule-table`이며, 출생지 경도 보정은 미적용이다. 정책을 바꾸기 전에는 UX와 계산 기준을 문서화해야 한다.
 - 레거시 Supabase/Ablecity API를 새 구현에 끌고 가지 않는다. 기존 환경변수는 임시 배포를 위한 것이며, Step 1부터는 PostgreSQL/Prisma 기준이다.
-- Docker가 없는 환경에서는 migration SQL과 Prisma 정적 검증까지만 가능하다. 실제 DB 검증은 Docker가 있는 로컬/CI에서 수행한다.
+- 데이터베이스는 Docker가 아닌 Vercel Marketplace의 Neon(관리형 서버리스 PostgreSQL)을 사용한다. 런타임에는 pooled `DATABASE_URL`, migration에는 trusted machine의 unpooled URL을 쓴다.
 - Step 6 문서는 아직 Oracle Cloud 전제다. 실제 배포는 Vercel이므로 후속 단계에서 Vercel 기준으로 다시 쓴다.
 
 ## 유용한 명령과 문서

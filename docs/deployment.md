@@ -63,7 +63,7 @@ CLI에는 해당 기능이 없으며, 필요하면 `api.vercel.com/v9/projects/{
 
 ## 환경변수
 
-값은 Vercel에만 존재한다. 레포에 `.env.example` 이 없으므로 이 표가 사실상 그 역할을 한다.
+값은 Vercel에만 존재한다. 비밀값 없는 이름·형식은 `.env.example`에도 기록한다.
 
 | 변수 | 발급처 | 비고 |
 |---|---|---|
@@ -77,6 +77,25 @@ CLI에는 해당 기능이 없으며, 필요하면 `api.vercel.com/v9/projects/{
 | `ABLECITY_API_URL` / `ABLECITY_API_KEY` | Ablecity | **레거시.** 재구축 시 내장 만세력으로 교체되어 폐기 |
 | `ABLECITY_TIMEOUT_MS` | 직접 입력 | 기본 10000 |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | OpenAI | 현재 코드에서 `gpt.ts`는 dead code라 미사용. 재구축 후 필수 |
+| `DATABASE_URL` | Neon → Vercel Marketplace 연동 | Prisma 런타임용 pooled PostgreSQL URL |
+| `DATABASE_URL_UNPOOLED` | Neon → Connect | migration 전용. Vercel 런타임에는 사용하지 않음 |
+
+## 새 DB 구성 — Vercel + Neon
+
+새 제품의 데이터베이스는 Docker나 자체 서버를 운영하지 않고, **Neon의 관리형 서버리스 PostgreSQL**을 Vercel 프로젝트에 연결한다. Vercel Postgres는 신규 생성이 종료되었으므로 외부 Postgres 연동을 쓰는 것이 현재 공식 구성이다.
+
+1. Vercel 프로젝트의 Marketplace에서 Neon을 연결하고 PostgreSQL 프로젝트를 만든다.
+2. 연동이 Vercel의 Production·Preview·Development 환경에 `DATABASE_URL`을 추가했는지 확인한다. 런타임에는 연결 수를 관리하는 pooled URL을 사용한다.
+3. Neon Connect 화면에서 unpooled URL을 별도로 복사해, 신뢰할 수 있는 개발 머신에서만 아래처럼 migration을 실행한다. 이 값은 레포나 클라이언트에 넣지 않는다.
+
+```bash
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:migrate
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:seed
+```
+
+4. Vercel에서 재배포한 뒤 앱은 `DATABASE_URL`만 사용한다.
+
+무료 플랜의 사용량 한도와 휴면 정책은 변경될 수 있으므로 Neon 대시보드에서 현재 한도를 확인한다. MVP 단계에서는 DB를 상시 실행하는 VM·Docker 볼륨·백업 크론보다 이 구성이 운영비와 관리 부담이 적다.
 
 `NEXT_PUBLIC_APP_URL` 은 환경별로 값이 다르다. 이 값으로 OAuth 리다이렉트 URL을 만들기 때문에
 틀리면 로그인이 엉뚱한 도메인으로 돌아간다.
