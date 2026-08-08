@@ -58,7 +58,8 @@ export async function generateReport(reportId: string): Promise<void> {
   }
 
   await prisma.report.update({ where: { id: reportId }, data: { status: "GENERATING", lastError: null } });
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // Serverless 함수가 외부 API 응답을 무한정 기다리지 않도록 제한한다.
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 15_000, maxRetries: 0 });
   let lastError = "리포트 생성에 실패했습니다.";
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {

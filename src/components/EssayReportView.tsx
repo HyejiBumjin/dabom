@@ -20,7 +20,7 @@ export function EssayReportView({ reportId }: { reportId: string }) {
   });
 
   useEffect(() => {
-    if (started.current || query.data?.status !== "PENDING") return;
+    if (started.current || (query.data?.status !== "PENDING" && query.data?.status !== "GENERATING")) return;
     started.current = true;
     void fetch(`/api/saju/reports/${reportId}/generate`, { method: "POST" }).finally(() => queryClient.invalidateQueries({ queryKey: ["saju-report", reportId] }));
   }, [query.data?.status, queryClient, reportId]);
