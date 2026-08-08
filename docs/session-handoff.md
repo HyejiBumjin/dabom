@@ -27,19 +27,20 @@
 - 리포트는 제목/번호/섹션 카드 없이 자연스럽게 이어지는 에세이·편지이며, DB에는 문단 배열로 저장한다.
 - 결제 웹훅과 서버 검증만 전체 리포트 생성의 트리거가 된다. 리포트는 `(sajuProfileId, productCode)`당 한 번만 생성한다.
 
-## 바로 다음에 할 일 — Step 2
+## 바로 다음에 할 일 — Step 3 (OpenAI 키 등록 후)
 
-Step 1을 완료했다. 다음 작업 브랜치를 `develop`에서 만들고, `docs/dev-steps/step-2-핵심-루프.md`를 기준으로 진행한다.
+Step 2 구현을 완료했다. OpenAI 키를 Vercel에 안전하게 등록하고 실제 생성 1건을 검증한 뒤, `docs/dev-steps/step-3-톤-프롬프트.md`를 기준으로 톤을 다듬는다.
 
-1. 새 saju 입력 화면과 `SajuProfile` 생성 경로를 Prisma 기준으로 구현한다.
-2. 무료 티저 생성·캐시, 상품 표시, 결제 준비까지의 핵심 흐름을 Step 2 명세에 맞게 구현한다.
+1. `OPENAI_API_KEY`를 local/Vercel server-only 환경변수에 등록하고 `/saju`에서 실제 생성 1건을 확인한다.
+2. Step 3에서 에세이의 톤·단락 리듬·금지 표현을 다듬고 prompt version을 올린다.
 3. 레거시 Supabase/Ablecity API를 새 경로로 확장하지 않는다.
 
-## Step 2에서 주의할 점
+## Step 3에서 주의할 점
 
 - `Myeongsik` JSON의 신살 상태는 아직 `pending-korean-rule-table`이며, 출생지 경도 보정은 미적용이다. 정책을 바꾸기 전에는 UX와 계산 기준을 문서화해야 한다.
 - 레거시 Supabase/Ablecity API를 새 구현에 끌고 가지 않는다. 기존 환경변수는 임시 배포를 위한 것이며, Step 1부터는 PostgreSQL/Prisma 기준이다.
-- 데이터베이스는 Docker나 새 Neon 계정이 아니라 기존 Supabase PostgreSQL을 사용한다. Vercel 런타임에는 transaction-pooler `DATABASE_URL`, migration에는 trusted machine의 direct URL을 쓴다.
+- 데이터베이스는 Docker나 새 Neon 계정이 아니라 기존 Supabase PostgreSQL을 사용한다. Vercel 런타임에는 transaction-pooler `DATABASE_URL`, migration에는 IPv4 호환 Session pooler URL을 쓴다.
+- `OPENAI_API_KEY`는 server-only 비밀값이다. `NEXT_PUBLIC_` 환경변수·브라우저·GitHub에 노출하지 않는다.
 - Step 6 문서는 아직 Oracle Cloud 전제다. 실제 배포는 Vercel이므로 후속 단계에서 Vercel 기준으로 다시 쓴다.
 
 ## 유용한 명령과 문서
@@ -52,7 +53,8 @@ npm run build
 
 - Step 0 상세 결과: `docs/dev-steps/step-0-result.md`
 - Step 1 결과: `docs/dev-steps/step-1-result.md`
-- 다음 구현 명세: `docs/dev-steps/step-2-핵심-루프.md`
+- Step 2 결과: `docs/dev-steps/step-2-result.md`
+- 다음 구현 명세: `docs/dev-steps/step-3-톤-프롬프트.md`
 - Vercel·도메인·카카오의 현재 상태: `docs/deployment.md`
 - 비교 fixture: `scripts/fixtures/sajuinfo-reference.json`
 - 비교 스크립트: `scripts/saju-compare.cjs`

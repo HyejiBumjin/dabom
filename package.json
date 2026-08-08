@@ -22,6 +22,7 @@
     "@tanstack/react-query": "^5.90.21",
     "lunar-javascript": "^1.7.7",
     "next": "^16.2.11",
+    "openai": "^6.29.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.3.6"

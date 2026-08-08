@@ -36,7 +36,7 @@ export default async function LandingPage() {
           />
         </div>
         <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center animate-fade-in-up animate-delay-2">
-          <Link href="/products/2026" className="w-full sm:w-[50%]">
+          <Link href="/saju" className="w-full sm:w-[50%]">
             <Button
               size="lg"
               className="w-full flex flex-col items-start justify-between h-auto py-8 cursor-pointer text-left sm:h-full"

@@ -30,6 +30,7 @@ export interface Myeongsik {
     isLeapMonth: boolean;
     localDateTime: string;
     timezone: string;
+    birthTimeKnown: boolean;
   };
   lunarDate: string;
   dayMaster: string;
@@ -56,4 +57,5 @@ export interface KoreanSajuInput {
   timezone?: string;
   /** Required only for the repeated 02:00–02:59 hour when Korean DST ended. */
   dstOccurrence?: "daylight" | "standard";
+  birthTimeKnown?: boolean;
 }

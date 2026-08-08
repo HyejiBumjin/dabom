@@ -108,7 +108,7 @@ export class KoreanPolicyAdapter {
     return {
       version: 1,
       policy: { timezone, ziHour: "sect-2", solarTermBoundary: "exact-instant", koreanDstAdjusted: dst.adjusted, longitudeCorrection: "not-applied" },
-      input: { calendar: input.calendar, isLeapMonth: input.isLeapMonth ?? false, localDateTime: `${input.birthDate} ${input.birthTime}:00`, timezone },
+      input: { calendar: input.calendar, isLeapMonth: input.isLeapMonth ?? false, localDateTime: `${input.birthDate} ${input.birthTime}:00`, timezone, birthTimeKnown: input.birthTimeKnown ?? true },
       lunarDate: lunar.toString(), dayMaster: eightChar.getDayGan(),
       pillars: { year: toPillar(eightChar, "year"), month: toPillar(eightChar, "month"), day: toPillar(eightChar, "day"), hour: toPillar(eightChar, "hour") },
       fortune: {
