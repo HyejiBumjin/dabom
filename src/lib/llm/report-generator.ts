@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { buildEssayPrompt } from "@/lib/prompts/v1";
+import { buildEssayPrompt } from "@/lib/prompts/v2";
 import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
@@ -32,7 +32,7 @@ const outputSchema = {
 } as const;
 
 const headingPattern = /^\s*(?:#{1,6}\s|\d+[.)]\s|[■◆●]\s|\[[^\]]+\])/m;
-const bannedTerms = ["병신", "씨발", "좆", "무조건 대박"];
+const bannedTerms = ["병신", "씨발", "좆", "존나", "개짜증", "GOAT", "긁", "어쩔티비", "킹받다", "스불재", "오조오억", "라떼는", "무조건 대박"];
 
 function validateReport(value: unknown): ReportContent {
   const parsed = reportSchema.parse(value);

@@ -28,7 +28,7 @@ AI 사주 MVP. Next.js 풀스택 + Prisma/PostgreSQL 세팅과 DB 스키마(User
      - **용어 풀이**: `termsUsed`의 각 용어가 본문에 등장하며, 등장 직후 풀이가 함께 있는지
      - **금지어**: 비속어·금지 유행어 블랙리스트 미포함
    - 실패 시 자동 재시도 최대 3회(retryCount), 3회 실패 시 FAILED + lastError 기록
-   - 프롬프트는 `src/lib/prompts/v1.ts` 형태로 버전 관리, Report에 promptVersion 기록
+   - 프롬프트는 `src/lib/prompts/vN.ts` 형태로 버전 관리, Report에 promptVersion 기록
    - LLM에는 명식 JSON만 context로 제공하고, 명식 데이터를 벗어난 창작 금지 지시
      - 신살·대운·세운·월운이 명식 JSON에 값으로 들어 있어야 이 지시가 성립한다 (STEP 0 참고)
 

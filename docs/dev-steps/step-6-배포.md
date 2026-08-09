@@ -22,5 +22,5 @@ AI 사주 MVP. Next.js 풀스택 + Prisma/PostgreSQL, 카카오 로그인, PortO
 
 ## 검증
 
-- 프로덕션 도메인에서 입력→티저→로그인→테스트결제→리포트 E2E
+- 프로덕션 도메인에서 입력→명식 확인→로그인→테스트결제→리포트 E2E
 - Vercel Production/Preview에서 환경변수가 분리되고 웹훅이 수신되는지 확인

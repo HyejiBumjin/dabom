@@ -1,2 +1,2 @@
-/** Prompt versions are named here before their immutable templates are added in Step 3. */
-export const CURRENT_PROMPT_VERSION = "essay-v1";
+/** The active, immutable report prompt version. */
+export const CURRENT_PROMPT_VERSION = "essay-v2-persona";
