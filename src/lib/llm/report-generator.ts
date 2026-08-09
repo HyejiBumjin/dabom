@@ -7,7 +7,7 @@ import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(1)).min(4).max(6),
+  paragraphs: z.array(z.string().min(1)).length(6),
 });
 
 const outputSchema = {
@@ -15,14 +15,14 @@ const outputSchema = {
   additionalProperties: false,
   required: ["paragraphs"],
   properties: {
-    paragraphs: { type: "array", minItems: 4, maxItems: 6, items: { type: "string", minLength: 1 } },
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 1 } },
   },
 } as const;
 
 function validateReport(value: unknown): ReportContent {
   const parsed = reportSchema.parse(value);
   const paragraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
-  if (paragraphs.length < 4) throw new Error("문단이 충분하지 않습니다.");
+  if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
   const text = paragraphs.join("\n\n");
   const charCount = [...text].length;
   return { paragraphs, meta: { charCount, beats: [], termsUsed: [] } };
