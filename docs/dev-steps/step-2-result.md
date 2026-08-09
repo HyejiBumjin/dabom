@@ -9,7 +9,7 @@
 - 개발용 리포트 생성 경로를 추가했다.
   - `POST /api/saju/profiles/:profileId/reports`는 같은 `(sajuProfileId, yearly_2026)` 요청에 기존 리포트를 돌려준다.
   - 결제 전 개발용 리포트를 위해 `Report.orderId`를 nullable로 바꾸는 migration을 적용했다. 결제 단계에서 주문을 연결한다.
-  - 리포트는 `PENDING → GENERATING → COMPLETED/FAILED` 상태로 저장하고 실패 시 최대 3회 재시도한다.
+  - 리포트는 `PENDING → GENERATING → COMPLETED/FAILED` 상태로 저장한다. 사용자 대기 시간을 제한하기 위해 자동 재시도 대신 실패 화면의 명시적 재시도 버튼을 사용한다.
 - OpenAI Responses API의 JSON Schema Structured Output을 사용해 `{ paragraphs, meta }` 계약을 받도록 구현했다. 저장 전 분량·제목/번호·서사 비트·용어 풀이·금지어를 검증한다.
 - `/saju/reports/:reportId`에 React Query 폴링과 모바일 우선 에세이 렌더링을 추가했다.
 
