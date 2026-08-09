@@ -8,7 +8,7 @@ interface ReportResponse { id: string; status: "PENDING" | "GENERATING" | "COMPL
 
 export function EssayReportView({ reportId }: { reportId: string }) {
   const queryClient = useQueryClient();
-  const started = useRef(false);
+  const generationRequestInFlight = useRef(false);
   const query = useQuery({
     queryKey: ["saju-report", reportId],
     queryFn: async (): Promise<ReportResponse> => {
@@ -20,15 +20,23 @@ export function EssayReportView({ reportId }: { reportId: string }) {
   });
 
   useEffect(() => {
-    if (started.current || (query.data?.status !== "PENDING" && query.data?.status !== "GENERATING")) return;
-    started.current = true;
-    void fetch(`/api/saju/reports/${reportId}/generate`, { method: "POST" }).finally(() => queryClient.invalidateQueries({ queryKey: ["saju-report", reportId] }));
+    if (generationRequestInFlight.current || query.data?.status !== "PENDING") return;
+    generationRequestInFlight.current = true;
+    void fetch(`/api/saju/reports/${reportId}/generate`, { method: "POST" }).finally(() => {
+      generationRequestInFlight.current = false;
+      void queryClient.invalidateQueries({ queryKey: ["saju-report", reportId] });
+    });
   }, [query.data?.status, queryClient, reportId]);
 
   async function retry() {
-    started.current = true;
-    await fetch(`/api/saju/reports/${reportId}/generate`, { method: "POST" });
-    await queryClient.invalidateQueries({ queryKey: ["saju-report", reportId] });
+    if (generationRequestInFlight.current) return;
+    generationRequestInFlight.current = true;
+    try {
+      await fetch(`/api/saju/reports/${reportId}/generate`, { method: "POST" });
+    } finally {
+      generationRequestInFlight.current = false;
+      await queryClient.invalidateQueries({ queryKey: ["saju-report", reportId] });
+    }
   }
 
   if (query.isLoading || !query.data || query.data.status === "PENDING" || query.data.status === "GENERATING") {

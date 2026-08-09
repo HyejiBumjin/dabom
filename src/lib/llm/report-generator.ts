@@ -58,7 +58,12 @@ export async function generateReport(reportId: string): Promise<void> {
     return;
   }
 
-  await prisma.report.update({ where: { id: reportId }, data: { status: "GENERATING", lastError: null } });
+  // 동시에 들어온 화면 요청 중 한 건만 생성권을 갖는다.
+  const claim = await prisma.report.updateMany({
+    where: { id: reportId, status: { in: ["PENDING", "FAILED"] } },
+    data: { status: "GENERATING", lastError: null },
+  });
+  if (claim.count === 0) return;
   // Serverless 함수가 외부 API 응답을 무한정 기다리지 않도록 제한한다.
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 18_000, maxRetries: 0 });
   let lastError = "리포트 생성에 실패했습니다.";
