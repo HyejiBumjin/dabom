@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import type { Myeongsik, PillarName } from "@/lib/saju/myeongsik";
 import { deriveInterpretationFacts } from "@/lib/saju/interpretation-facts";
+import { deriveSajuInterpretationBlueprint } from "@/lib/saju/interpretation-blueprint";
 
 const pillarLabels: Record<PillarName, string> = {
   year: "년주",
@@ -23,6 +24,7 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
   const reportYear = myeongsik.fortune.targetYear ?? 2026;
   const yearlyFortune = myeongsik.fortune.yearly.find((item) => item.year === reportYear);
   const interpretationFacts = deriveInterpretationFacts(myeongsik);
+  const blueprint = deriveSajuInterpretationBlueprint(myeongsik);
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
@@ -89,6 +91,24 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
               <p className="mt-2 text-sm leading-6 text-zinc-700">{fact.description}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {fact.evidence.map((item) => <span key={item} className="rounded-full bg-violet-50 px-2.5 py-1 text-xs text-violet-800">근거 · {item}</span>)}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/50 p-6 shadow-sm">
+        <p className="text-sm font-medium text-amber-800">AI 작문 전 · 서비스 해석 설계서</p>
+        <h2 className="mt-1 text-lg font-semibold text-zinc-900">이 명식을 읽는 순서</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">아래 내용은 GPT가 새로 판단하는 것이 아니라, 서비스가 정한 사주 해석의 출발점과 허용 범위입니다. 리포트는 이 설계서의 내용을 20대 친구 말투로 풀기만 합니다.</p>
+        <div className="mt-5 space-y-3">
+          {blueprint.cards.map((card) => (
+            <article key={card.id} className="rounded-xl border border-amber-100 bg-white p-4">
+              <h3 className="font-medium text-zinc-900">{card.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-700">{card.interpretation}</p>
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900"><span className="font-medium">리포트에서 이렇게 풀어:</span> {card.writingDirection}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {card.evidence.map((item) => <span key={item} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-900">근거 · {item}</span>)}
               </div>
             </article>
           ))}
