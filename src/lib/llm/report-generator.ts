@@ -43,15 +43,15 @@ export async function generateReport(reportId: string): Promise<void> {
   });
   if (claim.count === 0) return;
   // Serverless 함수가 외부 API 응답을 무한정 기다리지 않도록 제한한다.
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 18_000, maxRetries: 0 });
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 28_000, maxRetries: 0 });
   let lastError = "리포트 생성에 실패했습니다.";
 
   // 사용자 요청을 오래 붙잡지 않는다. 재시도는 UI에서 명시적으로 시작한다.
   for (let attempt = 1; attempt <= 1; attempt += 1) {
     try {
       const response = await client.responses.create({
-        // 짧은 에세이 생성은 지연과 비용이 작은 모델로 처리한다.
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        // 사용자에게 전달되는 본문은 글맛과 지시 이행이 좋은 모델로 작성한다.
+        model: process.env.OPENAI_MODEL || "gpt-4o",
         store: false,
         max_output_tokens: 2200,
         input: [

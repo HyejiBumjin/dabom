@@ -17,7 +17,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ pr
       sajuProfileId: profile.id,
       productCode: PRODUCT_CODE,
       promptVersion: REPORT_PROMPT_VERSION,
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model: process.env.OPENAI_MODEL || "gpt-4o",
     },
   });
   return NextResponse.json({ reportId: report.id, existing: false }, { status: 201 });

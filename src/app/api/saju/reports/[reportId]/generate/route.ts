@@ -3,7 +3,7 @@ import { generateReport } from "@/lib/llm/report-generator";
 import { prisma } from "@/lib/db";
 
 // 빠른 실패를 우선해 사용자가 긴 로딩 화면에 머물지 않게 한다.
-export const maxDuration = 30;
+export const maxDuration = 45;
 
 export async function POST(_request: Request, { params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params;
