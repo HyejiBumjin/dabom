@@ -7,7 +7,7 @@ import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(250)).length(6),
+  paragraphs: z.array(z.string().min(220).max(320)).length(6),
 });
 
 const outputSchema = {
@@ -15,13 +15,48 @@ const outputSchema = {
   additionalProperties: false,
   required: ["paragraphs"],
   properties: {
-    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 250 } },
+    // Bound chunks so the JSON response always finishes. We rebuild natural paragraph
+    // boundaries from complete sentences below because a model may split an item at its limit.
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 220, maxLength: 320 } },
   },
 } as const;
 
+function normalizeParagraphs(chunks: string[]) {
+  const text = chunks.join("").replace(/([.!?])(?=[^\s])/g, "$1 ").replace(/\s+/g, " ").trim();
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [text];
+  const paragraphs: string[] = [];
+  let current = "";
+
+  for (const sentence of sentences) {
+    const remainingParagraphs = 6 - paragraphs.length;
+    const remainingLength = text.length - paragraphs.join("").length - current.length;
+    const targetLength = Math.ceil(remainingLength / remainingParagraphs);
+    if (current && current.length + sentence.length > targetLength && paragraphs.length < 5) {
+      paragraphs.push(current);
+      current = sentence;
+    } else {
+      current = `${current}${current ? " " : ""}${sentence}`;
+    }
+  }
+  if (current) paragraphs.push(current);
+
+  while (paragraphs.length > 6) {
+    const last = paragraphs.pop();
+    if (last) paragraphs[paragraphs.length - 1] = `${paragraphs[paragraphs.length - 1]} ${last}`;
+  }
+  while (paragraphs.length < 6) {
+    const longestIndex = paragraphs.reduce((best, paragraph, index, values) => paragraph.length > values[best].length ? index : best, 0);
+    const source = paragraphs[longestIndex];
+    const splitAt = source.lastIndexOf(" ", Math.ceil(source.length / 2));
+    if (splitAt < 1) break;
+    paragraphs.splice(longestIndex, 1, source.slice(0, splitAt).trim(), source.slice(splitAt + 1).trim());
+  }
+  return paragraphs;
+}
+
 function validateReport(value: unknown): ReportContent {
   const parsed = reportSchema.parse(value);
-  const paragraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
+  const paragraphs = normalizeParagraphs(parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean));
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
   const text = paragraphs.join("\n\n");
   const charCount = [...text].length;
@@ -55,7 +90,7 @@ export async function generateReport(reportId: string): Promise<void> {
         // 사용자에게 전달되는 본문은 글맛과 지시 이행이 좋은 모델로 작성한다.
         model: process.env.OPENAI_MODEL || "gpt-4o",
         store: false,
-        max_output_tokens: 3200,
+        max_output_tokens: 2200,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
           { role: "user", content: buildReportEvidencePrompt(report.sajuProfile.myeongsik as unknown as Myeongsik) },
