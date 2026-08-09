@@ -8,6 +8,8 @@ export interface InterpretationFact {
   title: string;
   evidence: string[];
   description: string;
+  /** A service-owned editorial lens. The writing model may not invent lenses beyond this. */
+  writingGuidance?: string;
 }
 
 export interface InterpretationFacts {
@@ -70,6 +72,16 @@ const clashPairs = [
 
 function isClash(left: string, right: string) {
   return clashPairs.some(([first, second]) => (left === first && right === second) || (left === second && right === first));
+}
+
+function elementRelation(from: Element, to: Element) {
+  const produces: Record<Element, Element> = { wood: "fire", fire: "earth", earth: "metal", metal: "water", water: "wood" };
+  const controls: Record<Element, Element> = { wood: "earth", fire: "metal", earth: "water", metal: "wood", water: "fire" };
+  if (produces[from] === to) return { name: "상생", rule: `${elementLabels[from]}생${elementLabels[to]}` };
+  if (produces[to] === from) return { name: "상생", rule: `${elementLabels[to]}생${elementLabels[from]}` };
+  if (controls[from] === to) return { name: "상극", rule: `${elementLabels[from]}극${elementLabels[to]}` };
+  if (controls[to] === from) return { name: "상극", rule: `${elementLabels[to]}극${elementLabels[from]}` };
+  return null;
 }
 
 function readStem(stem: string) {
@@ -138,6 +150,20 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
       evidence: [`${targetYear}년 세운 ${yearlyFortune.ganZhi}`, `천간 ${readStem(stem)}`, `지지 ${readBranch(branch)}`],
       description: `${targetYear}년 세운은 ${readGanZhi(yearlyFortune.ganZhi)}입니다. 천간은 ${stemElement}, 지지는 ${branchElement}에 해당합니다.`,
     });
+
+    if (dayMasterInfo && stemInfo[stem]) {
+      const relation = elementRelation(stemInfo[stem].element, dayMasterInfo.element);
+      if (relation) {
+        facts.push({
+          id: "yearly-day-master-element-relation",
+          category: "fortune",
+          title: `${targetYear}년 ${elementLabels[stemInfo[stem].element]}와 일간 ${elementLabels[dayMasterInfo.element]}의 ${relation.rule}`,
+          evidence: [`일간 ${readStem(dayMaster)} = ${elementLabels[dayMasterInfo.element]}`, `${targetYear}년 세운 천간 ${readStem(stem)} = ${elementLabels[stemInfo[stem].element]}`, `오행 ${relation.name} 규칙: ${relation.rule}`],
+          description: `${targetYear}년 세운 천간의 ${elementLabels[stemInfo[stem].element]}와 일간의 ${elementLabels[dayMasterInfo.element]}은 오행 ${relation.name} 규칙에서 ${relation.rule} 관계입니다.`,
+          writingGuidance: relation.rule === "화극금" ? "화극금은 단단한 금속을 다듬는 과정에 비유할 수 있다. 외부 기준·피드백·마감 앞에서 내 기준을 정교하게 만드는 흐름으로만 가능성을 표현하고, 특정 사건이나 결과를 단정하지 않는다." : undefined,
+        });
+      }
+    }
   }
 
   const activeDaYun = myeongsik.fortune.daYun.find((period) => period.startYear <= targetYear && targetYear <= period.endYear);
@@ -166,6 +192,7 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
           title: `${source.label}의 ${readBranch(branch)}와 ${pillarLabels[natal.name]}의 ${readBranch(natal.branch)} 충`,
           evidence: [`${source.label} ${source.ganZhi}`, `${pillarLabels[natal.name]} 지지 ${natal.branch}`, "지지 충 규칙: 子–午 · 丑–未 · 寅–申 · 卯–酉 · 辰–戌 · 巳–亥"],
           description: `${source.label} 지지 ${branch}와 ${pillarLabels[natal.name]} 지지 ${natal.branch}는 지지 충 규칙에 해당합니다. 이 카드는 관계의 계산 결과만 표시하며, 길흉 판단은 포함하지 않습니다.`,
+          writingGuidance: "지지 충은 기존 리듬을 점검하고 조정할 필요가 생기는 때라는 비유로만 풀 수 있다. 이직·이별·사고처럼 특정 사건을 예고하거나 단정하지 않는다.",
         });
       }
       if (branch === natal.branch) {
@@ -175,6 +202,7 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
           title: `${source.label}과 ${pillarLabels[natal.name]}의 ${readBranch(branch)} 겹침`,
           evidence: [`${source.label} ${source.ganZhi}`, `${pillarLabels[natal.name]} 지지 ${natal.branch}`],
           description: `${source.label} 지지와 ${pillarLabels[natal.name]} 지지가 모두 ${branch}로 같습니다. 이 카드는 같은 지지가 겹친다는 계산 결과만 표시합니다.`,
+          writingGuidance: "같은 지지의 겹침은 이미 신경 쓰던 주제를 다시 살피는 흐름이라는 비유로만 풀 수 있다. 좋은 일이나 나쁜 일을 예고하지 않는다.",
         });
       }
     }

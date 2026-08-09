@@ -7,7 +7,7 @@ import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(220).max(320)).length(6),
+  paragraphs: z.array(z.string().min(1)).length(6),
 });
 
 const outputSchema = {
@@ -15,8 +15,7 @@ const outputSchema = {
   additionalProperties: false,
   required: ["paragraphs"],
   properties: {
-    // 문단마다 상한을 두면 한 문단이 길어져 JSON 응답 전체가 잘리는 일을 막을 수 있다.
-    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 220, maxLength: 320 } },
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 1 } },
   },
 } as const;
 
@@ -56,7 +55,7 @@ export async function generateReport(reportId: string): Promise<void> {
         // 사용자에게 전달되는 본문은 글맛과 지시 이행이 좋은 모델로 작성한다.
         model: process.env.OPENAI_MODEL || "gpt-4o",
         store: false,
-        max_output_tokens: 2200,
+        max_output_tokens: 3200,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
           { role: "user", content: buildReportEvidencePrompt(report.sajuProfile.myeongsik as unknown as Myeongsik) },
