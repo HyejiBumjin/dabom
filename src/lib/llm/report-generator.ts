@@ -22,49 +22,27 @@ const outputSchema = {
   },
 } as const;
 
-function normalizeParagraphs(chunks: string[]) {
-  const text = chunks.join("").replace(/([.!?])(?=[^\s])/g, "$1 ").replace(/\s+/g, " ").trim();
-  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [text];
-  const paragraphs: string[] = [];
-  let current = "";
-
-  for (const sentence of sentences) {
-    const remainingParagraphs = 6 - paragraphs.length;
-    const remainingLength = text.length - paragraphs.join("").length - current.length;
-    const targetLength = Math.ceil(remainingLength / remainingParagraphs);
-    if (current && current.length + sentence.length > targetLength && paragraphs.length < 5) {
-      paragraphs.push(current);
-      current = sentence;
-    } else {
-      current = `${current}${current ? " " : ""}${sentence}`;
-    }
-  }
-  if (current) paragraphs.push(current);
-
-  while (paragraphs.length > 6) {
-    const last = paragraphs.pop();
-    if (last) paragraphs[paragraphs.length - 1] = `${paragraphs[paragraphs.length - 1]} ${last}`;
-  }
-  while (paragraphs.length < 6) {
-    const longestIndex = paragraphs.reduce((best, paragraph, index, values) => paragraph.length > values[best].length ? index : best, 0);
-    const source = paragraphs[longestIndex];
-    const splitAt = source.lastIndexOf(" ", Math.ceil(source.length / 2));
-    if (splitAt < 1) break;
-    paragraphs.splice(longestIndex, 1, source.slice(0, splitAt).trim(), source.slice(splitAt + 1).trim());
-  }
-  return paragraphs;
-}
-
 const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "규칙적인 생활", "마음을 다잡고", "자기계발"];
 
 function validateReport(value: unknown, _script: ReportScript): ReportContent {
   const parsed = reportSchema.parse(value);
-  const paragraphs = normalizeParagraphs(parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean));
+  const paragraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
   const text = paragraphs.join("\n\n");
   const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
   if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
   if ([...text].length < 1_450) throw new Error("리포트 분량이 부족합니다.");
+  const requiredByBit = [
+    ["辛", "신금"],
+    ["丙午", "병오", "정관"],
+    ["충", "3월", "4월", "10월"],
+    ["정재", "정관"],
+    ["화극금"],
+    ["甲申", "갑신", "정재"],
+  ];
+  requiredByBit.forEach((terms, index) => {
+    if (!terms.some((term) => paragraphs[index]?.includes(term))) throw new Error(`${index + 1}비트의 사주 근거가 누락되었습니다: ${terms.join("/")}`);
+  });
 
   const charCount = [...text].length;
   return { paragraphs, meta: { charCount, beats: [], termsUsed: [] } };
