@@ -66,7 +66,8 @@ export async function generateReport(reportId: string): Promise<void> {
   for (let attempt = 1; attempt <= 1; attempt += 1) {
     try {
       const response = await client.responses.create({
-        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        // 짧은 에세이 생성은 지연과 비용이 작은 모델로 처리한다.
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         store: false,
         max_output_tokens: 1600,
         input: buildEssayPrompt(report.sajuProfile.myeongsik as unknown as Myeongsik),
@@ -77,6 +78,7 @@ export async function generateReport(reportId: string): Promise<void> {
       return;
     } catch (error) {
       lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
+      console.warn("[report-generation] failed", { reportId, attempt, message: lastError });
       await prisma.report.update({ where: { id: reportId }, data: { retryCount: attempt, lastError } });
     }
   }
