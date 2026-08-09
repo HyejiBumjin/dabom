@@ -36,6 +36,7 @@ export interface Myeongsik {
   dayMaster: string;
   pillars: Record<PillarName, MyeongsikPillar>;
   fortune: {
+    targetYear: number;
     direction: "forward" | "backward";
     startsAt: string;
     daYun: MyeongsikFortunePeriod[];

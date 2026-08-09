@@ -22,6 +22,8 @@ interface DaYun { getGanZhi(): string; getStartYear(): number; getEndYear(): num
 interface LiuNian { getYear(): number; getGanZhi(): string; getLiuYue(): LiuYue[] }
 interface LiuYue { getGanZhi(): string }
 
+const REPORT_YEAR = 2026;
+
 const PILLAR_METHODS: Record<PillarName, readonly [string, string, string, string, string, string, string]> = {
   year: ["getYear", "getYearGan", "getYearZhi", "getYearHideGan", "getYearShiShenGan", "getYearShiShenZhi", "getYearWuXing"],
   month: ["getMonth", "getMonthGan", "getMonthZhi", "getMonthHideGan", "getMonthShiShenGan", "getMonthShiShenZhi", "getMonthWuXing"],
@@ -103,7 +105,11 @@ export class KoreanPolicyAdapter {
     eightChar.setSect(2);
     const yun = eightChar.getYun(input.gender === "male" ? 1 : 0, 2);
     const daYun = yun.getDaYun(10).slice(1);
-    const firstYear = daYun[0]?.getLiuNian() ?? [];
+    // 리포트 대상 연도가 포함된 대운의 세운·월운을 사용한다.
+    // 첫 대운만 쓰면 2000년대 데이터로 2026년 리포트를 쓰게 된다.
+    const reportDaYun = daYun.find((period) => period.getStartYear() <= REPORT_YEAR && REPORT_YEAR <= period.getEndYear()) ?? daYun[0];
+    const reportYears = reportDaYun?.getLiuNian() ?? [];
+    const reportYear = reportYears.find((period) => period.getYear() === REPORT_YEAR);
 
     return {
       version: 1,
@@ -112,10 +118,11 @@ export class KoreanPolicyAdapter {
       lunarDate: lunar.toString(), dayMaster: eightChar.getDayGan(),
       pillars: { year: toPillar(eightChar, "year"), month: toPillar(eightChar, "month"), day: toPillar(eightChar, "day"), hour: toPillar(eightChar, "hour") },
       fortune: {
+        targetYear: REPORT_YEAR,
         direction: yun.isForward() ? "forward" : "backward", startsAt: yun.getStartSolar().toYmdHms(),
         daYun: daYun.map((period) => ({ ganZhi: period.getGanZhi(), startYear: period.getStartYear(), endYear: period.getEndYear() })),
-        yearly: firstYear.map((period) => ({ year: period.getYear(), ganZhi: period.getGanZhi() })),
-        monthly: firstYear[0]?.getLiuYue().map((period, index) => ({ ordinal: index + 1, ganZhi: period.getGanZhi() })) ?? [],
+        yearly: reportYears.map((period) => ({ year: period.getYear(), ganZhi: period.getGanZhi() })),
+        monthly: reportYear?.getLiuYue().map((period, index) => ({ ordinal: index + 1, ganZhi: period.getGanZhi() })) ?? [],
       },
       shinsal: { status: "pending-korean-rule-table", items: [] },
     };

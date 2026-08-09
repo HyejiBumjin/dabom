@@ -19,7 +19,8 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
 
   const myeongsik = profile.myeongsik as unknown as Myeongsik;
   const birthDate = profile.birthDate.toISOString().slice(0, 10);
-  const year2026 = myeongsik.fortune.yearly.find((item) => item.year === 2026);
+  const reportYear = myeongsik.fortune.targetYear ?? 2026;
+  const yearlyFortune = myeongsik.fortune.yearly.find((item) => item.year === reportYear);
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
@@ -69,7 +70,7 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
       <section className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
         <h2 className="font-semibold text-zinc-900">운의 데이터</h2>
         <p className="mt-1 text-sm text-zinc-500">방향: {myeongsik.fortune.direction === "forward" ? "순행" : "역행"} · 대운 시작: {myeongsik.fortune.startsAt}</p>
-        {year2026 && <p className="mt-4 rounded-lg bg-zinc-50 px-4 py-3 text-sm text-zinc-700">2026년 세운: <span className="ml-2 text-lg font-semibold text-zinc-900">{year2026.ganZhi}</span></p>}
+        {yearlyFortune && <p className="mt-4 rounded-lg bg-zinc-50 px-4 py-3 text-sm text-zinc-700">{reportYear}년 세운: <span className="ml-2 text-lg font-semibold text-zinc-900">{yearlyFortune.ganZhi}</span></p>}
         <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5">
           {myeongsik.fortune.daYun.map((period) => <div key={`${period.startYear}-${period.ganZhi}`} className="rounded-lg bg-zinc-50 p-3 text-center"><p className="text-lg font-semibold text-zinc-900">{period.ganZhi}</p><p className="mt-1 text-xs text-zinc-500">{period.startYear}–{period.endYear}</p></div>)}
         </div>
