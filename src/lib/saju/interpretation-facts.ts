@@ -46,6 +46,16 @@ const stemInfo: Record<string, { reading: string; element: Element }> = {
   "癸": { reading: "계", element: "water" },
 };
 
+const yangStems = new Set(["甲", "丙", "戊", "庚", "壬"]);
+
+const produces: Record<Element, Element> = { wood: "fire", fire: "earth", earth: "metal", metal: "water", water: "wood" };
+const controls: Record<Element, Element> = { wood: "earth", fire: "metal", earth: "water", metal: "wood", water: "fire" };
+
+const tenGodLabels: Record<string, string> = {
+  "비견": "비견", "겁재": "겁재", "식신": "식신", "상관": "상관", "편재": "편재",
+  "정재": "정재", "편관": "편관", "정관": "정관", "편인": "편인", "정인": "정인",
+};
+
 const branchInfo: Record<string, { reading: string; element: Element }> = {
   "子": { reading: "자", element: "water" },
   "丑": { reading: "축", element: "earth" },
@@ -75,12 +85,25 @@ function isClash(left: string, right: string) {
 }
 
 function elementRelation(from: Element, to: Element) {
-  const produces: Record<Element, Element> = { wood: "fire", fire: "earth", earth: "metal", metal: "water", water: "wood" };
-  const controls: Record<Element, Element> = { wood: "earth", fire: "metal", earth: "water", metal: "wood", water: "fire" };
   if (produces[from] === to) return { name: "상생", rule: `${elementLabels[from]}생${elementLabels[to]}` };
   if (produces[to] === from) return { name: "상생", rule: `${elementLabels[to]}생${elementLabels[from]}` };
   if (controls[from] === to) return { name: "상극", rule: `${elementLabels[from]}극${elementLabels[to]}` };
   if (controls[to] === from) return { name: "상극", rule: `${elementLabels[to]}극${elementLabels[from]}` };
+  return null;
+}
+
+/** Determines the ten-god name from the day stem and a comparison stem. */
+function calculateTenGod(dayStem: string, comparisonStem: string) {
+  const day = stemInfo[dayStem];
+  const comparison = stemInfo[comparisonStem];
+  if (!day || !comparison) return null;
+  const samePolarity = yangStems.has(dayStem) === yangStems.has(comparisonStem);
+
+  if (day.element === comparison.element) return samePolarity ? "비견" : "겁재";
+  if (produces[day.element] === comparison.element) return samePolarity ? "식신" : "상관";
+  if (controls[day.element] === comparison.element) return samePolarity ? "편재" : "정재";
+  if (controls[comparison.element] === day.element) return samePolarity ? "편관" : "정관";
+  if (produces[comparison.element] === day.element) return samePolarity ? "편인" : "정인";
   return null;
 }
 
@@ -115,6 +138,7 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
       title: `${readStem(dayMaster)} 일간`,
       evidence: [`일간 ${readStem(dayMaster)}`, `일주 ${readGanZhi(myeongsik.pillars.day.ganZhi)}`],
       description: `이 명식의 일간은 ${readStem(dayMaster)}입니다. 이후의 해석 문장은 이 값을 기준으로 작성합니다.`,
+      writingGuidance: "일간은 사주에서 나 자신을 보는 기준이라는 뜻까지만 설명한다. 금속의 물성이나 성격을 덧붙이지 않는다.",
     });
   }
 
@@ -135,6 +159,7 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
     title: "원국 오행의 단순 분포",
     evidence: pillarOrder.map((name) => `${pillarLabels[name]} ${myeongsik.pillars[name].ganZhi}`),
     description: `원국의 천간·지지 8글자를 같은 비중으로 집계하면 ${distribution}입니다. 지장간과 계절의 세기는 이 단순 집계에 포함하지 않습니다.`,
+    writingGuidance: "이 카드는 8글자의 단순 개수다. 강함·약함·부족·균형·성격이나 능력으로 해석하지 않는다.",
   });
 
   const targetYear = myeongsik.fortune.targetYear;
@@ -149,6 +174,7 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
       title: `${targetYear}년 세운 ${readGanZhi(yearlyFortune.ganZhi)}`,
       evidence: [`${targetYear}년 세운 ${yearlyFortune.ganZhi}`, `천간 ${readStem(stem)}`, `지지 ${readBranch(branch)}`],
       description: `${targetYear}년 세운은 ${readGanZhi(yearlyFortune.ganZhi)}입니다. 천간은 ${stemElement}, 지지는 ${branchElement}에 해당합니다.`,
+      writingGuidance: "세운은 해당 연도에 들어오는 간지라는 뜻까지만 설명한다. 화 기운만으로 계절·건강·성공 여부를 예측하지 않는다.",
     });
 
     if (dayMasterInfo && stemInfo[stem]) {
@@ -163,6 +189,18 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
           writingGuidance: relation.rule === "화극금" ? "화극금은 단단한 금속을 다듬는 과정에 비유할 수 있다. 외부 기준·피드백·마감 앞에서 내 기준을 정교하게 만드는 흐름으로만 가능성을 표현하고, 특정 사건이나 결과를 단정하지 않는다." : undefined,
         });
       }
+
+      const tenGod = calculateTenGod(dayMaster, stem);
+      if (tenGod) {
+        facts.push({
+          id: "yearly-stem-ten-god",
+          category: "fortune",
+          title: `${targetYear}년 세운 천간 ${readStem(stem)}의 ${tenGodLabels[tenGod]}`,
+          evidence: [`일간 ${readStem(dayMaster)}`, `${targetYear}년 세운 천간 ${readStem(stem)}`, `십신 계산 결과 ${tenGod}`],
+          description: `${targetYear}년 세운 천간 ${stem}은 일간 ${dayMaster}을 기준으로 ${tenGod}에 해당합니다.`,
+          writingGuidance: tenGod === "정관" ? "정관은 전통적으로 기준·책임·공식적인 역할을 살피는 십신이다. 승진·합격·직장 변화를 단정하지 말고, 기준을 정하고 결과물을 정리하는 행동 제안으로만 풀어낸다." : undefined,
+        });
+      }
     }
   }
 
@@ -174,7 +212,20 @@ export function deriveInterpretationFacts(myeongsik: Myeongsik): InterpretationF
       title: `현재 대운 ${readGanZhi(activeDaYun.ganZhi)}`,
       evidence: [`대운 ${activeDaYun.ganZhi}`, `${activeDaYun.startYear}–${activeDaYun.endYear}`],
       description: `${targetYear}년은 ${readGanZhi(activeDaYun.ganZhi)} 대운(${activeDaYun.startYear}–${activeDaYun.endYear}) 구간에 있습니다.`,
+      writingGuidance: "대운은 10년 단위의 흐름 표기다. 제공된 기간과 간지 외의 변화를 예측하지 않는다.",
     });
+    const daYunStem = Array.from(activeDaYun.ganZhi)[0];
+    const tenGod = calculateTenGod(dayMaster, daYunStem);
+    if (tenGod) {
+      facts.push({
+        id: "da-yun-stem-ten-god",
+        category: "fortune",
+        title: `현재 대운 천간 ${readStem(daYunStem)}의 ${tenGodLabels[tenGod]}`,
+        evidence: [`일간 ${readStem(dayMaster)}`, `현재 대운 천간 ${readStem(daYunStem)}`, `십신 계산 결과 ${tenGod}`],
+        description: `현재 대운 천간 ${daYunStem}은 일간 ${dayMaster}을 기준으로 ${tenGod}에 해당합니다.`,
+        writingGuidance: tenGod === "정재" ? "정재는 전통적으로 일상의 자원·계획·관리라는 키워드로 살핀다. 수입이나 재산 증가를 단정하지 말고, 예산·일정·우선순위를 정리하는 행동 제안으로만 풀어낸다." : undefined,
+      });
+    }
   }
 
   const natalBranches = pillarOrder.map((name) => ({ name, branch: myeongsik.pillars[name].earthlyBranch }));
