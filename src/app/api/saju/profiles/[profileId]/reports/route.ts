@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { REPORT_PROMPT_VERSION } from "@/lib/prompts/v2";
+import { REPORT_PROMPT_VERSION } from "@/lib/prompts/v3";
 
 const PRODUCT_CODE = "yearly_2026";
 

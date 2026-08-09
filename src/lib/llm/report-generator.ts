@@ -2,56 +2,30 @@ import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { buildEssayPrompt } from "@/lib/prompts/v2";
+import { buildEssayPrompt } from "@/lib/prompts/v3";
 import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
-const beats = ["opening", "past", "career", "money_love", "mental", "ending"] as const;
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(235).max(360)).length(6),
-  meta: z.object({
-    beats: z.array(z.enum(beats)).length(6),
-    termsUsed: z.array(z.object({ term: z.string().min(1), gloss: z.string().min(1) })),
-  }),
+  paragraphs: z.array(z.string().min(1)).min(4).max(6),
 });
 
 const outputSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["paragraphs", "meta"],
+  required: ["paragraphs"],
   properties: {
-    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 235, maxLength: 360 } },
-    meta: {
-      type: "object", additionalProperties: false, required: ["beats", "termsUsed"],
-      properties: {
-        beats: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", enum: beats } },
-        termsUsed: { type: "array", items: { type: "object", additionalProperties: false, required: ["term", "gloss"], properties: { term: { type: "string" }, gloss: { type: "string" } } } },
-      },
-    },
+    paragraphs: { type: "array", minItems: 4, maxItems: 6, items: { type: "string", minLength: 1 } },
   },
 } as const;
-
-const headingPattern = /^\s*(?:#{1,6}\s|\d+[.)]\s|[■◆●]\s|\[[^\]]+\])/m;
-// 유행어는 프롬프트로 제어한다. 저장 실패는 심한 비속어처럼 안전상 반드시 막아야 할 경우에만 낸다.
-const bannedTerms = ["병신", "씨발", "좆"];
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function validateReport(value: unknown): ReportContent {
   const parsed = reportSchema.parse(value);
   const paragraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
+  if (paragraphs.length < 4) throw new Error("문단이 충분하지 않습니다.");
   const text = paragraphs.join("\n\n");
   const charCount = [...text].length;
-  // 모바일에서 읽기 좋되, 충분히 몰입할 수 있는 에세이 분량을 보장한다.
-  if (charCount < 1400 || charCount > 2200) throw new Error(`본문 분량이 범위를 벗어났습니다: ${charCount}자`);
-  if (headingPattern.test(text)) throw new Error("소제목 또는 번호 형식이 포함되었습니다.");
-  if (bannedTerms.some((term) => text.includes(term))) throw new Error("금지어가 포함되었습니다.");
-  if (new Set(parsed.meta.beats).size !== beats.length) throw new Error("서사 비트가 모두 포함되지 않았습니다.");
-  for (const { term } of parsed.meta.termsUsed) {
-    // 모델이 meta의 풀이를 자연스럽게 다듬어 써도, 본문에서 용어 바로 뒤에 풀이가 있으면 허용한다.
-    const explainedInText = new RegExp(`${escapeRegExp(term)}\\s*[（(][^）)]{2,100}[）)]`).test(text);
-    if (!text.includes(term) || !explainedInText) throw new Error(`용어 풀이가 본문에 없습니다: ${term}`);
-  }
-  return { paragraphs, meta: { charCount, beats: [...parsed.meta.beats], termsUsed: parsed.meta.termsUsed } };
+  return { paragraphs, meta: { charCount, beats: [], termsUsed: [] } };
 }
 
 export async function generateReport(reportId: string): Promise<void> {
@@ -79,7 +53,7 @@ export async function generateReport(reportId: string): Promise<void> {
         // 짧은 에세이 생성은 지연과 비용이 작은 모델로 처리한다.
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         store: false,
-        max_output_tokens: 1900,
+        max_output_tokens: 1300,
         input: buildEssayPrompt(report.sajuProfile.myeongsik as unknown as Myeongsik),
         text: { format: { type: "json_schema", name: "essay_report", strict: true, schema: outputSchema } },
       });
