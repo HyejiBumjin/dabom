@@ -7,7 +7,7 @@ import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(1)).length(6),
+  paragraphs: z.array(z.string().min(220).max(320)).length(6),
 });
 
 const outputSchema = {
@@ -15,7 +15,8 @@ const outputSchema = {
   additionalProperties: false,
   required: ["paragraphs"],
   properties: {
-    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 1 } },
+    // 문단마다 상한을 두면 한 문단이 길어져 JSON 응답 전체가 잘리는 일을 막을 수 있다.
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 220, maxLength: 320 } },
   },
 } as const;
 
