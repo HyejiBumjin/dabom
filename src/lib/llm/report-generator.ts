@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { buildEssayPrompt } from "@/lib/prompts/v5";
+import { buildReportEvidencePrompt, REPORT_DEVELOPER_INSTRUCTIONS } from "@/lib/prompts/v6";
 import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
@@ -54,7 +54,10 @@ export async function generateReport(reportId: string): Promise<void> {
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         store: false,
         max_output_tokens: 2200,
-        input: buildEssayPrompt(report.sajuProfile.myeongsik as unknown as Myeongsik),
+        input: [
+          { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
+          { role: "user", content: buildReportEvidencePrompt(report.sajuProfile.myeongsik as unknown as Myeongsik) },
+        ],
         text: { format: { type: "json_schema", name: "essay_report", strict: true, schema: outputSchema } },
       });
       const content = validateReport(JSON.parse(response.output_text));
