@@ -8,7 +8,7 @@ import type { Myeongsik } from "@/lib/saju/myeongsik";
 import { buildReportScript, type ReportScript } from "@/lib/saju/report-script";
 
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(220).max(320)).length(6),
+  paragraphs: z.array(z.string().min(250).max(320)).length(6),
 });
 
 const outputSchema = {
@@ -18,7 +18,7 @@ const outputSchema = {
   properties: {
     // Bound chunks so the JSON response always finishes. We rebuild natural paragraph
     // boundaries from complete sentences below because a model may split an item at its limit.
-    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 220, maxLength: 320 } },
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 250, maxLength: 320 } },
   },
 } as const;
 
