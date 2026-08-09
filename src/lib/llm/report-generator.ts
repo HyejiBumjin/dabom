@@ -32,7 +32,8 @@ const outputSchema = {
 } as const;
 
 const headingPattern = /^\s*(?:#{1,6}\s|\d+[.)]\s|[■◆●]\s|\[[^\]]+\])/m;
-const bannedTerms = ["병신", "씨발", "좆", "존나", "개짜증", "GOAT", "긁", "어쩔티비", "킹받다", "스불재", "오조오억", "라떼는", "무조건 대박"];
+// 유행어는 프롬프트로 제어한다. 저장 실패는 심한 비속어처럼 안전상 반드시 막아야 할 경우에만 낸다.
+const bannedTerms = ["병신", "씨발", "좆"];
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function validateReport(value: unknown): ReportContent {
