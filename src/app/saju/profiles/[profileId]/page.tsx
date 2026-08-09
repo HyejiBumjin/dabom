@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import type { Myeongsik, PillarName } from "@/lib/saju/myeongsik";
+import { deriveInterpretationFacts } from "@/lib/saju/interpretation-facts";
 
 const pillarLabels: Record<PillarName, string> = {
   year: "년주",
@@ -21,6 +22,7 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
   const birthDate = profile.birthDate.toISOString().slice(0, 10);
   const reportYear = myeongsik.fortune.targetYear ?? 2026;
   const yearlyFortune = myeongsik.fortune.yearly.find((item) => item.year === reportYear);
+  const interpretationFacts = deriveInterpretationFacts(myeongsik);
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
@@ -73,6 +75,23 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
         {yearlyFortune && <p className="mt-4 rounded-lg bg-zinc-50 px-4 py-3 text-sm text-zinc-700">{reportYear}년 세운: <span className="ml-2 text-lg font-semibold text-zinc-900">{yearlyFortune.ganZhi}</span></p>}
         <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5">
           {myeongsik.fortune.daYun.map((period) => <div key={`${period.startYear}-${period.ganZhi}`} className="rounded-lg bg-zinc-50 p-3 text-center"><p className="text-lg font-semibold text-zinc-900">{period.ganZhi}</p><p className="mt-1 text-xs text-zinc-500">{period.startYear}–{period.endYear}</p></div>)}
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-violet-200 bg-violet-50/40 p-6 shadow-sm">
+        <p className="text-sm font-medium text-violet-700">AI 해석 전 · 코드로 확인한 사실</p>
+        <h2 className="mt-1 text-lg font-semibold text-zinc-900">확정된 해석 근거</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">아래는 정해진 만세력·오행·지지 관계 규칙으로 계산한 값입니다. 아직 좋고 나쁨을 판단하거나 문장으로 풀이하지 않습니다.</p>
+        <div className="mt-5 space-y-3">
+          {interpretationFacts.facts.map((fact) => (
+            <article key={fact.id} className="rounded-xl border border-violet-100 bg-white p-4">
+              <h3 className="font-medium text-zinc-900">{fact.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-700">{fact.description}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {fact.evidence.map((item) => <span key={item} className="rounded-full bg-violet-50 px-2.5 py-1 text-xs text-violet-800">근거 · {item}</span>)}
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
