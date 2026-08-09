@@ -8,7 +8,7 @@ import type { Myeongsik } from "@/lib/saju/myeongsik";
 
 const beats = ["opening", "past", "career", "money_love", "mental", "ending"] as const;
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(1)).min(4),
+  paragraphs: z.array(z.string().min(235).max(360)).length(6),
   meta: z.object({
     beats: z.array(z.enum(beats)).length(6),
     termsUsed: z.array(z.object({ term: z.string().min(1), gloss: z.string().min(1) })),
@@ -20,7 +20,7 @@ const outputSchema = {
   additionalProperties: false,
   required: ["paragraphs", "meta"],
   properties: {
-    paragraphs: { type: "array", minItems: 4, items: { type: "string" } },
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 235, maxLength: 360 } },
     meta: {
       type: "object", additionalProperties: false, required: ["beats", "termsUsed"],
       properties: {
