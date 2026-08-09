@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { buildReportEvidencePrompt, REPORT_DEVELOPER_INSTRUCTIONS } from "@/lib/prompts/v6";
 import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
+import { buildReportScript, type ReportScript } from "@/lib/saju/report-script";
 
 const reportSchema = z.object({
   paragraphs: z.array(z.string().min(220).max(320)).length(6),
@@ -54,11 +55,27 @@ function normalizeParagraphs(chunks: string[]) {
   return paragraphs;
 }
 
-function validateReport(value: unknown): ReportContent {
+const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "규칙적인 생활", "마음을 다잡고", "자기계발"];
+
+function validateReport(value: unknown, script: ReportScript): ReportContent {
   const parsed = reportSchema.parse(value);
   const paragraphs = normalizeParagraphs(parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean));
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
   const text = paragraphs.join("\n\n");
+  const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
+  if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
+  if ([...text].length < 1_450) throw new Error("리포트 분량이 부족합니다.");
+
+  const requiredTerms = [
+    ["辛", "신금"],
+    ["丙午", "병오", "정관"],
+    ["충", "3월", "4월", "10월"],
+    ["정재", "정관"],
+    ["화극금"],
+  ];
+  for (const terms of requiredTerms) {
+    if (!terms.some((term) => text.includes(term))) throw new Error(`대본 핵심어가 누락되었습니다: ${terms.join("/")}`);
+  }
   const charCount = [...text].length;
   return { paragraphs, meta: { charCount, beats: [], termsUsed: [] } };
 }
@@ -83,8 +100,9 @@ export async function generateReport(reportId: string): Promise<void> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 45_000, maxRetries: 0 });
   let lastError = "리포트 생성에 실패했습니다.";
 
-  // 사용자 요청을 오래 붙잡지 않는다. 재시도는 UI에서 명시적으로 시작한다.
-  for (let attempt = 1; attempt <= 1; attempt += 1) {
+  const script = buildReportScript(report.sajuProfile.myeongsik as unknown as Myeongsik, report.sajuProfile.name);
+  // 금지 표현·핵심 비트 누락은 한 번 더 작문하게 한다. 계산을 다시 하지는 않는다.
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const response = await client.responses.create({
         // 사용자에게 전달되는 본문은 글맛과 지시 이행이 좋은 모델로 작성한다.
@@ -93,11 +111,12 @@ export async function generateReport(reportId: string): Promise<void> {
         max_output_tokens: 2200,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
-          { role: "user", content: buildReportEvidencePrompt(report.sajuProfile.myeongsik as unknown as Myeongsik) },
+          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 초안이 코드 검증을 통과하지 못했습니다: ${lastError}. 대본의 6비트를 빠짐없이 유지하고 금지 표현 없이 처음부터 다시 작성하세요.` }] : []),
+          { role: "user", content: buildReportEvidencePrompt(script) },
         ],
         text: { format: { type: "json_schema", name: "essay_report", strict: true, schema: outputSchema } },
       });
-      const content = validateReport(JSON.parse(response.output_text));
+      const content = validateReport(JSON.parse(response.output_text), script);
       await prisma.report.update({ where: { id: reportId }, data: { status: "COMPLETED", content: content as unknown as Prisma.InputJsonValue, retryCount: attempt - 1, completedAt: new Date(), lastError: null } });
       return;
     } catch (error) {
