@@ -39,7 +39,8 @@ function validateReport(value: unknown): ReportContent {
   const paragraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
   const text = paragraphs.join("\n\n");
   const charCount = [...text].length;
-  if (charCount < 1700 || charCount > 2600) throw new Error(`본문 분량이 범위를 벗어났습니다: ${charCount}자`);
+  // 모바일에서 읽기 좋은 짧은 에세이로 제한해 응답 지연과 비용을 함께 낮춘다.
+  if (charCount < 1200 || charCount > 2000) throw new Error(`본문 분량이 범위를 벗어났습니다: ${charCount}자`);
   if (headingPattern.test(text)) throw new Error("소제목 또는 번호 형식이 포함되었습니다.");
   if (bannedTerms.some((term) => text.includes(term))) throw new Error("금지어가 포함되었습니다.");
   if (new Set(parsed.meta.beats).size !== beats.length) throw new Error("서사 비트가 모두 포함되지 않았습니다.");
