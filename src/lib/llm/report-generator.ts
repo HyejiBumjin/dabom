@@ -39,8 +39,8 @@ function validateReport(value: unknown): ReportContent {
   const paragraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
   const text = paragraphs.join("\n\n");
   const charCount = [...text].length;
-  // 모바일에서 읽기 좋은 짧은 에세이로 제한해 응답 지연과 비용을 함께 낮춘다.
-  if (charCount < 1200 || charCount > 2000) throw new Error(`본문 분량이 범위를 벗어났습니다: ${charCount}자`);
+  // 모바일에서 읽기 좋되, 충분히 몰입할 수 있는 에세이 분량을 보장한다.
+  if (charCount < 1400 || charCount > 2200) throw new Error(`본문 분량이 범위를 벗어났습니다: ${charCount}자`);
   if (headingPattern.test(text)) throw new Error("소제목 또는 번호 형식이 포함되었습니다.");
   if (bannedTerms.some((term) => text.includes(term))) throw new Error("금지어가 포함되었습니다.");
   if (new Set(parsed.meta.beats).size !== beats.length) throw new Error("서사 비트가 모두 포함되지 않았습니다.");
@@ -70,7 +70,7 @@ export async function generateReport(reportId: string): Promise<void> {
         // 짧은 에세이 생성은 지연과 비용이 작은 모델로 처리한다.
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         store: false,
-        max_output_tokens: 1600,
+        max_output_tokens: 1900,
         input: buildEssayPrompt(report.sajuProfile.myeongsik as unknown as Myeongsik),
         text: { format: { type: "json_schema", name: "essay_report", strict: true, schema: outputSchema } },
       });
