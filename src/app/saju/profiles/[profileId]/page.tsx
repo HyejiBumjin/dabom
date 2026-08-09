@@ -1,12 +1,88 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { DevelopmentReportTrigger } from "@/components/DevelopmentReportTrigger";
+import type { Myeongsik, PillarName } from "@/lib/saju/myeongsik";
+
+const pillarLabels: Record<PillarName, string> = {
+  year: "년주",
+  month: "월주",
+  day: "일주",
+  hour: "시주",
+};
+
+const pillarOrder: PillarName[] = ["year", "month", "day", "hour"];
 
 export default async function SajuProfilePage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = await params;
   const profile = await prisma.sajuProfile.findUnique({ where: { id: profileId } });
   if (!profile) notFound();
-  const pillarText = (profile.myeongsik as { pillars?: Record<string, { ganZhi?: string }> }).pillars;
-  return <main className="mx-auto min-h-screen max-w-xl px-5 py-12 sm:py-20"><Link href="/saju" className="text-sm text-zinc-500 hover:text-zinc-900">← 입력 다시 하기</Link><section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"><p className="text-sm text-zinc-500">{profile.name}님의 명식</p><h1 className="mt-2 text-3xl font-bold text-zinc-900">사주의 결을 살펴봤어요.</h1><p className="mt-5 text-lg tracking-[0.22em] text-zinc-700">{pillarText ? Object.values(pillarText).map((pillar) => pillar.ganZhi).join(" ") : ""}</p><p className="mt-4 text-sm leading-6 text-zinc-600">지금은 결제 전 핵심 흐름을 확인하는 개발 단계입니다. 아래 버튼은 결제 대신 리포트를 생성합니다.</p></section><div className="mt-6"><DevelopmentReportTrigger profileId={profile.id} /></div></main>;
+
+  const myeongsik = profile.myeongsik as unknown as Myeongsik;
+  const birthDate = profile.birthDate.toISOString().slice(0, 10);
+  const year2026 = myeongsik.fortune.yearly.find((item) => item.year === 2026);
+
+  return (
+    <main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
+      <Link href="/saju" className="text-sm text-zinc-500 hover:text-zinc-900">← 입력 다시 하기</Link>
+
+      <header className="mt-8">
+        <p className="text-sm text-zinc-500">AI 해석 전 · 계산된 명식 데이터</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">{profile.name}님의 사주 데이터</h1>
+        <p className="mt-3 leading-7 text-zinc-600">아래 값은 입력 정보와 만세력 계산 결과를 그대로 보여줍니다. 아직 AI 리포트는 생성하지 않습니다.</p>
+      </header>
+
+      <section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="font-semibold text-zinc-900">입력 정보</h2>
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+          <DataRow label="생년월일" value={birthDate} />
+          <DataRow label="태어난 시각" value={profile.birthTime || "모름"} />
+          <DataRow label="성별" value={profile.gender === "FEMALE" ? "여성" : "남성"} />
+          <DataRow label="달력" value={`${profile.isLunar ? "음력" : "양력"}${profile.isLeapMonth ? " · 윤달" : ""}`} />
+          <DataRow label="음력 환산일" value={myeongsik.lunarDate} />
+          <DataRow label="일간" value={myeongsik.dayMaster} />
+        </dl>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="text-lg font-semibold text-zinc-900">사주 팔자</h2>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {pillarOrder.map((name) => {
+            const pillar = myeongsik.pillars[name];
+            return (
+              <article key={name} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-zinc-500">{pillarLabels[name]}</p>
+                <p className="mt-3 text-3xl font-semibold tracking-[0.18em] text-zinc-900">{pillar.ganZhi}</p>
+                <dl className="mt-5 space-y-2 text-xs leading-5 text-zinc-600">
+                  <DataRow label="천간" value={pillar.heavenlyStem} compact />
+                  <DataRow label="지지" value={pillar.earthlyBranch} compact />
+                  <DataRow label="십신" value={pillar.stemTenGod} compact />
+                  <DataRow label="오행" value={pillar.elementPair} compact />
+                  <DataRow label="지장간" value={pillar.hiddenStems.join(" · ")} compact />
+                  <DataRow label="지장간 십신" value={pillar.hiddenTenGods.join(" · ")} compact />
+                </dl>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="font-semibold text-zinc-900">운의 데이터</h2>
+        <p className="mt-1 text-sm text-zinc-500">방향: {myeongsik.fortune.direction === "forward" ? "순행" : "역행"} · 대운 시작: {myeongsik.fortune.startsAt}</p>
+        {year2026 && <p className="mt-4 rounded-lg bg-zinc-50 px-4 py-3 text-sm text-zinc-700">2026년 세운: <span className="ml-2 text-lg font-semibold text-zinc-900">{year2026.ganZhi}</span></p>}
+        <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {myeongsik.fortune.daYun.map((period) => <div key={`${period.startYear}-${period.ganZhi}`} className="rounded-lg bg-zinc-50 p-3 text-center"><p className="text-lg font-semibold text-zinc-900">{period.ganZhi}</p><p className="mt-1 text-xs text-zinc-500">{period.startYear}–{period.endYear}</p></div>)}
+        </div>
+      </section>
+
+      <details className="mt-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <summary className="cursor-pointer text-sm font-medium text-zinc-700">계산 결과 JSON 전체 보기</summary>
+        <pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100">{JSON.stringify(myeongsik, null, 2)}</pre>
+      </details>
+    </main>
+  );
+}
+
+function DataRow({ label, value, compact = false }: { label: string; value: string; compact?: boolean }) {
+  return <div className={compact ? "flex justify-between gap-2" : "space-y-1"}><dt className="text-zinc-500">{label}</dt><dd className={compact ? "text-right font-medium text-zinc-800" : "font-medium text-zinc-800"}>{value}</dd></div>;
 }
