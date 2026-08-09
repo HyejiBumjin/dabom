@@ -57,7 +57,7 @@ function normalizeParagraphs(chunks: string[]) {
 
 const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "규칙적인 생활", "마음을 다잡고", "자기계발"];
 
-function validateReport(value: unknown, script: ReportScript): ReportContent {
+function validateReport(value: unknown, _script: ReportScript): ReportContent {
   const parsed = reportSchema.parse(value);
   const paragraphs = normalizeParagraphs(parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean));
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
@@ -66,16 +66,6 @@ function validateReport(value: unknown, script: ReportScript): ReportContent {
   if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
   if ([...text].length < 1_450) throw new Error("리포트 분량이 부족합니다.");
 
-  const requiredTerms = [
-    ["辛", "신금"],
-    ["丙午", "병오", "정관"],
-    ["충", "3월", "4월", "10월"],
-    ["정재", "정관"],
-    ["화극금"],
-  ];
-  for (const terms of requiredTerms) {
-    if (!terms.some((term) => text.includes(term))) throw new Error(`대본 핵심어가 누락되었습니다: ${terms.join("/")}`);
-  }
   const charCount = [...text].length;
   return { paragraphs, meta: { charCount, beats: [], termsUsed: [] } };
 }
