@@ -8,7 +8,7 @@ import type { Myeongsik } from "@/lib/saju/myeongsik";
 import { buildReportScript, type ReportScript } from "@/lib/saju/report-script";
 
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(250).max(320)).length(6),
+  paragraphs: z.array(z.string().min(250).max(380)).length(6),
 });
 
 const outputSchema = {
@@ -18,20 +18,15 @@ const outputSchema = {
   properties: {
     // Bound chunks so the JSON response always finishes. We rebuild natural paragraph
     // boundaries from complete sentences below because a model may split an item at its limit.
-    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 250, maxLength: 320 } },
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 250, maxLength: 380 } },
   },
 } as const;
 
 const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "규칙적인 생활", "마음을 다잡고", "자기계발"];
 
-function validateReport(value: unknown, _script: ReportScript): ReportContent {
+function validateReport(value: unknown, script: ReportScript): ReportContent {
   const parsed = reportSchema.parse(value);
-  const paragraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
-  if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
-  const text = paragraphs.join("\n\n");
-  const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
-  if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
-  if ([...text].length < 1_450) throw new Error("리포트 분량이 부족합니다.");
+  const rawParagraphs = parsed.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
   const requiredByBit = [
     ["辛", "신금"],
     ["丙午", "병오", "정관"],
@@ -40,9 +35,16 @@ function validateReport(value: unknown, _script: ReportScript): ReportContent {
     ["화극금"],
     ["甲申", "갑신", "정재"],
   ];
-  requiredByBit.forEach((terms, index) => {
-    if (!terms.some((term) => paragraphs[index]?.includes(term))) throw new Error(`${index + 1}비트의 사주 근거가 누락되었습니다: ${terms.join("/")}`);
+  // 사주 근거는 모델 준수에 맡기지 않는다. 빠진 경우 서비스 대본의 사실을 직접 덧붙인다.
+  const paragraphs = rawParagraphs.map((paragraph, index) => {
+    const hasAnchor = requiredByBit[index].some((term) => paragraph.includes(term));
+    return hasAnchor ? paragraph : `${paragraph} 이 대목의 사주 근거는 ${script.bits[index].sajuFact}야.`;
   });
+  if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
+  const text = paragraphs.join("\n\n");
+  const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
+  if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
+  if ([...text].length < 1_450) throw new Error("리포트 분량이 부족합니다.");
 
   const charCount = [...text].length;
   return { paragraphs, meta: { charCount, beats: [], termsUsed: [] } };
