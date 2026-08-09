@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { buildEssayPrompt } from "@/lib/prompts/v3";
+import { buildEssayPrompt } from "@/lib/prompts/v4";
 import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
@@ -53,7 +53,7 @@ export async function generateReport(reportId: string): Promise<void> {
         // 짧은 에세이 생성은 지연과 비용이 작은 모델로 처리한다.
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         store: false,
-        max_output_tokens: 1300,
+        max_output_tokens: 1900,
         input: buildEssayPrompt(report.sajuProfile.myeongsik as unknown as Myeongsik),
         text: { format: { type: "json_schema", name: "essay_report", strict: true, schema: outputSchema } },
       });
