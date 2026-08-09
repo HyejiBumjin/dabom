@@ -7,7 +7,7 @@ import type { ReportContent } from "./types";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 
 const reportSchema = z.object({
-  paragraphs: z.array(z.string().min(1)).length(6),
+  paragraphs: z.array(z.string().min(250)).length(6),
 });
 
 const outputSchema = {
@@ -15,7 +15,7 @@ const outputSchema = {
   additionalProperties: false,
   required: ["paragraphs"],
   properties: {
-    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 1 } },
+    paragraphs: { type: "array", minItems: 6, maxItems: 6, items: { type: "string", minLength: 250 } },
   },
 } as const;
 
