@@ -33,6 +33,7 @@ const outputSchema = {
 
 const headingPattern = /^\s*(?:#{1,6}\s|\d+[.)]\s|[■◆●]\s|\[[^\]]+\])/m;
 const bannedTerms = ["병신", "씨발", "좆", "존나", "개짜증", "GOAT", "긁", "어쩔티비", "킹받다", "스불재", "오조오억", "라떼는", "무조건 대박"];
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function validateReport(value: unknown): ReportContent {
   const parsed = reportSchema.parse(value);
@@ -44,8 +45,10 @@ function validateReport(value: unknown): ReportContent {
   if (headingPattern.test(text)) throw new Error("소제목 또는 번호 형식이 포함되었습니다.");
   if (bannedTerms.some((term) => text.includes(term))) throw new Error("금지어가 포함되었습니다.");
   if (new Set(parsed.meta.beats).size !== beats.length) throw new Error("서사 비트가 모두 포함되지 않았습니다.");
-  for (const { term, gloss } of parsed.meta.termsUsed) {
-    if (!text.includes(term) || !text.includes(gloss)) throw new Error(`용어 풀이가 본문에 없습니다: ${term}`);
+  for (const { term } of parsed.meta.termsUsed) {
+    // 모델이 meta의 풀이를 자연스럽게 다듬어 써도, 본문에서 용어 바로 뒤에 풀이가 있으면 허용한다.
+    const explainedInText = new RegExp(`${escapeRegExp(term)}\\s*[（(][^）)]{2,100}[）)]`).test(text);
+    if (!text.includes(term) || !explainedInText) throw new Error(`용어 풀이가 본문에 없습니다: ${term}`);
   }
   return { paragraphs, meta: { charCount, beats: [...parsed.meta.beats], termsUsed: parsed.meta.termsUsed } };
 }
