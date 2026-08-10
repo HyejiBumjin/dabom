@@ -133,7 +133,11 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
   const careerMechanismText = careerMechanism(daYunGod, daYunHiddenGods, annualGod);
   const careerTermGuide = `${daYun.ganZhi} 대운은 ‘${daYunGod}의 방식으로 10년짜리 판을 운영하는 시간’으로 풀고, ${careerFact}의 관계는 ‘큰 한 방보다 알짜배기 실속과 결과물을 챙기는 판’처럼 현실 언어로 설명할 것.`;
   const temperament = temperamentByElement[day.element];
-  const [mappedTranslation, mappedScene] = DAY_MASTER_SCRIPT[myeongsik.dayMaster as keyof typeof DAY_MASTER_SCRIPT] ?? [temperament.translation, temperament.scene];
+  const dayMasterScript = DAY_MASTER_SCRIPT[myeongsik.dayMaster] ?? {
+    mechanism: "일간은 그 사람이 기본적으로 반응하고 힘을 쓰는 방식을 보여준다.",
+    translation: temperament.translation,
+    concreteScene: temperament.scene,
+  };
   const godGroup: Record<string, keyof typeof TEN_GOD_GROUP_SCRIPT> = { 比肩: "비겁", 劫财: "비겁", 食神: "식상", 伤官: "식상", 偏财: "재성", 正财: "재성", 偏官: "관성", 七杀: "관성", 正官: "관성", 偏印: "인성", 正印: "인성" };
   const groupCounts = new Map<keyof typeof TEN_GOD_GROUP_SCRIPT, number>();
   for (const pillar of Object.values(myeongsik.pillars)) {
@@ -166,10 +170,10 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
         title: "본질과 성향",
         timeScope: "태어난 명식의 기본 성향",
         sajuFact: `${myeongsik.dayMaster}(일간), ${monthPillar.ganZhi}월, 월령 ${monthPillar.earthlyBranch}, 원국의 정인·정관·정재·상관`,
-        mechanism: "일간은 나의 기본 반응을, 월령은 그 반응이 가장 자주 쓰이는 계절의 배경을 보여준다. 원국의 십신은 그 성향이 일·관계에서 어떤 역할로 드러나는지 보태는 재료다.",
+        mechanism: `${dayMasterScript.mechanism} 일간은 나의 기본 반응을, 월령은 그 반응이 가장 자주 쓰이는 계절의 배경을 보여준다. 원국의 십신은 그 성향이 일·관계에서 어떤 역할로 드러나는지 보태는 재료다.`,
         termTranslationGuide: `${myeongsik.dayMaster} 일간은 타고난 반응 방식으로, 월령 ${monthPillar.earthlyBranch}는 그 반응을 둘러싼 계절의 분위기로 쉬운 장면에 번역할 것.`,
-        factTranslation: mappedTranslation,
-        concreteScene: mappedScene,
+        factTranslation: dayMasterScript.translation,
+        concreteScene: dayMasterScript.concreteScene,
         emotionalDirection: "첫 문단은 ‘너 이런 타입이지?’ 하는 팩폭으로 시선을 붙잡고, 예민함을 흠으로 몰지 말고 왜 그럴 수 있는지 다정하게 풀어준다.",
       },
       {
@@ -179,8 +183,8 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
         sajuFact: `${readGanZhi(yearly.ganZhi)} 세운, 천간 ${yearGan}의 ${annualGod}${mentalInteraction ? `, ${mentalInteraction}` : ""}`,
         mechanism: `${yearGan}의 ${annualGod} 기운이 올해 바깥에서 들어오는 역할·요구·선택의 색을 만든다.${mentalInteraction ? ` 일간과의 오행 관계는 ${mentalInteraction}로 작동해 압박과 자기검열을 키울 수 있다.` : ""}`,
         termTranslationGuide: `${yearly.ganZhi} 세운은 ‘올해 바깥 판의 분위기’, ${annualGod}은 ‘올해 특히 자주 마주치는 역할과 요구’로 풀 것.`,
-        factTranslation: `${annual.translation}${groupScript ? ` ${groupScript[0]}` : ""}`,
-        concreteScene: `${annual.scene}${groupScript ? ` ${groupScript[1]}` : ""}`,
+        factTranslation: `${annual.translation}${groupScript ? ` ${groupScript.translation}` : ""}`,
+        concreteScene: `${annual.scene}${groupScript ? ` ${groupScript.concreteScene}` : ""}`,
         emotionalDirection: "바깥 상황을 같이 욕해 주되, 억지로 다 참지 말고 네 몫의 선을 정하라고 말한다. 사건을 예언하지 않는다.",
       },
       {
@@ -190,10 +194,10 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
         sajuFact: relationshipInteraction
           ? `2026년 월운 ${relationshipMonths.map((item) => `${item.ordinal}월 ${readGanZhi(item.ganZhi)} ↔ 원국 ${item.against}, ${relationshipInteraction}` ).join(" · ")}`
           : `2026년 월운 ${myeongsik.fortune.monthly.filter((item) => [3, 4, 9, 10].includes(item.ordinal)).map((item) => `${item.ordinal}월 ${readGanZhi(item.ganZhi)}`).join(" · ")}`,
-        mechanism: relationshipInteraction ? `월운의 지지가 원국 지지와 ${relationshipInteraction}을 이룬다. 기존의 관계·일정 리듬이 평소보다 쉽게 흔들리는 구간으로만 해석하고, 사건을 예고하지 않는다.` : "월운은 한 해의 세부 리듬을 보여준다. 특정 달의 대화와 일정에서 감정 반응이 빨라질 수 있다는 정도로만 사용한다.",
+        mechanism: relationshipScript?.mechanism ?? "월운은 한 해의 세부 리듬을 보여준다. 특정 달의 대화와 일정에서 감정 반응이 빨라질 수 있다는 정도로만 사용한다.",
         termTranslationGuide: relationshipInteraction ? `${relationshipInteraction}은 ‘관계가 끝난다’가 아니라 ‘익숙한 리듬이 흔들려 대화와 계획을 다시 보게 되는 달’로 번역할 것.` : "월운은 특정 사건 예고가 아니라, 일정과 관계의 반응 속도가 달라지는 배경으로만 풀 것.",
-        factTranslation: relationshipScript?.[0] ?? "익숙한 관계나 진행 중인 대화에서, 별일 아닌 말도 평소보다 걸리고 혼자 결론을 빨리 내리고 싶어질 수 있는 흐름.",
-        concreteScene: relationshipScript?.[1] ?? "별것 아닌 한마디에 단톡방 알림을 꺼 두거나, 답장을 미루면서 마음속으로 혼자 손절 각을 재는 장면.",
+        factTranslation: relationshipScript?.translation ?? "익숙한 관계나 진행 중인 대화에서, 별일 아닌 말도 평소보다 걸리고 혼자 결론을 빨리 내리고 싶어질 수 있는 흐름.",
+        concreteScene: relationshipScript?.concreteScene ?? "별것 아닌 한마디에 단톡방 알림을 꺼 두거나, 답장을 미루면서 마음속으로 혼자 손절 각을 재는 장면.",
         emotionalDirection: "‘네가 유난한 게 아니라 지금은 반응이 예민해질 수 있는 달’이라고 다독인다. 이별·다툼을 단정하지 않고, 바로 보내지 말고 한 박자 두는 실전 팁을 준다.",
       },
       {
@@ -203,7 +207,7 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
         sajuFact: `${careerFact} + ${yearly.ganZhi} 세운의 ${annualGod}`,
         mechanism: careerMechanismText,
         termTranslationGuide: careerTermGuide,
-        factTranslation: `10년의 바탕에서는 ${daYunTranslation.translation} 올해는 ${annual.translation}${groupScript ? ` 원국의 ${dominantGroup} 흐름도 ‘${groupScript[0]}’로 읽힌다.` : ""} 대박 한 번보다 눈에 보이는 결과물, 신뢰, 반복 가능한 실력이 더 중요해지는 조합.`,
+        factTranslation: `10년의 바탕에서는 ${daYunTranslation.translation} 올해는 ${annual.translation}${groupScript ? ` 원국의 ${dominantGroup} 흐름도 ‘${groupScript.translation}’로 읽힌다.` : ""} 대박 한 번보다 눈에 보이는 결과물, 신뢰, 반복 가능한 실력이 더 중요해지는 조합.`,
         concreteScene: "변동 큰 투자로 한 방을 노리다가 자원과 마음이 같이 묶이기 쉬운 흐름. 차라리 확실하게 찍히는 월급, 연봉 협상, 자격증, 포트폴리오처럼 손에 남는 결과물로 실속을 차리는 장면.",
         emotionalDirection: "현실적인 이득을 챙기라고 직설적으로 말한다. 투자 수익이나 합격은 약속하지 않고, ‘뭘 남길지’가 보이는 선택을 추천한다.",
       },
@@ -212,10 +216,10 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
         title: "주의할 멘탈 루틴",
         timeScope: `${myeongsik.fortune.targetYear}년 세운과 일간의 만남`,
         sajuFact: `${mentalInteraction ?? `${annualGod} 세운`} + ${myeongsik.dayMaster} 일간`,
-        mechanism: mentalInteraction ? `세운의 ${yearElement} 기운이 일간의 ${day.element} 기운을 제어하는 관계다. 바깥 압박이 자기검열이나 불안으로 안쪽에 쌓일 수 있다.` : "올해 들어오는 역할과 내 기준이 맞물리면서, 혼자 생각을 오래 끌기 쉬운 흐름이다.",
+        mechanism: mentalInteraction ? `${INTERACTION_SCRIPT[mentalInteraction].mechanism} 세운의 ${yearElement} 기운이 일간의 ${day.element} 기운을 제어하는 관계라, 바깥 압박이 자기검열이나 불안으로 안쪽에 쌓일 수 있다.` : "올해 들어오는 역할과 내 기준이 맞물리면서, 혼자 생각을 오래 끌기 쉬운 흐름이다.",
         termTranslationGuide: mentalInteraction ? `${mentalInteraction}은 건강·사건 예고가 아니라, ‘스스로를 너무 세게 몰아붙이는 밤의 패턴’으로 번역할 것.` : "멘탈 조언은 사주 용어를 바로 일상 장면으로 바꿔 설명할 것.",
-        factTranslation: mentalInteraction ? INTERACTION_SCRIPT[mentalInteraction][0] : "바깥 요구와 내 기준 사이에서 혼자 과하게 계산하지 않도록 봐야 하는 흐름.",
-        concreteScene: mentalInteraction ? INTERACTION_SCRIPT[mentalInteraction][1] : "남들은 잘했다고 하는데 침대에 누워서 낮에 했던 말이나 보낸 메시지를 다시 떠올리며 이불 킥하는 장면.",
+        factTranslation: mentalInteraction ? INTERACTION_SCRIPT[mentalInteraction].translation : "바깥 요구와 내 기준 사이에서 혼자 과하게 계산하지 않도록 봐야 하는 흐름.",
+        concreteScene: mentalInteraction ? INTERACTION_SCRIPT[mentalInteraction].concreteScene : "남들은 잘했다고 하는데 침대에 누워서 낮에 했던 말이나 보낸 메시지를 다시 떠올리며 이불 킥하는 장면.",
         emotionalDirection: "제발 너 자신에게만 엄격하게 굴지 말라고 진심으로 말한다. 뻔한 힐링 대신, ‘수정은 다음 날 오전에 한 번만’처럼 구체적이고 작은 멈춤 장치를 제안한다.",
       },
       {
