@@ -9,7 +9,7 @@ import { buildReportScript, type ReportScript } from "@/lib/saju/report-script";
 
 const bitSchema = z.object({ paragraph: z.string().min(250).max(420) });
 const bitOutputSchema = { type: "object", additionalProperties: false, required: ["paragraph"], properties: { paragraph: { type: "string", minLength: 250, maxLength: 420 } } } as const;
-const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "규칙적인 생활", "마음을 다잡고", "자기계발"];
+const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "신중하게", "규칙적인 생활", "루틴", "마음을 다잡고", "자기계발", "현명한 방법", "완벽하지 않아도 괜찮아", "토닥토닥", "사주에 따르면", "사주를 보니"];
 function evidenceTerms(sajuFact: string) {
   return [...new Set(sajuFact.match(/[甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥]{1,2}|[가-힣]{2,4}/g) ?? [])]
     .filter((term) => !["세운", "대운", "일간", "원국", "천간", "월운"].includes(term));
