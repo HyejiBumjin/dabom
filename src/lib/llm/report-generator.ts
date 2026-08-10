@@ -15,11 +15,19 @@ function evidenceTerms(sajuFact: string) {
     .filter((term) => !["세운", "대운", "일간", "원국", "천간", "월운"].includes(term));
 }
 
+function validateBeatRequirements(paragraph: string, bit: ReportScript["bits"][number]) {
+  if (bit.bitIndex !== 4) return;
+  const mustMention = ["대운", ...[...new Set(bit.sajuFact.match(/비견|겁재|식신|상관|편재|정재|편관|정관|편인|정인/g) ?? [])].slice(0, 2)];
+  const missing = mustMention.filter((term) => !paragraph.includes(term));
+  if (missing.length) throw new Error(`커리어 비트에 필수 근거가 빠졌습니다: ${missing.join(", ")}`);
+}
+
 function validateReport(paragraphs: string[], script: ReportScript): ReportContent {
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
   const anchored = paragraphs.map((paragraph, index) => {
     const terms = evidenceTerms(script.bits[index].sajuFact);
-    return terms.some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 문단의 사주 근거는 ${script.bits[index].sajuFact}로 적혀 있어.`;
+    validateBeatRequirements(paragraph, script.bits[index]);
+    return terms.some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 문단의 사주 근거는 ${script.bits[index].sajuFact}야.`;
   });
   const text = anchored.join("\n\n");
   const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
@@ -45,7 +53,7 @@ export async function generateReport(reportId: string): Promise<void> {
         const response = await client.responses.create({
           model: process.env.OPENAI_MODEL || "gpt-4o", store: false, max_output_tokens: 650,
           input: [
-            { role: "developer", content: `${REPORT_DEVELOPER_INSTRUCTIONS}\n\n지금은 전체 편지가 아니라 bit ${bit.bitIndex} 하나만 렌더링한다. ${bit.bitIndex === 1 ? "이 문단만 성향 팩폭으로 시작한다." : "이 문단은 ‘너 이런 타입이지?’ 같은 성향 오프닝 없이, 주어진 장면에서 바로 시작한다."} JSON paragraph 하나만 출력하고 다른 비트 내용은 절대 섞지 않는다.` },
+            { role: "developer", content: `${REPORT_DEVELOPER_INSTRUCTIONS}\n\n지금은 전체 편지가 아니라 bit ${bit.bitIndex} 하나만 렌더링한다. ${bit.bitIndex === 1 ? "이 문단만 성향 팩폭으로 시작한다." : "이 문단은 ‘너 이런 타입이지?’ 같은 성향 오프닝 없이, 주어진 장면에서 바로 시작한다."}${bit.bitIndex === 4 ? " 반드시 ‘대운’이라는 10년 범위, saju_fact의 앞 두 십신 용어, 그리고 mechanism의 원인→결과를 모두 자연스럽게 문장에 쓴다. 셋 중 하나라도 빼면 실패다." : ""} JSON paragraph 하나만 출력하고 다른 비트 내용은 절대 섞지 않는다.` },
             ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 초안 검증 실패: ${lastError}. 금지 표현 없이 대본 사실과 현실 장면을 모두 살려 다시 작성하세요.` }] : []),
             {
               role: "user",

@@ -1,6 +1,6 @@
 import type { ReportScript } from "@/lib/saju/report-script";
 
-export const REPORT_PROMPT_VERSION = "essay-v12-mechanism-renderer";
+export const REPORT_PROMPT_VERSION = "essay-v13-mechanism-verified";
 
 export const REPORT_DEVELOPER_INSTRUCTIONS = `[Role]
 너는 사주를 명확하고 기가 막히게 풀어주는 20대 친한 친구 ‘다봄’이야. 너는 사주 학자가 아니라, 친구의 사주 대본을 받아 자기만의 입담과 시선으로 재치 있게 전달하는 카피라이터야. 대본의 사주 사실과 번역을 새로 계산하거나 바꾸지 않는다.
