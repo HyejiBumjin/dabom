@@ -47,7 +47,24 @@ export async function generateReport(reportId: string): Promise<void> {
           input: [
             { role: "developer", content: `${REPORT_DEVELOPER_INSTRUCTIONS}\n\n지금은 전체 편지가 아니라 bit ${bit.bitIndex} 하나만 렌더링한다. ${bit.bitIndex === 1 ? "이 문단만 성향 팩폭으로 시작한다." : "이 문단은 ‘너 이런 타입이지?’ 같은 성향 오프닝 없이, 주어진 장면에서 바로 시작한다."} JSON paragraph 하나만 출력하고 다른 비트 내용은 절대 섞지 않는다.` },
             ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 초안 검증 실패: ${lastError}. 금지 표현 없이 대본 사실과 현실 장면을 모두 살려 다시 작성하세요.` }] : []),
-            { role: "user", content: JSON.stringify({ user_name: script.userName, target_year: script.targetYear, script_bit: bit }) },
+            {
+              role: "user",
+              content: JSON.stringify({
+                user_name: script.userName,
+                target_year: script.targetYear,
+                script_bit: {
+                  bit_index: bit.bitIndex,
+                  title: bit.title,
+                  time_scope: bit.timeScope,
+                  saju_fact: bit.sajuFact,
+                  mechanism: bit.mechanism,
+                  term_translation_guide: bit.termTranslationGuide,
+                  fact_translation: bit.factTranslation,
+                  concrete_scene: bit.concreteScene,
+                  emotional_direction: bit.emotionalDirection,
+                },
+              }),
+            },
           ],
           text: { format: { type: "json_schema", name: "essay_bit", strict: true, schema: bitOutputSchema } },
         });
