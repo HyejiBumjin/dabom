@@ -22,9 +22,18 @@ function validateBeatRequirements(paragraph: string, bit: ReportScript["bits"][n
   if (missing.length) throw new Error(`커리어 비트에 필수 근거가 빠졌습니다: ${missing.join(", ")}`);
 }
 
+function groundCareerEvidence(paragraph: string, bit: ReportScript["bits"][number]) {
+  if (bit.bitIndex !== 4) return paragraph;
+  const mustMention = ["대운", ...[...new Set(bit.sajuFact.match(/비견|겁재|식신|상관|편재|정재|편관|정관|편인|정인/g) ?? [])].slice(0, 2)];
+  if (mustMention.every((term) => paragraph.includes(term))) return paragraph;
+  const baseFact = bit.sajuFact.split(" + ").slice(0, 2).join(" + ");
+  return `${paragraph} ${bit.timeScope}의 핵심은 ${baseFact}가 맞물려 큰 한 방보다 손에 남는 결과물을 챙기는 판이라는 거야.`;
+}
+
 function validateReport(paragraphs: string[], script: ReportScript): ReportContent {
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
-  const anchored = paragraphs.map((paragraph, index) => {
+  const anchored = paragraphs.map((rawParagraph, index) => {
+    const paragraph = groundCareerEvidence(rawParagraph, script.bits[index]);
     const terms = evidenceTerms(script.bits[index].sajuFact);
     validateBeatRequirements(paragraph, script.bits[index]);
     return terms.some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 문단의 사주 근거는 ${script.bits[index].sajuFact}야.`;
