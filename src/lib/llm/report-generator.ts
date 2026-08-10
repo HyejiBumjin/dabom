@@ -11,7 +11,7 @@ const bitSchema = z.object({ paragraph: z.string().min(250).max(420) });
 const bitOutputSchema = { type: "object", additionalProperties: false, required: ["paragraph"], properties: { paragraph: { type: "string", minLength: 250, maxLength: 420 } } } as const;
 const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "신중하게", "규칙적인 생활", "루틴", "마음을 다잡고", "자기계발", "현명한 방법", "완벽하지 않아도 괜찮아", "토닥토닥", "사주에 따르면", "사주를 보니"];
 function evidenceTerms(sajuFact: string) {
-  return [...new Set(sajuFact.match(/[甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥]{1,2}|[가-힣]{2,4}/g) ?? [])]
+  return [...new Set(sajuFact.match(/[甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥]{1,2}|화극금|수극화|충|합|[가-힣]{2,4}/g) ?? [])]
     .filter((term) => !["세운", "대운", "일간", "원국", "천간", "월운"].includes(term));
 }
 
@@ -19,7 +19,7 @@ function validateReport(paragraphs: string[], script: ReportScript): ReportConte
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
   const anchored = paragraphs.map((paragraph, index) => {
     const terms = evidenceTerms(script.bits[index].sajuFact);
-    return terms.some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 대목의 사주 근거는 ${script.bits[index].sajuFact}야.`;
+    return terms.some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 문단의 사주 근거는 ${script.bits[index].sajuFact}로 적혀 있어.`;
   });
   const text = anchored.join("\n\n");
   const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
@@ -45,7 +45,7 @@ export async function generateReport(reportId: string): Promise<void> {
         const response = await client.responses.create({
           model: process.env.OPENAI_MODEL || "gpt-4o", store: false, max_output_tokens: 650,
           input: [
-            { role: "developer", content: `${REPORT_DEVELOPER_INSTRUCTIONS}\n\n지금은 전체 편지가 아니라 bit ${bit.bitIndex} 하나만 렌더링한다. JSON paragraph 하나만 출력하고 다른 비트 내용은 절대 섞지 않는다.` },
+            { role: "developer", content: `${REPORT_DEVELOPER_INSTRUCTIONS}\n\n지금은 전체 편지가 아니라 bit ${bit.bitIndex} 하나만 렌더링한다. ${bit.bitIndex === 1 ? "이 문단만 성향 팩폭으로 시작한다." : "이 문단은 ‘너 이런 타입이지?’ 같은 성향 오프닝 없이, 주어진 장면에서 바로 시작한다."} JSON paragraph 하나만 출력하고 다른 비트 내용은 절대 섞지 않는다.` },
             ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 초안 검증 실패: ${lastError}. 금지 표현 없이 대본 사실과 현실 장면을 모두 살려 다시 작성하세요.` }] : []),
             { role: "user", content: JSON.stringify({ user_name: script.userName, target_year: script.targetYear, script_bit: bit }) },
           ],
