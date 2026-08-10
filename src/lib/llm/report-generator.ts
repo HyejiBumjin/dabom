@@ -10,11 +10,17 @@ import { buildReportScript, type ReportScript } from "@/lib/saju/report-script";
 const bitSchema = z.object({ paragraph: z.string().min(250).max(420) });
 const bitOutputSchema = { type: "object", additionalProperties: false, required: ["paragraph"], properties: { paragraph: { type: "string", minLength: 250, maxLength: 420 } } } as const;
 const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "규칙적인 생활", "마음을 다잡고", "자기계발"];
-const requiredByBit = [["辛", "신금"], ["丙午", "병오", "정관"], ["충", "3월", "4월", "10월"], ["정재", "정관"], ["화극금"], ["甲申", "갑신", "정재"]];
+function evidenceTerms(sajuFact: string) {
+  return [...new Set(sajuFact.match(/[甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥]{1,2}|[가-힣]{2,4}/g) ?? [])]
+    .filter((term) => !["세운", "대운", "일간", "원국", "천간", "월운"].includes(term));
+}
 
 function validateReport(paragraphs: string[], script: ReportScript): ReportContent {
   if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
-  const anchored = paragraphs.map((paragraph, index) => requiredByBit[index].some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 대목의 사주 근거는 ${script.bits[index].sajuFact}야.`);
+  const anchored = paragraphs.map((paragraph, index) => {
+    const terms = evidenceTerms(script.bits[index].sajuFact);
+    return terms.some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 대목의 사주 근거는 ${script.bits[index].sajuFact}야.`;
+  });
   const text = anchored.join("\n\n");
   const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
   if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);

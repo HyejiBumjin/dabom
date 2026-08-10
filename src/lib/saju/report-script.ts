@@ -1,4 +1,5 @@
 import type { Myeongsik } from "@/lib/saju/myeongsik";
+import { DAY_MASTER_SCRIPT, INTERACTION_SCRIPT, TEN_GOD_GROUP_SCRIPT } from "@/lib/saju/script-database";
 
 type Element = "wood" | "fire" | "earth" | "metal" | "water";
 
@@ -27,6 +28,8 @@ const stem: Record<string, { reading: string; element: Element; yang: boolean }>
 const branchReading: Record<string, string> = { 子: "자", 丑: "축", 寅: "인", 卯: "묘", 辰: "진", 巳: "사", 午: "오", 未: "미", 申: "신", 酉: "유", 戌: "술", 亥: "해" };
 const produces: Record<Element, Element> = { wood: "fire", fire: "earth", earth: "metal", metal: "water", water: "wood" };
 const controls: Record<Element, Element> = { wood: "earth", fire: "metal", earth: "water", metal: "wood", water: "fire" };
+const clashSet = new Set(["子午", "午子", "丑未", "未丑", "寅申", "申寅", "卯酉", "酉卯", "辰戌", "戌辰", "巳亥", "亥巳"]);
+const combinationSet = new Set(["子丑", "丑子", "寅亥", "亥寅", "卯戌", "戌卯", "辰酉", "酉辰", "巳申", "申巳", "午未", "未午"]);
 
 const temperamentByElement: Record<Element, { translation: string; scene: string }> = {
   metal: {
@@ -74,6 +77,17 @@ function activeDaYun(myeongsik: Myeongsik) {
   return myeongsik.fortune.daYun.find((period) => period.startYear <= myeongsik.fortune.targetYear && myeongsik.fortune.targetYear <= period.endYear);
 }
 
+function findMonthlyInteraction(myeongsik: Myeongsik, relation: Set<string>) {
+  const natalBranches = Object.values(myeongsik.pillars).map((pillar) => pillar.earthlyBranch);
+  return myeongsik.fortune.monthly
+    .filter((item) => [3, 4, 9, 10].includes(item.ordinal))
+    .flatMap((item) => {
+      const monthBranch = [...item.ganZhi][1];
+      const against = natalBranches.find((natalBranch) => relation.has(`${monthBranch}${natalBranch}`));
+      return against ? [{ ...item, against }] : [];
+    });
+}
+
 /** Builds the six detailed beats. GPT receives this result, not raw manseoryeok JSON. */
 export function buildReportScript(myeongsik: Myeongsik, userName: string): ReportScript {
   const day = stem[myeongsik.dayMaster];
@@ -89,8 +103,29 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
   const daYunGod = calculateTenGod(myeongsik.dayMaster, daYunGan) ?? "정재";
   const daYunTranslation = annualTranslation[daYunGod] ?? annualTranslation.정재;
   const temperament = temperamentByElement[day.element];
-  const checkpoints = myeongsik.fortune.monthly.filter((item) => [3, 4, 9, 10].includes(item.ordinal));
-  const hasFireControlsDay = controls[stem[yearGan]?.element ?? day.element] === day.element;
+  const [mappedTranslation, mappedScene] = DAY_MASTER_SCRIPT[myeongsik.dayMaster as keyof typeof DAY_MASTER_SCRIPT] ?? [temperament.translation, temperament.scene];
+  const godGroup: Record<string, keyof typeof TEN_GOD_GROUP_SCRIPT> = { 比肩: "비겁", 劫财: "비겁", 食神: "식상", 伤官: "식상", 偏财: "재성", 正财: "재성", 偏官: "관성", 七杀: "관성", 正官: "관성", 偏印: "인성", 正印: "인성" };
+  const groupCounts = new Map<keyof typeof TEN_GOD_GROUP_SCRIPT, number>();
+  for (const pillar of Object.values(myeongsik.pillars)) {
+    const visible = godGroup[pillar.stemTenGod];
+    if (visible) groupCounts.set(visible, (groupCounts.get(visible) ?? 0) + 1);
+    pillar.hiddenTenGods.forEach((god) => { const group = godGroup[god]; if (group) groupCounts.set(group, (groupCounts.get(group) ?? 0) + 1); });
+  }
+  const dominantEntry = [...groupCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  // "과다" 대본은 지장간까지 세 번 이상 확인될 때만 사용한다.
+  const dominantGroup = dominantEntry && dominantEntry[1] >= 3 ? dominantEntry[0] : null;
+  const groupScript = dominantGroup ? TEN_GOD_GROUP_SCRIPT[dominantGroup] : null;
+  const yearElement = stem[yearGan]?.element;
+  const mentalInteraction = yearElement === "fire" && day.element === "metal"
+    ? "화극금"
+    : yearElement === "water" && day.element === "fire"
+      ? "수극화"
+      : null;
+  const clashes = findMonthlyInteraction(myeongsik, clashSet);
+  const combinations = findMonthlyInteraction(myeongsik, combinationSet);
+  const relationshipInteraction = clashes.length ? "충" : combinations.length ? "합" : null;
+  const relationshipMonths = relationshipInteraction === "충" ? clashes : combinations;
+  const relationshipScript = relationshipInteraction ? INTERACTION_SCRIPT[relationshipInteraction] : null;
 
   return {
     userName,
@@ -100,40 +135,42 @@ export function buildReportScript(myeongsik: Myeongsik, userName: string): Repor
         bitIndex: 1,
         title: "본질과 성향",
         sajuFact: `${myeongsik.dayMaster}(일간), ${monthPillar.ganZhi}월, 월령 ${monthPillar.earthlyBranch}, 원국의 정인·정관·정재·상관`,
-        factTranslation: temperament.translation,
-        concreteScene: temperament.scene,
+        factTranslation: mappedTranslation,
+        concreteScene: mappedScene,
         emotionalDirection: "첫 문단은 ‘너 이런 타입이지?’ 하는 팩폭으로 시선을 붙잡고, 예민함을 흠으로 몰지 말고 왜 그럴 수 있는지 다정하게 풀어준다.",
       },
       {
         bitIndex: 2,
         title: `${myeongsik.fortune.targetYear}년 환경적 흐름`,
-        sajuFact: `${readGanZhi(yearly.ganZhi)} 세운, 천간 ${yearGan}의 ${annualGod}${hasFireControlsDay ? ", 화극금" : ""}`,
-        factTranslation: annual.translation,
-        concreteScene: annual.scene,
+        sajuFact: `${readGanZhi(yearly.ganZhi)} 세운, 천간 ${yearGan}의 ${annualGod}${mentalInteraction ? `, ${mentalInteraction}` : ""}`,
+        factTranslation: `${annual.translation}${groupScript ? ` ${groupScript[0]}` : ""}`,
+        concreteScene: `${annual.scene}${groupScript ? ` ${groupScript[1]}` : ""}`,
         emotionalDirection: "바깥 상황을 같이 욕해 주되, 억지로 다 참지 말고 네 몫의 선을 정하라고 말한다. 사건을 예언하지 않는다.",
       },
       {
         bitIndex: 3,
         title: "관계와 대인 리듬",
-        sajuFact: `2026년 월운 ${checkpoints.map((item) => `${item.ordinal}월 ${readGanZhi(item.ganZhi)}`).join(" · ")}, 원국 지지와 충이 있는 달`,
-        factTranslation: "익숙한 관계나 진행 중인 대화에서, 별일 아닌 말도 평소보다 걸리고 혼자 결론을 빨리 내리고 싶어질 수 있는 흐름.",
-        concreteScene: "별것 아닌 한마디에 단톡방 알림을 꺼 두거나, 답장을 미루면서 마음속으로 혼자 손절 각을 재는 장면.",
+        sajuFact: relationshipInteraction
+          ? `2026년 월운 ${relationshipMonths.map((item) => `${item.ordinal}월 ${readGanZhi(item.ganZhi)} ↔ 원국 ${item.against}, ${relationshipInteraction}` ).join(" · ")}`
+          : `2026년 월운 ${myeongsik.fortune.monthly.filter((item) => [3, 4, 9, 10].includes(item.ordinal)).map((item) => `${item.ordinal}월 ${readGanZhi(item.ganZhi)}`).join(" · ")}`,
+        factTranslation: relationshipScript?.[0] ?? "익숙한 관계나 진행 중인 대화에서, 별일 아닌 말도 평소보다 걸리고 혼자 결론을 빨리 내리고 싶어질 수 있는 흐름.",
+        concreteScene: relationshipScript?.[1] ?? "별것 아닌 한마디에 단톡방 알림을 꺼 두거나, 답장을 미루면서 마음속으로 혼자 손절 각을 재는 장면.",
         emotionalDirection: "‘네가 유난한 게 아니라 지금은 반응이 예민해질 수 있는 달’이라고 다독인다. 이별·다툼을 단정하지 않고, 바로 보내지 말고 한 박자 두는 실전 팁을 준다.",
       },
       {
         bitIndex: 4,
         title: "일과 커리어 방향",
         sajuFact: `${daYun.ganZhi} 대운(${daYun.startYear}–${daYun.endYear})의 ${daYunGod} + ${yearly.ganZhi} 세운의 ${annualGod}`,
-        factTranslation: `${daYunTranslation.translation} 여기에 ${annual.translation} 이 겹친다. 대박 한 번보다 눈에 보이는 결과물, 신뢰, 반복 가능한 실력이 더 중요해지는 조합.`,
-        concreteScene: "화려한 한 방을 좇기보다 포트폴리오 한 장, 정리된 제안서 하나, 끝까지 마무리한 프로젝트처럼 손에 잡히는 결과를 쌓는 장면.",
+        factTranslation: `${daYunTranslation.translation} 여기에 ${annual.translation}이 겹친다.${groupScript ? ` 원국의 ${dominantGroup} 흐름도 ${groupScript[0]}로 읽힌다.` : ""} 대박 한 번보다 눈에 보이는 결과물, 신뢰, 반복 가능한 실력이 더 중요해지는 조합.`,
+        concreteScene: groupScript?.[1] ?? "화려한 한 방을 좇기보다 포트폴리오 한 장, 정리된 제안서 하나, 끝까지 마무리한 프로젝트처럼 손에 잡히는 결과를 쌓는 장면.",
         emotionalDirection: "현실적인 이득을 챙기라고 직설적으로 말한다. 투자 수익이나 합격은 약속하지 않고, ‘뭘 남길지’가 보이는 선택을 추천한다.",
       },
       {
         bitIndex: 5,
         title: "주의할 멘탈 루틴",
-        sajuFact: `${hasFireControlsDay ? "화극금" : `${annualGod} 세운`} + ${myeongsik.dayMaster} 일간`,
-        factTranslation: hasFireControlsDay ? "외부의 평가가 들어오면 스스로를 더 세게 검열하고, 이미 잘한 일도 ‘아까 그 말 괜히 했나?’ 하며 다시 돌려보기 쉬운 흐름." : "바깥 요구와 내 기준 사이에서 혼자 과하게 계산하지 않도록 봐야 하는 흐름.",
-        concreteScene: "남들은 잘했다고 하는데 침대에 누워서 낮에 했던 말이나 보낸 메시지를 다시 떠올리며 이불 킥하는 장면.",
+        sajuFact: `${mentalInteraction ?? `${annualGod} 세운`} + ${myeongsik.dayMaster} 일간`,
+        factTranslation: mentalInteraction ? INTERACTION_SCRIPT[mentalInteraction][0] : "바깥 요구와 내 기준 사이에서 혼자 과하게 계산하지 않도록 봐야 하는 흐름.",
+        concreteScene: mentalInteraction ? INTERACTION_SCRIPT[mentalInteraction][1] : "남들은 잘했다고 하는데 침대에 누워서 낮에 했던 말이나 보낸 메시지를 다시 떠올리며 이불 킥하는 장면.",
         emotionalDirection: "제발 너 자신에게만 엄격하게 굴지 말라고 진심으로 말한다. 뻔한 힐링 대신, ‘수정은 다음 날 오전에 한 번만’처럼 구체적이고 작은 멈춤 장치를 제안한다.",
       },
       {
