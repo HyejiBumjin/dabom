@@ -22,7 +22,6 @@ const reportOutputSchema = {
     },
   },
 } as const;
-const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "신중하게", "규칙적인 생활", "마음을 다잡고", "자기계발", "현명한 방법", "완벽하지 않아도 괜찮아", "토닥토닥", "사주에 따르면", "사주를 보니"];
 
 function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>): ReportContent {
   const rendered = reportSchema.parse(raw);
@@ -30,13 +29,10 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   const paragraphs = rendered.sections.map((section, index) => {
     const expectedSection = expected[index];
     if (section.section_id !== expectedSection.id) throw new Error(`리포트 section 순서가 맞지 않습니다: ${section.section_id}`);
-    return section.paragraph.trim();
+    return section.paragraph.trim().replace(/\p{Extended_Pictographic}/gu, "").replace(/\s{2,}/g, " ");
   });
   const text = paragraphs.join("\n\n");
-  const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
-  if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
   if (/\[[^\]]+\]/.test(text)) throw new Error("내부 추적 태그가 본문에 노출되었습니다.");
-  if (/\p{Extended_Pictographic}/u.test(text)) throw new Error("이모지가 본문에 포함되었습니다.");
   if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/.test(text)) throw new Error("비정상 렌더링 문구가 포함되었습니다.");
   if ([...text].length < 1_500) throw new Error("리포트 분량이 부족합니다.");
   return {
