@@ -38,6 +38,8 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   const text = paragraphs.join("\n\n");
   const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
   if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
+  if (/\[[^\]]+\]/.test(text)) throw new Error("내부 추적 태그가 본문에 노출되었습니다.");
+  if (/\p{Extended_Pictographic}/u.test(text)) throw new Error("이모지가 본문에 포함되었습니다.");
   if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/.test(text)) throw new Error("비정상 렌더링 문구가 포함되었습니다.");
   if ([...text].length < 1_500) throw new Error("리포트 분량이 부족합니다.");
   return {
