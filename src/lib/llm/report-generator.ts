@@ -23,7 +23,7 @@ const reportOutputSchema = {
     },
   },
 } as const;
-const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "신중하게", "규칙적인 생활", "루틴", "마음을 다잡고", "자기계발", "현명한 방법", "완벽하지 않아도 괜찮아", "토닥토닥", "사주에 따르면", "사주를 보니"];
+const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "신중하게", "규칙적인 생활", "마음을 다잡고", "자기계발", "현명한 방법", "완벽하지 않아도 괜찮아", "토닥토닥", "사주에 따르면", "사주를 보니"];
 
 function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>): ReportContent {
   const rendered = reportSchema.parse(raw);
