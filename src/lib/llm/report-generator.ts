@@ -7,17 +7,16 @@ import { buildReportRenderPayload } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import type { ReportContent } from "./types";
 
-const sectionSchema = z.object({ section_id: z.string(), paragraph: z.string().min(250).max(460), fragment_ids: z.array(z.string()).min(1) });
+const sectionSchema = z.object({ section_id: z.string(), paragraph: z.string().min(250).max(460) });
 const reportSchema = z.object({ sections: z.array(sectionSchema).length(6) });
 const reportOutputSchema = {
   type: "object", additionalProperties: false, required: ["sections"], properties: {
     sections: {
       type: "array", minItems: 6, maxItems: 6,
       items: {
-        type: "object", additionalProperties: false, required: ["section_id", "paragraph", "fragment_ids"], properties: {
+        type: "object", additionalProperties: false, required: ["section_id", "paragraph"], properties: {
           section_id: { type: "string" },
           paragraph: { type: "string", minLength: 250, maxLength: 460 },
-          fragment_ids: { type: "array", minItems: 1, items: { type: "string" } },
         },
       },
     },
@@ -31,8 +30,6 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   const paragraphs = rendered.sections.map((section, index) => {
     const expectedSection = expected[index];
     if (section.section_id !== expectedSection.id) throw new Error(`리포트 section 순서가 맞지 않습니다: ${section.section_id}`);
-    const allowedIds = new Set(expectedSection.fragments.map((fragment) => fragment.id));
-    if (section.fragment_ids.some((id) => !allowedIds.has(id))) throw new Error(`${section.section_id}에 선택되지 않은 조각이 인용되었습니다.`);
     return section.paragraph.trim();
   });
   const text = paragraphs.join("\n\n");
@@ -46,7 +43,7 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
     paragraphs,
     meta: {
       charCount: [...text].length,
-      beats: rendered.sections.map((section) => `${section.section_id}:${section.fragment_ids.join(",")}`),
+      beats: expected.map((section) => `${section.id}:${section.fragments.map((fragment) => fragment.id).join(",")}`),
       termsUsed: context.reportFacts.facts.map((fact) => ({ term: fact.value, gloss: fact.basis })),
     },
   };
