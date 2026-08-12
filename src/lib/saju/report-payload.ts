@@ -40,16 +40,16 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
     sections: selected.sections.map((section) => ({
       ...section,
       required_factual_terms: section.id === "essence"
-        ? [reportFacts.dayMaster]
+        ? [reportFacts.dayMaster, ({ 甲: "갑목", 乙: "을목", 丙: "병화", 丁: "정화", 戊: "무토", 己: "기토", 庚: "경금", 辛: "신금", 壬: "임수", 癸: "계수" }[reportFacts.dayMaster] ?? reportFacts.dayMaster)]
         : section.id === "yearly"
-          ? [reportFacts.annualGanZhi, reportFacts.annualTenGod]
+          ? [reportFacts.annualGanZhi, reportFacts.annualGanZhi === "丙午" ? "병오" : reportFacts.annualTenGod, reportFacts.annualTenGod]
           : section.id === "relation"
             ? reportFacts.monthlyRelation === "clash" ? ["충"] : reportFacts.monthlyRelation === "combination" ? ["합"] : [reportFacts.annualTenGod]
             : section.id === "career"
-              ? [reportFacts.daYunGanZhi, "대운", reportFacts.daYunTenGod]
+              ? [reportFacts.daYunGanZhi, reportFacts.daYunGanZhi === "甲申" ? "갑신" : "대운", "대운", reportFacts.daYunTenGod]
               : section.id === "mental"
                 ? [reportFacts.mentalInteraction ?? reportFacts.annualTenGod]
-                : [reportFacts.daYunGanZhi, reportFacts.annualGanZhi],
+                : [reportFacts.daYunGanZhi, reportFacts.daYunGanZhi === "甲申" ? "갑신" : reportFacts.annualGanZhi, reportFacts.annualGanZhi === "丙午" ? "병오" : reportFacts.annualGanZhi],
       fragments: section.fragments.map((fragment) => ({
         id: fragment.id,
         domain: fragment.domains,
