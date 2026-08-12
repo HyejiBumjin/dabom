@@ -29,7 +29,9 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   const paragraphs = rendered.sections.map((section, index) => {
     const expectedSection = expected[index];
     if (section.section_id !== expectedSection.id) throw new Error(`리포트 section 순서가 맞지 않습니다: ${section.section_id}`);
-    return section.paragraph.trim().replace(/\p{Extended_Pictographic}/gu, "").replace(/\s{2,}/g, " ");
+    const paragraph = section.paragraph.trim().replace(/\p{Extended_Pictographic}/gu, "").replace(/\s{2,}/g, " ");
+    if (!expectedSection.required_factual_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 필수 사주 근거가 빠졌습니다.`);
+    return paragraph;
   });
   const text = paragraphs.join("\n\n");
   if (/\[[^\]]+\]/.test(text)) throw new Error("내부 추적 태그가 본문에 노출되었습니다.");

@@ -11,6 +11,7 @@ export interface ReportRenderPayload {
   sections: Array<{
     id: string;
     title: string;
+    required_factual_terms: string[];
     fragments: Array<{
       id: string;
       domain: string[];
@@ -38,6 +39,17 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
     outline: selected.outline,
     sections: selected.sections.map((section) => ({
       ...section,
+      required_factual_terms: section.id === "essence"
+        ? [reportFacts.dayMaster]
+        : section.id === "yearly"
+          ? [reportFacts.annualGanZhi, reportFacts.annualTenGod]
+          : section.id === "relation"
+            ? reportFacts.monthlyRelation === "clash" ? ["충"] : reportFacts.monthlyRelation === "combination" ? ["합"] : [reportFacts.annualTenGod]
+            : section.id === "career"
+              ? [reportFacts.daYunGanZhi, "대운", reportFacts.daYunTenGod]
+              : section.id === "mental"
+                ? [reportFacts.mentalInteraction ?? reportFacts.annualTenGod]
+                : [reportFacts.daYunGanZhi, reportFacts.annualGanZhi],
       fragments: section.fragments.map((fragment) => ({
         id: fragment.id,
         domain: fragment.domains,
