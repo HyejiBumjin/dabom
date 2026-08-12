@@ -2,95 +2,92 @@ import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { REPORT_DEVELOPER_INSTRUCTIONS } from "@/lib/prompts/v6";
-import type { ReportContent } from "./types";
+import { buildReportEvidencePrompt, REPORT_DEVELOPER_INSTRUCTIONS } from "@/lib/prompts/v6";
+import { buildReportRenderPayload } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
-import { buildReportScript, type ReportScript } from "@/lib/saju/report-script";
+import type { ReportContent } from "./types";
 
-const bitSchema = z.object({ paragraph: z.string().min(250).max(420) });
-const bitOutputSchema = { type: "object", additionalProperties: false, required: ["paragraph"], properties: { paragraph: { type: "string", minLength: 250, maxLength: 420 } } } as const;
+const sectionSchema = z.object({ section_id: z.string(), paragraph: z.string().min(250).max(460), fragment_ids: z.array(z.string()).min(1) });
+const reportSchema = z.object({ sections: z.array(sectionSchema).length(6) });
+const reportOutputSchema = {
+  type: "object", additionalProperties: false, required: ["sections"], properties: {
+    sections: {
+      type: "array", minItems: 6, maxItems: 6,
+      items: {
+        type: "object", additionalProperties: false, required: ["section_id", "paragraph", "fragment_ids"], properties: {
+          section_id: { type: "string" },
+          paragraph: { type: "string", minLength: 250, maxLength: 460 },
+          fragment_ids: { type: "array", minItems: 1, items: { type: "string" } },
+        },
+      },
+    },
+  },
+} as const;
 const forbiddenPhrases = ["기준을 바로잡아", "점검해봐", "신중한 자세", "신중하게", "규칙적인 생활", "루틴", "마음을 다잡고", "자기계발", "현명한 방법", "완벽하지 않아도 괜찮아", "토닥토닥", "사주에 따르면", "사주를 보니"];
-function evidenceTerms(sajuFact: string) {
-  return [...new Set(sajuFact.match(/[甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥]{1,2}|화극금|수극화|충|합|[가-힣]{2,4}/g) ?? [])]
-    .filter((term) => !["세운", "대운", "일간", "원국", "천간", "월운"].includes(term));
-}
 
-function validateBeatRequirements(paragraph: string, bit: ReportScript["bits"][number]) {
-  if (bit.bitIndex !== 4) return;
-  const mustMention = ["대운", ...[...new Set(bit.sajuFact.match(/비견|겁재|식신|상관|편재|정재|편관|정관|편인|정인/g) ?? [])].slice(0, 2)];
-  const missing = mustMention.filter((term) => !paragraph.includes(term));
-  if (missing.length) throw new Error(`커리어 비트에 필수 근거가 빠졌습니다: ${missing.join(", ")}`);
-}
-
-function groundCareerEvidence(paragraph: string, bit: ReportScript["bits"][number]) {
-  if (bit.bitIndex !== 4) return paragraph;
-  const mustMention = ["대운", ...[...new Set(bit.sajuFact.match(/비견|겁재|식신|상관|편재|정재|편관|정관|편인|정인/g) ?? [])].slice(0, 2)];
-  if (mustMention.every((term) => paragraph.includes(term))) return paragraph;
-  const baseFact = bit.sajuFact.split(" + ").slice(0, 2).join(" + ");
-  return `${paragraph} ${bit.timeScope}의 핵심은 ${baseFact}가 맞물려 큰 한 방보다 손에 남는 결과물을 챙기는 판이라는 거야.`;
-}
-
-function validateReport(paragraphs: string[], script: ReportScript): ReportContent {
-  if (paragraphs.length !== 6) throw new Error("문단 수가 맞지 않습니다.");
-  const anchored = paragraphs.map((rawParagraph, index) => {
-    const paragraph = groundCareerEvidence(rawParagraph, script.bits[index]);
-    const terms = evidenceTerms(script.bits[index].sajuFact);
-    validateBeatRequirements(paragraph, script.bits[index]);
-    return terms.some((term) => paragraph.includes(term)) ? paragraph : `${paragraph} 이 문단의 사주 근거는 ${script.bits[index].sajuFact}야.`;
+function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>): ReportContent {
+  const rendered = reportSchema.parse(raw);
+  const expected = context.payload.sections;
+  const paragraphs = rendered.sections.map((section, index) => {
+    const expectedSection = expected[index];
+    if (section.section_id !== expectedSection.id) throw new Error(`리포트 section 순서가 맞지 않습니다: ${section.section_id}`);
+    const allowedIds = new Set(expectedSection.fragments.map((fragment) => fragment.id));
+    if (section.fragment_ids.some((id) => !allowedIds.has(id))) throw new Error(`${section.section_id}에 선택되지 않은 조각이 인용되었습니다.`);
+    return section.paragraph.trim();
   });
-  const text = anchored.join("\n\n");
+  const text = paragraphs.join("\n\n");
   const forbidden = forbiddenPhrases.find((phrase) => text.includes(phrase));
   if (forbidden) throw new Error(`렌더링 금지 표현이 포함되었습니다: ${forbidden}`);
   if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/.test(text)) throw new Error("비정상 렌더링 문구가 포함되었습니다.");
-  if ([...text].length < 1_450) throw new Error("리포트 분량이 부족합니다.");
-  return { paragraphs: anchored, meta: { charCount: [...text].length, beats: [], termsUsed: [] } };
+  if ([...text].length < 1_500) throw new Error("리포트 분량이 부족합니다.");
+  return {
+    paragraphs,
+    meta: {
+      charCount: [...text].length,
+      beats: rendered.sections.map((section) => `${section.section_id}:${section.fragment_ids.join(",")}`),
+      termsUsed: context.reportFacts.facts.map((fact) => ({ term: fact.value, gloss: fact.basis })),
+    },
+  };
 }
 
+/** One structured rendering pass. Facts and approved corpus selection stay outside the LLM. */
 export async function generateReport(reportId: string): Promise<void> {
   const report = await prisma.report.findUnique({ where: { id: reportId }, include: { sajuProfile: true } });
   if (!report || report.status === "COMPLETED") return;
-  if (!process.env.OPENAI_API_KEY) { await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError: "OPENAI_API_KEY가 설정되지 않았습니다." } }); return; }
+  if (!process.env.OPENAI_API_KEY) {
+    await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError: "OPENAI_API_KEY가 설정되지 않았습니다." } });
+    return;
+  }
   const claim = await prisma.report.updateMany({ where: { id: reportId, status: { in: ["PENDING", "FAILED"] } }, data: { status: "GENERATING", lastError: null } });
   if (claim.count === 0) return;
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 45_000, maxRetries: 0 });
-  const script = buildReportScript(report.sajuProfile.myeongsik as unknown as Myeongsik, report.sajuProfile.name);
+
+  const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik, report.sajuProfile.name);
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 50_000, maxRetries: 0 });
   let lastError = "리포트 생성에 실패했습니다.";
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const paragraphs = await Promise.all(script.bits.map(async (bit) => {
-        const response = await client.responses.create({
-          model: process.env.OPENAI_MODEL || "gpt-4o", store: false, max_output_tokens: 650,
-          input: [
-            { role: "developer", content: `${REPORT_DEVELOPER_INSTRUCTIONS}\n\n지금은 전체 편지가 아니라 bit ${bit.bitIndex} 하나만 렌더링한다. ${bit.bitIndex === 1 ? "이 문단만 성향 팩폭으로 시작한다." : "이 문단은 ‘너 이런 타입이지?’ 같은 성향 오프닝 없이, 주어진 장면에서 바로 시작한다."}${bit.bitIndex === 4 ? " 반드시 ‘대운’이라는 10년 범위, saju_fact의 앞 두 십신 용어, 그리고 mechanism의 원인→결과를 모두 자연스럽게 문장에 쓴다. 셋 중 하나라도 빼면 실패다." : ""} JSON paragraph 하나만 출력하고 다른 비트 내용은 절대 섞지 않는다.` },
-            ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 초안 검증 실패: ${lastError}. 금지 표현 없이 대본 사실과 현실 장면을 모두 살려 다시 작성하세요.` }] : []),
-            {
-              role: "user",
-              content: JSON.stringify({
-                user_name: script.userName,
-                target_year: script.targetYear,
-                script_bit: {
-                  bit_index: bit.bitIndex,
-                  title: bit.title,
-                  time_scope: bit.timeScope,
-                  saju_fact: bit.sajuFact,
-                  mechanism: bit.mechanism,
-                  term_translation_guide: bit.termTranslationGuide,
-                  fact_translation: bit.factTranslation,
-                  concrete_scene: bit.concreteScene,
-                  emotional_direction: bit.emotionalDirection,
-                },
-              }),
-            },
-          ],
-          text: { format: { type: "json_schema", name: "essay_bit", strict: true, schema: bitOutputSchema } },
-        });
-        return bitSchema.parse(JSON.parse(response.output_text)).paragraph.trim();
-      }));
-      const content = validateReport(paragraphs, script);
-      await prisma.report.update({ where: { id: reportId }, data: { status: "COMPLETED", content: content as unknown as Prisma.InputJsonValue, retryCount: attempt - 1, completedAt: new Date(), lastError: null } });
+      const response = await client.responses.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o",
+        store: false,
+        max_output_tokens: 3_400,
+        input: [
+          { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
+          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. outline 순서와 fragment_ids를 다시 확인하고, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
+          { role: "user", content: buildReportEvidencePrompt(context.payload) },
+        ],
+        text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: reportOutputSchema } },
+      });
+      const content = validateReport(JSON.parse(response.output_text), context);
+      await prisma.report.update({
+        where: { id: reportId },
+        data: { status: "COMPLETED", content: content as unknown as Prisma.InputJsonValue, retryCount: attempt - 1, completedAt: new Date(), lastError: null },
+      });
       return;
-    } catch (error) { lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류"; await prisma.report.update({ where: { id: reportId }, data: { retryCount: attempt, lastError } }); }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
+      await prisma.report.update({ where: { id: reportId }, data: { retryCount: attempt, lastError } });
+    }
   }
   await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError } });
 }

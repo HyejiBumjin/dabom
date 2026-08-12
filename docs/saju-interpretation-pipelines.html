@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>사주 해석 생성 — 세 가지 파이프라인</title>
+<style>
+  :root {
+    --bg: #F4F6F3;
+    --surface: #FFFFFF;
+    --ink: #232D28;
+    --muted: #5C6B64;
+    --line: #C7D0CA;
+    --teal: #2E7D6B;
+    --teal-bg: #E2EFEA;
+    --amber: #96691F;
+    --amber-bg: #F4EAD4;
+    --red: #B0483A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141917;
+      --surface: #1D2421;
+      --ink: #E3E8E4;
+      --muted: #94A19A;
+      --line: #3B463F;
+      --teal: #6FBFAC;
+      --teal-bg: #20362F;
+      --amber: #D3A458;
+      --amber-bg: #382E1B;
+      --red: #DC8172;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F3; --surface: #FFFFFF; --ink: #232D28; --muted: #5C6B64; --line: #C7D0CA;
+    --teal: #2E7D6B; --teal-bg: #E2EFEA; --amber: #96691F; --amber-bg: #F4EAD4; --red: #B0483A;
+  }
+  :root[data-theme="dark"] {
+    --bg: #141917; --surface: #1D2421; --ink: #E3E8E4; --muted: #94A19A; --line: #3B463F;
+    --teal: #6FBFAC; --teal-bg: #20362F; --amber: #D3A458; --amber-bg: #382E1B; --red: #DC8172;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+  }
+
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--teal);
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  h1 {
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 15.5px;
+    color: var(--muted);
+    max-width: 40em;
+    margin: 0;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    margin: 32px 0 8px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .sw {
+    display: inline-block;
+    width: 22px; height: 14px;
+    border-radius: 3px;
+    border: 1.5px solid var(--line);
+    background: var(--surface);
+  }
+  .sw.teal { border-color: var(--teal); background: var(--teal-bg); }
+  .sw.amber { border-color: var(--amber); background: var(--amber-bg); }
+  .sw.red { border: 1.5px dashed var(--red); background: transparent; }
+
+  section {
+    margin-top: 48px;
+    padding-top: 36px;
+    border-top: 1px solid var(--line);
+  }
+  .chip {
+    display: inline-block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    padding: 3px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .chip.rec { border-color: var(--teal); color: var(--teal); }
+  h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .verdict {
+    font-size: 14.5px;
+    color: var(--muted);
+    margin: 0 0 22px;
+  }
+  .verdict strong { color: var(--ink); font-weight: 700; }
+
+  figure {
+    margin: 0 0 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px 18px 14px;
+    overflow-x: auto;
+  }
+  figure svg {
+    display: block;
+    width: 100%;
+    min-width: 740px;
+    height: auto;
+  }
+  figcaption {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+
+  /* SVG shared classes */
+  .box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; rx: 7; }
+  .box-llm { fill: var(--teal-bg); stroke: var(--teal); stroke-width: 1.5; rx: 7; }
+  .box-own { fill: var(--amber-bg); stroke: var(--amber); stroke-width: 1.5; rx: 7; }
+  .lbl { font-size: 13px; font-weight: 700; fill: var(--ink); }
+  .lbl-t { fill: var(--teal); }
+  .lbl-a { fill: var(--amber); }
+  .sub { font-size: 11px; fill: var(--muted); }
+  .flow { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  .warnline { stroke: var(--red); stroke-width: 1.2; stroke-dasharray: 4 4; fill: none; }
+  .warn { font-size: 11.5px; fill: var(--red); font-weight: 600; }
+  .alab { font-size: 11px; fill: var(--muted); }
+  .mk { fill: var(--muted); }
+  .mk-r { fill: var(--red); }
+
+  ul.notes {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 14.5px;
+  }
+  ul.notes li { margin-bottom: 6px; }
+  ul.notes li::marker { color: var(--teal); }
+  ul.notes .bad::marker { color: var(--red); }
+
+  h3 {
+    font-size: 15.5px;
+    font-weight: 700;
+    margin: 30px 0 8px;
+  }
+  h3 .stepno {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--teal);
+    margin-right: 8px;
+    letter-spacing: 0.08em;
+  }
+  section p { font-size: 14.5px; margin: 0 0 10px; }
+  pre {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 10px 0 14px;
+  }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  pre code { background: none; border: none; padding: 0; }
+
+  .tablewrap { overflow-x: auto; margin-top: 22px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 640px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  thead th {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 700;
+    background: var(--bg);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.dim { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  th.c-col, td.c-col { background: var(--teal-bg); }
+  thead th.c-col { color: var(--teal); }
+
+  .pipe { margin-top: 20px; }
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .stage .no {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    border-radius: 99px;
+    padding: 2px 9px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .stage-body { min-width: 0; flex: 1; }
+  .stage h4 { margin: 0 0 4px; font-size: 14.5px; }
+  .stage p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .stage.llm { border-color: var(--teal); background: var(--teal-bg); }
+  .stage.own { border-color: var(--amber); }
+  .stage pre { margin: 8px 0 0; padding: 10px 12px; font-size: 12px; }
+  .down {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 11.5px;
+    padding: 4px 0;
+  }
+  .report {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 10px;
+    background: var(--surface);
+  }
+  .report-head {
+    padding: 12px 18px;
+    background: var(--teal-bg);
+    color: var(--teal);
+    font-weight: 700;
+    font-size: 14.5px;
+  }
+  .report h4 { margin: 16px 18px 6px; font-size: 14px; }
+  .report > p { margin: 0 18px 14px; font-size: 13.5px; line-height: 1.75; }
+  .rtag {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0 4px;
+    margin-left: 5px;
+    vertical-align: 1px;
+    white-space: nowrap;
+  }
+
+  .takeaway {
+    margin-top: 48px;
+    padding: 22px 26px;
+    border-left: 3px solid var(--teal);
+    background: var(--surface);
+    border-radius: 0 10px 10px 0;
+    font-size: 16px;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+  .takeaway small {
+    display: block;
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <p class="eyebrow">사주 서비스 · 해석 생성 파이프라인</p>
+  <h1>해석 문장은 누가 만드는가 — 세 가지 흐름</h1>
+  <p class="lede">계산(간지·십성·합충·용신)은 세 방식 모두 결정론적 코드가 담당합니다. 갈리는 지점은 딱 하나 — 계산 결과를 <b>읽을 수 있는 문장</b>으로 바꾸는 마지막 구간입니다.</p>
+
+  <div class="legend">
+    <span><i class="sw"></i>결정론적 코드</span>
+    <span><i class="sw amber"></i>우리가 보유한 콘텐츠 (자산)</span>
+    <span><i class="sw teal"></i>LLM 담당</span>
+    <span><i class="sw red"></i>실패 지점</span>
+  </div>
+
+  <section>
+    <span class="chip">공통 전제</span>
+    <h2>계산은 무조건 코드가 한다</h2>
+    <p class="verdict">아래 세 방식 모두 이 단계까지는 동일합니다. LLM에게 간지 계산을 시키는 선택지는 없습니다 — 틀립니다.</p>
+    <figure>
+      <svg viewBox="0 0 860 96" role="img" aria-label="출생 정보 입력이 계산 엔진을 거쳐 계산 결과 JSON이 되는 공통 단계">
+        <defs>
+          <marker id="arw0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" class="mk"/>
+          </marker>
+        </defs>
+        <rect class="box" x="20" y="26" width="190" height="46" rx="7"/>
+        <text class="lbl" x="115" y="45" text-anchor="middle">출생 정보 입력</text>
+        <text class="sub" x="115" y="61" text-anchor="middle">생년월일시 · 성별 · 출생지</text>
+        <line class="flow" x1="212" y1="49" x2="250" y2="49" marker-end="url(#arw0)"/>
+        <rect class="box" x="255" y="26" width="250" height="46" rx="7"/>
+        <text class="lbl" x="380" y="45" text-anchor="middle">계산 엔진 (순수 함수)</text>
+        <text class="sub" x="380" y="61" text-anchor="middle">만세력 · 간지 · 십성 · 합충 · 용신 · 대운</text>
+        <line class="flow" x1="507" y1="49" x2="545" y2="49" marker-end="url(#arw0)"/>
+        <rect class="box" x="550" y="26" width="290" height="46" rx="7"/>
+        <text class="lbl" x="695" y="45" text-anchor="middle">계산 결과 JSON</text>
+        <text class="sub" x="695" y="61" text-anchor="middle">{ 팔자, 십성, 합충, 용신 여부, 세운·월운… }</text>
+      </svg>
+      <figcaption>세 방식의 공통 앞단. 이후 다이어그램은 전부 이 JSON에서 출발합니다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="chip">방식 A</span>
+    <h2>순수 템플릿 — 완성 문장을 전부 보유</h2>
+    <p class="verdict"><strong>품질 통제는 확실</strong>하지만, 조합마다 완성문이 필요해서 콘텐츠가 감당이 안 됩니다.</p>
+    <figure>
+      <svg viewBox="0 0 860 176" role="img" aria-label="방식 A: JSON에서 룰 매칭으로 완성 문장 DB의 문단을 골라 이어붙이는 흐름. 조합 폭발과 문단 간 모순이 실패 지점">
+        <defs>
+          <marker id="arwA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" class="mk"/>
+          </marker>
+        </defs>
+        <rect class="box" x="10" y="26" width="140" height="46" rx="7"/>
+        <text class="lbl" x="80" y="53" text-anchor="middle">계산 결과 JSON</text>
+        <line class="flow" x1="152" y1="49" x2="175" y2="49" marker-end="url(#arwA)"/>
+        <rect class="box" x="180" y="26" width="155" height="46" rx="7"/>
+        <text class="lbl" x="257" y="45" text-anchor="middle">룰 매칭</text>
+        <text class="sub" x="257" y="61" text-anchor="middle">조합 키 생성</text>
+        <line class="flow" x1="337" y1="49" x2="363" y2="49" marker-end="url(#arwA)"/>
+        <rect class="box-own" x="368" y="26" width="180" height="46" rx="7"/>
+        <text class="lbl lbl-a" x="458" y="45" text-anchor="middle">완성 문장 DB</text>
+        <text class="sub" x="458" y="61" text-anchor="middle">조합별 완성 문단 · 수만 개</text>
+        <line class="flow" x1="550" y1="49" x2="575" y2="49" marker-end="url(#arwA)"/>
+        <rect class="box" x="580" y="26" width="160" height="46" rx="7"/>
+        <text class="lbl" x="660" y="45" text-anchor="middle">문단 이어붙이기</text>
+        <text class="sub" x="660" y="61" text-anchor="middle">A + B + C 조립</text>
+        <line class="flow" x1="742" y1="49" x2="765" y2="49" marker-end="url(#arwA)"/>
+        <rect class="box" x="770" y="26" width="80" height="46" rx="7"/>
+        <text class="lbl" x="810" y="53" text-anchor="middle">출력</text>
+
+        <line class="warnline" x1="458" y1="76" x2="458" y2="108"/>
+        <text class="warn" x="458" y="126" text-anchor="middle">조합 폭발 — 필요한 완성문이 수만 개</text>
+        <line class="warnline" x1="660" y1="76" x2="660" y2="138"/>
+        <text class="warn" x="660" y="156" text-anchor="middle">문단 간 모순 조정 불가 · 끊기는 글</text>
+      </svg>
+      <figcaption>방식 A: 문장의 내용도, 표현도 전부 DB에 박제. LLM은 등장하지 않습니다.</figcaption>
+    </figure>
+    <ul class="notes">
+      <li>같은 입력이면 항상 같은 출력 — QA와 검수는 제일 쉽습니다.</li>
+      <li class="bad">일간 × 세운 십성 × 합충 × 용신 조합이 곱해지면 완성문 수만 개가 필요합니다.</li>
+      <li class="bad">앞 문단 "재물운 좋음" + 뒤 문단 "지출 조심" 같은 충돌을 조정할 방법이 없습니다.</li>
+    </ul>
+  </section>
+
+  <section>
+    <span class="chip">방식 B</span>
+    <h2>LLM 단독 — 내용 판단까지 전부 위임</h2>
+    <p class="verdict">문장은 자연스럽지만, <strong>내용의 근거가 없습니다.</strong> 명리 판단 자체를 LLM이 하게 됩니다.</p>
+    <figure>
+      <svg viewBox="0 0 860 190" role="img" aria-label="방식 B: JSON을 프롬프트에 담아 LLM이 내용 판단과 문장 생성을 모두 수행하는 흐름. 환각, 바넘 문장, QA 불가가 실패 지점">
+        <defs>
+          <marker id="arwB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" class="mk"/>
+          </marker>
+        </defs>
+        <rect class="box" x="10" y="26" width="150" height="46" rx="7"/>
+        <text class="lbl" x="85" y="53" text-anchor="middle">계산 결과 JSON</text>
+        <line class="flow" x1="162" y1="49" x2="195" y2="49" marker-end="url(#arwB)"/>
+        <rect class="box" x="200" y="26" width="200" height="46" rx="7"/>
+        <text class="lbl" x="300" y="45" text-anchor="middle">프롬프트</text>
+        <text class="sub" x="300" y="61" text-anchor="middle">"이 사람 2026년 해석해줘"</text>
+        <line class="flow" x1="402" y1="49" x2="440" y2="49" marker-end="url(#arwB)"/>
+        <rect class="box-llm" x="445" y="26" width="215" height="46" rx="7"/>
+        <text class="lbl lbl-t" x="552" y="45" text-anchor="middle">LLM</text>
+        <text class="sub" x="552" y="61" text-anchor="middle">내용 판단 + 문장 생성 전부 담당</text>
+        <line class="flow" x1="662" y1="49" x2="700" y2="49" marker-end="url(#arwB)"/>
+        <rect class="box" x="705" y="26" width="80" height="46" rx="7"/>
+        <text class="lbl" x="745" y="53" text-anchor="middle">출력</text>
+
+        <line class="warnline" x1="552" y1="76" x2="552" y2="102"/>
+        <text class="warn" x="552" y="122" text-anchor="middle">환각 — 데이터와 모순되는 명리 판단</text>
+        <text class="warn" x="552" y="142" text-anchor="middle">근거 텍스트 없음 → 바넘 문장으로 수렴</text>
+        <text class="warn" x="552" y="162" text-anchor="middle">매번 다른 출력 → QA·재조회 신뢰 불가</text>
+      </svg>
+      <figcaption>방식 B: 해석의 근거를 대조할 원본이 없어서, 출력 검증 자체가 불가능합니다.</figcaption>
+    </figure>
+    <ul class="notes">
+      <li>콘텐츠 제작 비용이 0 — 프로토타입·데모용으로는 제일 빠릅니다.</li>
+      <li class="bad">"화 과다"라고 JSON에 있는데 "화를 보충하세요"라고 쓰는 식의 모순이 나옵니다.</li>
+      <li class="bad">단골이 재조회했을 때 다른 말이 나오면 서비스 신뢰가 깨집니다.</li>
+    </ul>
+  </section>
+
+  <section>
+    <span class="chip rec">방식 C · 권장</span>
+    <h2>하이브리드 — 내용은 코퍼스, 문장은 LLM</h2>
+    <p class="verdict">해석의 <strong>요지</strong>만 우리가 보유하고, LLM의 역할을 <strong>엮기 + 말투</strong>로 한정합니다.</p>
+    <figure>
+      <svg viewBox="0 0 860 250" role="img" aria-label="방식 C: 룰 엔진이 해석 조각 코퍼스에서 요지를 선별하고, LLM은 말투 가이드에 따라 엮기만 담당. 검증 단계가 재료 밖 주장을 걸러내고 결과는 캐시됨">
+        <defs>
+          <marker id="arwC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" class="mk"/>
+          </marker>
+          <marker id="arwCr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" class="mk-r"/>
+          </marker>
+        </defs>
+        <rect class="box" x="10" y="44" width="140" height="46" rx="7"/>
+        <text class="lbl" x="80" y="71" text-anchor="middle">계산 결과 JSON</text>
+        <line class="flow" x1="152" y1="67" x2="175" y2="67" marker-end="url(#arwC)"/>
+        <rect class="box" x="180" y="44" width="155" height="46" rx="7"/>
+        <text class="lbl" x="257" y="62" text-anchor="middle">룰 엔진</text>
+        <text class="sub" x="257" y="78" text-anchor="middle">발동 규칙 선별</text>
+        <line class="flow" x1="337" y1="67" x2="363" y2="67" marker-end="url(#arwC)"/>
+        <rect class="box-llm" x="368" y="44" width="180" height="46" rx="7"/>
+        <text class="lbl lbl-t" x="458" y="62" text-anchor="middle">LLM</text>
+        <text class="sub" x="458" y="78" text-anchor="middle">엮기 · 말투 다듬기만</text>
+        <line class="flow" x1="550" y1="67" x2="575" y2="67" marker-end="url(#arwC)"/>
+        <rect class="box" x="580" y="44" width="160" height="46" rx="7"/>
+        <text class="lbl" x="660" y="62" text-anchor="middle">검증</text>
+        <text class="sub" x="660" y="78" text-anchor="middle">재료 밖 주장 체크</text>
+        <line class="flow" x1="742" y1="67" x2="765" y2="67" marker-end="url(#arwC)"/>
+        <rect class="box" x="770" y="44" width="80" height="46" rx="7"/>
+        <text class="lbl" x="810" y="62" text-anchor="middle">출력</text>
+        <text class="sub" x="810" y="78" text-anchor="middle">연 1회 캐시</text>
+
+        <path class="warnline" d="M 655 44 C 630 14, 490 14, 466 42" marker-end="url(#arwCr)"/>
+        <text class="warn" x="560" y="16" text-anchor="middle">재료 밖 주장 발견 시 재생성</text>
+
+        <rect class="box-own" x="140" y="188" width="235" height="46" rx="7"/>
+        <text class="lbl lbl-a" x="257" y="206" text-anchor="middle">해석 조각 코퍼스</text>
+        <text class="sub" x="257" y="222" text-anchor="middle">조합 → 요지 단위 · 서비스의 진짜 자산</text>
+        <line class="flow" x1="257" y1="186" x2="257" y2="96" marker-end="url(#arwC)"/>
+        <text class="alab" x="266" y="145">요지 조각 5~10개</text>
+
+        <rect class="box" x="383" y="188" width="150" height="46" rx="7"/>
+        <text class="lbl" x="458" y="206" text-anchor="middle">말투 가이드</text>
+        <text class="sub" x="458" y="222" text-anchor="middle">존댓말 · 친근체 …</text>
+        <line class="flow" x1="458" y1="186" x2="458" y2="96" marker-end="url(#arwC)"/>
+        <text class="alab" x="467" y="145">톤 지정</text>
+      </svg>
+      <figcaption>방식 C: 명리 판단은 룰 엔진 + 코퍼스가, 자연스러운 글은 LLM이. 검증은 "재료에 없는 주장이 있는가"만 보면 되므로 기계적으로 가능합니다.</figcaption>
+    </figure>
+    <ul class="notes">
+      <li>코퍼스는 완성문이 아니라 <b>요지 단위</b> — "편관 세운 + 신약 → 압박 커짐, 이직 상반기 불리" 수준이면 충분합니다.</li>
+      <li>LLM 프롬프트: "이 재료만 사용해서, 이 톤으로 작성. 재료 밖 명리 판단 금지."</li>
+      <li>입력이 결정론적이므로 말투 버전별로 캐시하면 LLM 비용은 사용자당 연 1회입니다.</li>
+    </ul>
+  </section>
+
+  <section>
+    <span class="chip rec">방식 C 딥다이브</span>
+    <h2>룰 엔진 6단계 — 2026년 병오(丙午)년 예시</h2>
+    <p class="verdict">예시 인물 고정: 일간 <strong>경금(庚)</strong> · 일지 <strong>자수(子)</strong> · 원국에 인(寅) 보유 · <strong>신약</strong> · 용신 <strong>토·금</strong> (기신 화)</p>
+
+    <h3><span class="stepno">STEP 1</span>세운 간지 확정</h3>
+    <p>2026년 = <b>병오(丙午)</b>. 근거는 60갑자 순환 공식(또는 만세력 테이블)이고, 적용 기간은 <b>입춘 기준</b>으로 2026-02-04 ~ 2027-02-03입니다. 이 두 값이 이후 모든 계산의 입력이 됩니다.</p>
+
+    <h3><span class="stepno">STEP 2</span>관계 피처 추출 — 근거는 전부 룩업 테이블</h3>
+    <p>병오 두 글자를 원국·대운과 전부 대조해서 "사실 목록(facts)"을 만듭니다. 판단이 아니라 조회입니다.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>계산</th><th>결과</th><th>근거 (룩업 테이블)</th></tr></thead>
+        <tbody>
+          <tr><td>세운 천간 丙 vs 일간 庚</td><td>편관 (화극금 + 양·양)</td><td class="dim">십성 테이블 (10×10)</td></tr>
+          <tr><td>세운 지지 午 vs 일지 子</td><td>자오충 — 일지가 충 당함</td><td class="dim">지지 충 테이블 (6쌍)</td></tr>
+          <tr><td>세운 지지 午 vs 원국 寅</td><td>인오 반합 (화국 방향)</td><td class="dim">삼합 테이블 (4국)</td></tr>
+          <tr><td>오행 분포 재계산</td><td>화 +2 → 화 편중 심화</td><td class="dim">오행 카운트 (산술)</td></tr>
+          <tr><td>현재 대운 간지 vs 丙午</td><td>합·충 여부</td><td class="dim">같은 관계 테이블 재사용</td></tr>
+          <tr><td>화(火)의 길흉</td><td>기신 → 부담스러운 해</td><td class="dim">원국 용신 판정 결과</td></tr>
+          <tr><td>신살</td><td>해·묘·미 띠면 삼재 해당</td><td class="dim">띠 기준 단순 룩업</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3><span class="stepno">STEP 3</span>룰 발동 — facts를 조건으로 필터링</h3>
+    <p>룰 하나 = <b>조건 + 해석 조각 참조 + 영역 태그 + 우선순위</b>. facts에 대해 조건이 참인 룰만 발동됩니다.</p>
+    <pre><code>- id: R-081
+  when: 세운.십성 == 편관 AND 원국.신강약 == 신약
+  domain: [직장, 건강]
+  tone: 주의
+  priority: 80
+  fragment: "책임·압박이 커지는 해. 승진 기회이지만 과로 주의.
+             이직은 상반기 불리."
+
+- id: R-134
+  when: 세운.지지관계 CONTAINS 자오충 AND 충.궁위 == 일지
+  domain: [애정, 변동]
+  tone: 경고
+  priority: 90
+  fragment: "일지 충 — 배우자·거주지 등 일상 기반의 변동수.
+             큰 계약·이사는 시기를 가릴 것."</code></pre>
+
+    <h3><span class="stepno">STEP 4</span>충돌 해소 · 선별</h3>
+    <p>발동된 룰이 15~30개 나오면 그대로 다 넘기지 않습니다. 영역(domain)별로 priority 상위 2~3개만 남기고, 같은 영역에서 길·흉이 상반되면 삭제하는 대신 <code>"상반된 신호 공존"</code>이라는 메타 정보로 표시합니다 — "기회와 부담이 함께 오는 해"는 그 자체로 유효한 해석이니까요.</p>
+
+    <h3><span class="stepno">STEP 5</span>월운 12회 반복</h3>
+    <p>병오년의 월간지는 월두법으로 자동 결정(경인월부터 시작)되고, 각 월 간지에 STEP 2~4를 축소 적용해 월별 조각 1~2개씩 뽑습니다. 월 경계는 절입 시각 기준입니다.</p>
+
+    <h3><span class="stepno">STEP 6</span>페이로드 조립 → LLM 전달</h3>
+    <p>LLM에 넘어가는 최종본은 아래 하나의 구조화 객체입니다. LLM은 여기서 벗어난 판단을 할 수 없습니다.</p>
+    <pre><code>{
+  "profile":  { "일간": "경금", "신강약": "신약", "용신": ["토","금"] },
+  "seun":     { "year": 2026, "ganji": "병오",
+                "적용기간": "2026-02-04 ~ 2027-02-03" },
+  "facts":    [ { "type": "십성", "value": "편관",
+                  "basis": "丙(화) vs 일간 庚(금)" },
+                { "type": "충", "value": "자오충", "궁위": "일지" }, … ],
+  "fragments": [ { "id": "R-081", "domain": "직장", "tone": "주의",
+                   "text": "책임·압박이 커지는 해 …" }, … ],
+  "monthly":  [ { "month": "2026-02", "ganji": "경인",
+                  "fragments": [ … ] }, … ],
+  "outline":  [ "총운", "직장·명예", "재물", "애정·가정",
+                "건강", "월별 흐름", "올해의 조언" ],
+  "style":    { "톤": "친근한 존댓말", "분량": "영역별 2~3문장" },
+  "constraints": [
+    "fragments에 없는 명리 판단 금지",
+    "facts와 모순되는 서술 금지",
+    "outline 순서대로 작성, domain 태그로 영역 배치"
+  ]
+}</code></pre>
+    <p>리포트의 목차(<code>outline</code>)도 우리가 정합니다. LLM이 하는 일은 <b>fragments를 domain 태그에 따라 outline의 각 섹션에 배치하고, style대로 문장을 다시 쓰는 것</b> — 그게 전부입니다. 검증 단계는 출력에 fragments 밖 주장이 섞였는지만 대조하면 됩니다.</p>
+    <p style="color: var(--muted); font-size: 13.5px;">코퍼스 작성 팁: 조각은 완성 조합("경금 신약 병오년")이 아니라 <b>규칙 단위</b>("편관 세운 + 신약")로 씁니다. 조합은 룰 조건이 담당하므로, 세운 리포트 기준 수백 개 조각이면 시작할 수 있습니다.</p>
+  </section>
+
+  <section>
+    <span class="chip rec">코퍼스 · 조각 작성 가이드</span>
+    <h2>조각은 "짧게"가 아니라 "밀도 있게"</h2>
+    <p class="verdict">조각에 담긴 정보가 많을수록 LLM의 재량이 줄고, 재량이 줄수록 환각과 QA 리스크가 줄어듭니다. 원칙: <strong>담는 것은 내용, 빼는 것은 문체.</strong></p>
+
+    <h3>길이 다이얼 — 어느 쪽으로 틀어도 다른 방식의 실패로 회귀</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>수준</th><th>예</th><th>결과</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="dim">너무 짧음 (키워드)</td>
+            <td><code>"직장: 압박↑"</code></td>
+            <td>LLM이 빈칸을 자기 지식으로 메꿈 → <b>방식 B의 환각으로 회귀</b></td>
+          </tr>
+          <tr class="c-col">
+            <td class="dim c-col">적정 (명제 2~4개, 정보 최대)</td>
+            <td class="c-col">아래 예시</td>
+            <td class="c-col">LLM은 문장 표면만 다듬음 — 뼈대는 전부 조각에서</td>
+          </tr>
+          <tr>
+            <td class="dim">너무 김 (문체 포함 완성문)</td>
+            <td>존댓말 완성 문단</td>
+            <td>조합·말투마다 재작성 필요 → <b>방식 A의 조합 폭발로 회귀</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>조각 하나에 담을 것 — 체크리스트</h3>
+    <ul class="notes">
+      <li><b>방향</b> — 길인지 흉인지, 아니면 "기회와 부담 공존"인지</li>
+      <li><b>영역</b> — 어디서 일어나는 일인지 (직장·재물·애정·건강…)</li>
+      <li><b>조건·시기</b> — 언제, 어떤 경우에 (상반기 불리, 신약한 경우 심화 등)</li>
+      <li><b>권고</b> — 그래서 어떻게 하라는 것인지</li>
+      <li><b>강도</b> — 문장의 세기를 지시 (지나가는 언급 vs 올해의 핵심)</li>
+      <li><b>근거 참조</b> — 어떤 fact에서 나온 판단인지</li>
+    </ul>
+
+    <h3>나쁜 조각 vs 좋은 조각</h3>
+    <pre><code># 나쁨 — 키워드. LLM이 나머지를 지어내게 됨
+text: "직장운 주의"
+
+# 좋음 — 정보는 최대, 문체는 없음
+id: F-081
+text: >
+  책임과 업무량이 뚜렷하게 커지는 해.
+  승진·인정의 기회로 이어질 수 있으나, 신약한 명주에게는
+  과로와 건강 소모로 나타나기 쉬움.
+  이직·창업 등 큰 변동은 상반기 불리, 하반기부터 가능.
+domain: [직장, 건강]
+direction: 흉중길          # 방향
+strength: 4                # 강도 1~5 — 서술 비중을 LLM에 지시
+timing: { 불리: 상반기, 가능: 하반기 }
+grounds: [세운.십성=편관, 원국.신강약=신약]</code></pre>
+    <p><code>grounds</code>를 명시해두면 LLM이 "왜냐하면 올해의 화 기운이…" 같은 근거 문장을 쓸 때 참조할 출처가 생기고, 검증도 필드 단위 대조로 내려가서 더 기계적으로 가능해집니다. <code>strength</code>는 리포트에서 이 조각이 한 문장짜리 언급인지 섹션의 중심인지를 결정합니다.</p>
+
+    <h3>완성도 테스트</h3>
+    <p>조각을 쓰고 나서 이 질문 하나로 검사합니다: <b>"사람 작가가 이 조각만 받고, 추가 질문 없이, 새 주장을 보태지 않고 문단으로 늘릴 수 있는가?"</b> — 아니오라면 정보가 부족한 것이고, 문단을 늘리는 데 조각의 문장을 그대로 베끼게 된다면 문체까지 박아버린 것입니다.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="c-col">조각에 담는다 (내용)</th><th>조각에서 뺀다 (문체 — style 가이드 담당)</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="c-col">명리적 판단 · 방향 · 강도 · 시기 · 조건 · 예외 · 권고 · 근거</td>
+            <td>존댓말/반말, 수사적 표현("찬란한"), 독자 호칭, 문단 연결어, 이모지</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>룰 + 조각 예시 5선 — 조건 축별로 하나씩</h3>
+    <p>룰 조건이 참조하는 축은 <b>십성 / 지지관계(+궁위) / 용신 / 대운 / 월운</b> 다섯 가지이고, 대부분의 룰은 이 축 1~2개의 조합입니다. 그래서 수백 개 조각으로 커버가 됩니다.</p>
+    <pre><code># ① 세운 십성 기반 — 재물 (길한 케이스)
+- id: R-042
+  when: 세운.십성 == 정재 AND 원국.신강약 == 신강
+  domain: [재물]
+  direction: 길
+  strength: 4
+  grounds: [세운.십성=정재, 원국.신강약=신강]
+  fragment: >
+    노력의 결실이 돈으로 연결되는 해. 고정 수입 증가, 연봉 협상,
+    성과 보상에 유리. 신강한 명주라 재물을 감당할 힘이 있어
+    규모를 키워도 되지만, 투기성보다 실물·적립식이 맞는 구조.
+
+# ② 지지 관계 기반 — 애정 (합)
+- id: R-107
+  when: 세운.지지 육합 원국.일지
+  domain: [애정, 인연]
+  direction: 길
+  strength: 3
+  grounds: [지지관계=육합, 궁위=일지]
+  fragment: >
+    일지가 합을 맺는 해 — 새로운 인연이 자연스럽게 다가옴.
+    미혼자는 결혼 이야기가 구체화되기 좋은 시기,
+    기혼자는 배우자와의 관계가 순탄해지는 흐름.
+
+# ③ 삼합 + 용신 결합 — 건강 (복합 조건)
+- id: R-155
+  when: 세운.지지로 삼합 성립 AND 삼합.오행 == 원국.기신
+  domain: [건강, 총운]
+  direction: 흉
+  strength: 5
+  grounds: [삼합국=기신오행]
+  fragment: >
+    부담이 되는 오행이 국(局)을 이뤄 크게 강해지는 해.
+    해당 오행이 상징하는 신체 부위(화라면 심혈관·눈·혈압) 관리 필요.
+    무리한 확장과 감정적 결정이 문제를 키우는 구조라
+    올해는 벌이는 해가 아니라 지키는 해.
+
+# ④ 대운-세운 관계 — 변동
+- id: R-201
+  when: 대운.지지 충 세운.지지
+  domain: [변동, 총운]
+  direction: 주의
+  strength: 4
+  grounds: [대운지↔세운지=충]
+  fragment: >
+    10년 흐름(대운)과 올해 기운(세운)이 부딪히는 해 —
+    환경 자체가 흔들리는 변동수. 이사·부서 이동·소속 변화가
+    본인 의지보다 외부 요인으로 발생하기 쉬움.
+    변동 자체는 막기 어려우니 선택지를 미리 준비해두는 것이 상책.
+
+# ⑤ 월운 룰 — 조각이 짧아도 되는 케이스
+- id: R-310
+  when: 월운.지지 충 원국.일지
+  domain: [월운]
+  direction: 주의
+  strength: 2
+  fragment: >
+    이동수·변동수가 들어오는 달. 계약·서명은 조건 재확인 필요,
+    서두른 결정은 불리.</code></pre>
+  </section>
+
+  <section>
+    <span class="chip rec">코퍼스 · 콘텐츠 소싱</span>
+    <h2>조각의 글은 어디서 오는가</h2>
+    <p class="verdict">최종 소유는 우리가 하되, 전부 손으로 쓰지 않습니다. <strong>고전에서 뼈대 → LLM으로 초안 → 전문가 감수로 확정.</strong> 감수를 통과한 조각만 런타임에 사용합니다.</p>
+
+    <h3><span class="stepno">소스 1</span>명리 고전 — 판단의 뼈대 (저작권 프리)</h3>
+    <p>자평진전(子平眞詮) · 적천수천미(滴天髓闡微) · 궁통보감(窮通寶鑑) · 연해자평(淵海子平) 등 고전 <b>원문(한문)은 퍼블릭 도메인</b>입니다. 반면 시중 한글 번역서·해설서·타 사주 사이트의 문장은 저작권이 있으므로 표현을 가져오면 안 됩니다. 요지(아이디어)는 저작권 대상이 아니라서, 조각을 "명제 단위 요지"로 쓰는 우리 구조가 이 경계를 지키기에 유리합니다.</p>
+    <p>고전을 쓰는 방법 세 가지:</p>
+    <ul class="notes">
+      <li><b>룰 조건으로 번역</b> — 고전 조문을 조건식으로 옮깁니다. 예: 「살중신경(殺重身輕)이면 제복이 필요하다」 → <code>when: 세운.십성 == 편관 AND 원국.신강약 == 신약</code>. 룰 목록 자체를 고전 목차에서 뽑을 수 있습니다.</li>
+      <li><b>LLM 초안 생성 시 참고자료로 주입</b> — 해당 조문 원문 발췌를 프롬프트에 첨부(RAG)해서, 초안이 LLM의 일반 지식이 아니라 고전 텍스트에 묶이게 합니다.</li>
+      <li><b>출처 태깅</b> — 조각에 <code>source: 자평진전 論偏官</code>처럼 남겨두면, 리포트에서 "고전에서는 이 구조를 …라 봅니다" 같은 신뢰 요소로 쓸 수 있고 감수 때 원전 대조도 빨라집니다.</li>
+      <li class="bad">주의: 고전끼리도 유파가 갈립니다. 기준 고전(유파)을 하나 정해 코퍼스 전체의 일관성을 유지하세요 — 감수자와 함께 결정할 사안.</li>
+    </ul>
+
+    <h3><span class="stepno">소스 2</span>LLM 초안 생성 — 구축 시점이므로 안전</h3>
+    <p>"런타임에 LLM이 내용을 지어내면 안 된다"와 "구축 시점에 LLM으로 초안을 쓴다"는 다른 문제입니다. 후자는 사람이 검수한 뒤 박제되니까요. 파이프라인:</p>
+    <ul class="notes">
+      <li>① 룰 조건 목록 확정 — 십성 10 × 신강약 2~3 = 핵심 약 30개, 지지관계 × 궁위 ≈ 100여 개</li>
+      <li>② 조건별로 아래 프롬프트에 고전 발췌를 첨부해 초안 생성 (배치)</li>
+      <li>③ 감수 큐 — 전문가가 승인 / 수정 / 반려. <code>status: approved</code>만 런타임 사용</li>
+      <li>④ 운영 로그 기반 보강 — 자주 발동되는데 조각이 없거나 빈약한 룰부터 채움. 발동됐는데 조각이 없으면 해당 영역은 짧게 처리하고 로그만 남김</li>
+    </ul>
+    <pre><code># 초안 생성 프롬프트 (구축 시점 · 배치 실행)
+역할: 명리 콘텐츠 초안 생성기. 창작하지 말고 참고자료 범위에서 작성.
+
+입력 조건: 세운.십성 = 편관, 원국.신강약 = 신약
+참고자료: [자평진전 論偏官 절 원문 발췌 — RAG로 주입]
+
+작성 규칙:
+- 명제 3~4개. 방향 / 영역 / 조건·시기 / 권고가 각각 드러날 것
+- 문체 금지: 존댓말·수사·독자 호칭·이모지 없이 개조식 서술
+- direction(길/흉/흉중길/길중흉), strength(1~5), grounds 제안 포함
+- 참고자료에 근거가 없는 주장은 쓰지 말고 "감수 필요" 표시
+- 참고자료의 문장을 번역·복사하지 말 것. 요지만 재구성</code></pre>
+
+    <h3><span class="stepno">소스 3</span>전문가 감수 — 생략 불가</h3>
+    <p>감수 없이 LLM 초안만 쌓으면 "그럴듯한 코퍼스"가 됩니다. 이 아키텍처는 <b>검증이 전부 코퍼스를 기준으로 돌기 때문에, 코퍼스가 틀리면 시스템 전체가 자신 있게 틀립니다.</b> 상용 서비스들이 감수 역술인·명리 콘텐츠팀을 두는 이유이고, 감수를 통과한 코퍼스가 곧 서비스의 차별화 자산입니다. 조각에 <code>status</code>(draft/approved)와 <code>version</code>을 두고, 감수 이력을 남기세요.</p>
+  </section>
+
+  <section>
+    <span class="chip">한눈 비교</span>
+    <h2>세 방식의 책임 분담</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>구분</th>
+            <th>A · 순수 템플릿</th>
+            <th>B · LLM 단독</th>
+            <th class="c-col">C · 하이브리드</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="dim">내용(명리 판단)</td>
+            <td>우리 문장 DB</td>
+            <td>LLM — 근거 없음</td>
+            <td class="c-col">우리 코퍼스 + 룰 엔진</td>
+          </tr>
+          <tr>
+            <td class="dim">문장 · 말투</td>
+            <td>DB에 고정</td>
+            <td>LLM</td>
+            <td class="c-col">LLM</td>
+          </tr>
+          <tr>
+            <td class="dim">일관성 · QA</td>
+            <td>높음</td>
+            <td>낮음 — 매번 다른 출력</td>
+            <td class="c-col">높음 — 재료 대조로 검증</td>
+          </tr>
+          <tr>
+            <td class="dim">콘텐츠 제작 비용</td>
+            <td>매우 큼 — 완성문 수만 개</td>
+            <td>없음</td>
+            <td class="c-col">중간 — 요지 단위만 작성</td>
+          </tr>
+          <tr>
+            <td class="dim">결과물 느낌</td>
+            <td>문단이 뚝뚝 끊김</td>
+            <td>자연스럽지만 바넘 · 환각</td>
+            <td class="c-col">자연스럽고 근거 있음</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="chip rec">전체 흐름 · 엔드 투 엔드</span>
+    <h2>A씨의 2026년 리포트가 그려지기까지</h2>
+    <p class="verdict">예시 인물 A: 일주 <strong>경자(庚子)</strong> · 원국에 인(寅) 보유 · <strong>신약</strong> · 용신 토·금 · 선택한 톤 "친근한 존댓말"</p>
+
+    <div class="pipe">
+      <div class="stage">
+        <span class="no">1 · 입력</span>
+        <div class="stage-body">
+          <h4>출생 정보 + 리포트 요청</h4>
+          <p>생년월일시 · 남성 · 서울 출생. 음력 입력이면 양력 변환, 진태양시 보정(서울 약 −32분), 서머타임 이력 체크. 요청: "2026년 상세운"</p>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage">
+        <span class="no">2 · 원국</span>
+        <div class="stage-body">
+          <h4>원국 계산 — 가입 시 1회, 저장해두고 재사용</h4>
+          <pre><code>팔자: 일간 경금(庚) · 일지 자수(子) · 원국에 인(寅) …
+신강약: 신약  |  용신: 토·금  |  기신: 화  |  현재 대운: 조회</code></pre>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage">
+        <span class="no">3 · 세운</span>
+        <div class="stage-body">
+          <h4>2026년 간지 확정</h4>
+          <p>2026 → <b>병오(丙午)</b>, 적용 기간 2026-02-04(입춘) ~ 2027-02-03. 월간지 12개도 월두법으로 확정(경인월부터).</p>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage">
+        <span class="no">4 · facts</span>
+        <div class="stage-body">
+          <h4>관계 피처 추출 — 전부 룩업 테이블</h4>
+          <pre><code>십성:   편관        (丙화 → 일간 庚금, 양·양)
+충:     자오충      (세운지 午 ↔ 일지 子)
+반합:   인오 반합   (원국 寅 + 午 → 화 방향)
+용신:   화 = 기신   → 부담이 되는 해
+오행:   화 +2 → 화 편중 심화</code></pre>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage own">
+        <span class="no">5 · 룰 발동</span>
+        <div class="stage-body">
+          <h4>코퍼스 대조 → 발동 12개 → 영역별 선별 6개</h4>
+          <pre><code>R-081 [직장·건강]  편관 세운 + 신약        strength 4
+R-134 [애정·변동]  자오충 + 궁위=일지      strength 5
+R-152 [건강·총운]  반합으로 기신 화 강화   strength 3
+R-310 [월운]       6월 갑오월 화 정점 외   월별 조각 …
+※ 직장 영역 길·흉 공존 → "기회와 부담 공존" 메타 유지</code></pre>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage">
+        <span class="no">6 · 페이로드</span>
+        <div class="stage-body">
+          <h4>LLM에 넘길 최종본 조립</h4>
+          <p><code>profile + seun + facts(5) + fragments(6) + monthly(12) + outline(7개 섹션) + style(친근한 존댓말) + constraints</code></p>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage llm">
+        <span class="no">7 · LLM</span>
+        <div class="stage-body">
+          <h4>엮기 + 말투 — 새 주장 추가 불가</h4>
+          <p>fragments를 domain 태그 기준으로 outline 각 섹션에 배치하고, strength에 따라 분량을 조절하며 존댓말로 재작성.</p>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage">
+        <span class="no">8 · 검증</span>
+        <div class="stage-body">
+          <h4>재료 대조</h4>
+          <p>출력 문장을 fragments·facts와 대조 — 재료 밖 명리 주장 발견 시 7번으로 되돌려 재생성. 통과 시 확정.</p>
+        </div>
+      </div>
+      <div class="down">▼</div>
+      <div class="stage">
+        <span class="no">9 · 캐시</span>
+        <div class="stage-body">
+          <h4>저장 후 출력</h4>
+          <p>캐시 키 = <code>userId + 2026 + corpus_version + tone</code>. 이후 재조회는 LLM 호출 없이 즉시 응답.</p>
+        </div>
+      </div>
+      <div class="down">▼ 사용자가 보는 화면</div>
+
+      <div class="report">
+        <div class="report-head">🔮 A님의 2026년 병오년 리포트</div>
+        <h4>총운</h4>
+        <p>2026년 병오년은 A님에게 강한 화 기운이 들어오는 해예요. 이 화는 A님께 부담이 되기 쉬운 기운이라, 기회와 압박이 함께 커지는 한 해입니다. 올해는 벌이는 해가 아니라 지키는 해라는 걸 기억해 주세요.<span class="rtag">R-152</span><span class="rtag">R-081</span></p>
+        <h4>직장 · 명예</h4>
+        <p>맡는 일과 책임이 눈에 띄게 늘어나는데, 이건 그만큼 승진과 인정의 기회가 열린다는 뜻이기도 해요. 다만 성과를 좇다가 컨디션을 잃지 않도록 페이스 조절이 필요합니다. 이직을 고민 중이라면 상반기보다는 하반기가 유리해요.<span class="rtag">R-081</span></p>
+        <h4>애정 · 가정</h4>
+        <p>올해는 일상의 기반이 흔들리기 쉬운 해예요. 배우자나 거주지와 관련된 변동수가 있으니, 이사나 큰 계약은 시기를 넉넉히 두고 결정하세요.<span class="rtag">R-134</span></p>
+        <h4>건강</h4>
+        <p>강해진 화 기운이 심혈관·눈·혈압 쪽에 부담을 줄 수 있어요. 과로가 문제를 키우는 구조이니 상반기부터 관리 루틴을 잡아두시길 권해요.<span class="rtag">R-152</span><span class="rtag">R-081</span></p>
+        <h4>월별 흐름</h4>
+        <p>6월(갑오월)은 화 기운이 정점에 달해 한 해 중 가장 페이스 조절이 필요한 달이에요. 2월(경인월)은 새 흐름이 시작되는 달이라 계획을 세우기 좋습니다. …<span class="rtag">R-310</span></p>
+      </div>
+    </div>
+    <p style="color: var(--muted); font-size: 13px; margin-top: 12px;">리포트의 각 문단 끝 태그(R-xxx)는 그 문장이 어느 조각에서 왔는지의 추적 표시 — 실제 화면에는 노출하지 않지만 내부적으로 이 매핑이 있어야 8번 검증이 성립합니다.</p>
+  </section>
+
+  <p class="takeaway">
+    문장의 근거는 우리 코퍼스, 문장 자체는 LLM.
+    <small>계산 → 룰로 조각 선별 → LLM은 엮기·말투만 → 재료 대조 검증 → 캐시. LLM에게 명리 판단을 시키지 않는 것이 전체 구조의 핵심입니다.</small>
+  </p>
+</div>
+</body>
+</html>
