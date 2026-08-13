@@ -7,7 +7,7 @@ import { buildReportRenderPayload } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import type { ReportContent } from "./types";
 
-const sectionSchema = z.object({ section_id: z.string(), paragraph: z.string().min(250).max(460) });
+const sectionSchema = z.object({ section_id: z.string(), paragraph: z.string().min(430).max(620) });
 const reportSchema = z.object({ sections: z.array(sectionSchema).length(6) });
 const reportOutputSchema = {
   type: "object", additionalProperties: false, required: ["sections"], properties: {
@@ -16,7 +16,7 @@ const reportOutputSchema = {
       items: {
         type: "object", additionalProperties: false, required: ["section_id", "paragraph"], properties: {
           section_id: { type: "string" },
-          paragraph: { type: "string", minLength: 250, maxLength: 460 },
+          paragraph: { type: "string", minLength: 430, maxLength: 620 },
         },
       },
     },
@@ -31,6 +31,7 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
     if (section.section_id !== expectedSection.id) throw new Error(`리포트 section 순서가 맞지 않습니다: ${section.section_id}`);
     const paragraph = section.paragraph.trim().replace(/\p{Extended_Pictographic}/gu, "").replace(/\s{2,}/g, " ");
     if (!expectedSection.required_factual_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 필수 사주 근거가 빠졌습니다.`);
+    if (expectedSection.required_timing_terms.some((term) => !paragraph.includes(term))) throw new Error(`${section.section_id}에 올해 월운 시점이 빠졌습니다.`);
     if (!expectedSection.required_scene_terms.every((alternatives) => alternatives.some((term) => paragraph.includes(term)))) {
       throw new Error(`${section.section_id}에 선택된 현실 장면이 빠졌습니다.`);
     }
@@ -39,7 +40,7 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   const text = paragraphs.join("\n\n");
   if (/\[[^\]]+\]/.test(text)) throw new Error("내부 추적 태그가 본문에 노출되었습니다.");
   if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/.test(text)) throw new Error("비정상 렌더링 문구가 포함되었습니다.");
-  if ([...text].length < 1_500) throw new Error("리포트 분량이 부족합니다.");
+  if ([...text].length < 2_580) throw new Error("리포트 분량이 부족합니다.");
   return {
     paragraphs,
     meta: {
@@ -70,7 +71,7 @@ export async function generateReport(reportId: string): Promise<void> {
       const response = await client.responses.create({
         model: process.env.OPENAI_MODEL || "gpt-4o",
         store: false,
-        max_output_tokens: 3_400,
+        max_output_tokens: 4_800,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
           ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. outline 순서, 필수 사주 근거, 현실 장면 단어를 다시 확인하고 선택된 재료 안에서만 다시 작성하세요.` }] : []),
