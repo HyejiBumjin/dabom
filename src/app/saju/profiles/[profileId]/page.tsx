@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import type { Myeongsik, PillarName } from "@/lib/saju/myeongsik";
 import { deriveInterpretationFacts } from "@/lib/saju/interpretation-facts";
 import { deriveSajuInterpretationBlueprint } from "@/lib/saju/interpretation-blueprint";
+import { buildReportRenderPayload } from "@/lib/saju/report-payload";
 
 const pillarLabels: Record<PillarName, string> = {
   year: "년주",
@@ -38,6 +39,17 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
   const yearlyFortune = myeongsik.fortune.yearly.find((item) => item.year === reportYear);
   const interpretationFacts = deriveInterpretationFacts(myeongsik);
   const blueprint = deriveSajuInterpretationBlueprint(myeongsik);
+  const reportContext = buildReportRenderPayload(myeongsik, profile.name);
+  const calculationAndReportInput = {
+    myeongsik,
+    report_facts: reportContext.reportFacts,
+    selected_sentence_fragments: reportContext.selected.sections.map((section) => ({
+      section_id: section.id,
+      title: section.title,
+      fragments: section.fragments,
+    })),
+    report_render_payload: reportContext.payload,
+  };
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
@@ -146,8 +158,9 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
       </section>
 
       <details className="mt-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <summary className="cursor-pointer text-sm font-medium text-zinc-700">계산 결과 JSON 전체 보기</summary>
-        <pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100">{JSON.stringify(myeongsik, null, 2)}</pre>
+        <summary className="cursor-pointer text-sm font-medium text-zinc-700">계산 결과 및 리포트 입력 JSON 전체 보기</summary>
+        <p className="mt-3 text-sm leading-6 text-zinc-600">만세력 계산값에 더해, 이 명식에서 규칙으로 선택된 문장 조각과 GPT에 전달할 최종 입력값을 함께 표시합니다. 아직 생성된 리포트 본문은 포함하지 않습니다.</p>
+        <pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100">{JSON.stringify(calculationAndReportInput, null, 2)}</pre>
       </details>
     </main>
   );
