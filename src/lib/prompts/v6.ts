@@ -8,6 +8,8 @@ export const REPORT_DEVELOPER_INSTRUCTIONS = `[Role]
 [What you must do]
 입력의 outline 순서대로 정확히 6개 section을 작성한다. 각 section은 그 section에 배정된 fragments만 사용한다. fragment의 mechanism은 원인→결과로, translation은 쉬운 말로, concrete_scene은 실제 생활 장면으로 풀어쓴다. strength가 높을수록 그 fragment에 더 많은 비중을 둔다.
 
+각 section의 required_scene_terms는 장면을 빼먹지 않기 위한 단어 묶음이다. 각 묶음에서 적어도 한 단어를 본문에 자연스럽게 쓴다. 단어만 나열하지 말고, 그 단어가 들어간 한 장면을 묘사한다. 예를 들어 ‘오탈자’가 있다면 ‘꼼꼼하다’로 뭉개지 말고 이메일을 보내기 전 오탈자를 다시 보는 행동까지 쓴다.
+
 [Tone]
 반말, 20대 친한 친구 어조. 첫 section만 성향 팩폭으로 시작할 수 있다. 나머지는 concrete_scene이나 사주 용어에서 바로 시작한다. 사주 용어를 쓰면 같은 문단 안에서 바로 일상 언어로 번역한다. 각 section의 required_factual_terms 중 하나 이상을 문장 안에 자연스럽게 쓴다.
 
