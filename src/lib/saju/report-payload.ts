@@ -27,8 +27,6 @@ export interface ReportRenderPayload {
     required_timing_terms: string[];
     prohibited_terms: string[];
     editorial_focus: string;
-    /** One natural phrase from each group must appear in the rendered paragraph. */
-    required_scene_terms: string[][];
     fragments: Array<{
       domain: string[];
       direction: string;
@@ -97,7 +95,6 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
                 : [reportFacts.daYunGanZhi, reportFacts.daYunGanZhi === "甲申" ? "갑신" : reportFacts.annualGanZhi, reportFacts.annualGanZhi === "丙午" ? "병오" : reportFacts.annualGanZhi],
       required_timing_terms: section.id === "yearly" ? reportFacts.monthlyRelationMonths.map((month) => `${month.ordinal}월`) : [],
       prohibited_terms: section.id === "relation" ? reportFacts.monthlyRelationMonths.map((month) => `${month.ordinal}월`) : [],
-      required_scene_terms: section.fragments.slice(0, 2).map((fragment) => fragment.sceneAnchors),
       fragments: section.fragments.map((fragment) => ({
         domain: fragment.domains,
         direction: fragment.direction,
@@ -115,10 +112,9 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
         guidance: fragment.guidance,
       })),
     })),
-    style: { persona: "사주를 잘 풀어주는 20대 친한 친구 다봄", speech: "반말, 직설적이되 따뜻함, 현실 장면 중심", paragraph_length: "섹션당 430~580자" },
+    style: { persona: "사주를 잘 풀어주는 20대 친한 친구 다봄", speech: "반말, 다정한 20대 친구 어조, 상황·심리 흐름 중심", paragraph_length: "섹션당 430~580자" },
     constraints: [
       "선택된 fragments와 facts에 없는 명리 판단·사건 예고·직업·건강·금전 결과를 추가하지 않는다.",
-      "각 section의 required_scene_terms에서 각 묶음마다 한 단어 이상을 자연스럽게 사용한다.",
       "yearly의 required_timing_terms가 비어 있지 않으면, 그 달들을 명리 월운 기준의 주의·조율 시점으로 모두 언급한다.",
       "structural_context의 12개월 월운표는 계산 투명성을 위한 자료다. 구체적인 월을 나열할 수 있는 section은 yearly뿐이다.",
       "각 section의 editorial_focus와 prohibited_terms를 지켜, 이미 다른 section에서 쓴 시점·장면을 반복하지 않는다.",

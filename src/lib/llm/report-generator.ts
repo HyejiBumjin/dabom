@@ -23,6 +23,8 @@ const reportOutputSchema = {
   },
 } as const;
 
+const genericCheerleading = /화이팅|응원할게|잘\s*하고\s*있(?:어|으니까)|충분히\s*잘|네가\s*할\s*수\s*있|성공은\s*차곡차곡|멋진\s*한\s*해|다잘지냈어/u;
+
 function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>): ReportContent {
   const rendered = reportSchema.parse(raw);
   const expected = context.payload.sections;
@@ -33,9 +35,6 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
     if (!expectedSection.required_factual_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 필수 사주 근거가 빠졌습니다.`);
     if (expectedSection.required_timing_terms.some((term) => !paragraph.includes(term))) throw new Error(`${section.section_id}에 올해 월운 시점이 빠졌습니다.`);
     if (expectedSection.prohibited_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 다른 문단 전용 시점이 반복되었습니다.`);
-    if (!expectedSection.required_scene_terms.every((alternatives) => alternatives.some((term) => paragraph.includes(term)))) {
-      throw new Error(`${section.section_id}에 선택된 현실 장면이 빠졌습니다.`);
-    }
     return paragraph;
   });
   const text = paragraphs.join("\n\n");
@@ -43,6 +42,7 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(text)) {
     throw new Error("내부 입력 라벨이 본문에 노출되었습니다.");
   }
+  if (genericCheerleading.test(text)) throw new Error("근거 없는 치어리딩 문구가 포함되었습니다.");
   if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/.test(text)) throw new Error("비정상 렌더링 문구가 포함되었습니다.");
   if ([...text].length < 2_580) throw new Error("리포트 분량이 부족합니다.");
   return {
@@ -78,7 +78,7 @@ export async function generateReport(reportId: string): Promise<void> {
         max_output_tokens: 4_800,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
-          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하세요. 특히 relation에서 충 또는 합이 요구되면 그 한자를 문단 첫 두 문장 안에 정확히 쓰세요. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
+          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하세요. 특히 relation에서 충 또는 합이 요구되면 그 한자를 문단 첫 두 문장 안에 정확히 쓰세요. 기분을 띄우는 응원·칭찬 문장을 넣지 말고, 토닥임은 사주 근거를 다시 짚는 한 문장으로만 표현하세요. 마지막은 구체적인 선택으로 끝냅니다. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
           { role: "user", content: buildReportEvidencePrompt(context.payload) },
         ],
         text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: reportOutputSchema } },
