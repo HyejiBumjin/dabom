@@ -11,6 +11,22 @@ export interface SajuFact {
   timeScope: string;
 }
 
+export type BranchRelation = "clash" | "combination" | "overlap";
+export interface BranchRelationFact {
+  source: "natal" | "annual" | "da-yun" | "monthly";
+  sourceGanZhi: string;
+  sourceBranch: string;
+  targetPillar: "year" | "month" | "day" | "hour";
+  targetBranch: string;
+  relation: BranchRelation;
+}
+export interface MonthlyCalendarFact {
+  ordinal: number;
+  ganZhi: string;
+  branch: string;
+  relations: BranchRelationFact[];
+}
+
 export interface ReportFacts {
   targetYear: number;
   dayMaster: string;
@@ -23,6 +39,14 @@ export interface ReportFacts {
   mentalInteraction: "화극금" | "수극화" | null;
   monthlyRelation: MonthlyRelation;
   monthlyRelationMonths: Array<{ ordinal: number; ganZhi: string; against: string }>;
+  monthlyCalendar: MonthlyCalendarFact[];
+  natalBranchRelations: BranchRelationFact[];
+  annualBranchRelations: BranchRelationFact[];
+  daYunBranchRelations: BranchRelationFact[];
+  hasNatalClash: boolean;
+  hasRepeatedNatalBranch: boolean;
+  daYunNatalRelation: "clash" | "combination" | "overlap" | "none";
+  annualDaYunTheme: "role-and-results" | "expression-and-results" | "year-and-cycle";
   careerPattern: "asset-with-peer" | "asset" | "responsibility" | "general";
   facts: SajuFact[];
 }
@@ -69,6 +93,28 @@ function collectMonthlyRelation(myeongsik: Myeongsik, relation: Set<string>) {
   });
 }
 
+function branchRelation(left: string, right: string): BranchRelation | null {
+  if (left === right) return "overlap";
+  if (clashSet.has(`${left}${right}`)) return "clash";
+  if (combinationSet.has(`${left}${right}`)) return "combination";
+  return null;
+}
+
+function relationsAgainstNatal(source: BranchRelationFact["source"], sourceGanZhi: string, sourceBranch: string, myeongsik: Myeongsik): BranchRelationFact[] {
+  return (Object.entries(myeongsik.pillars) as Array<[BranchRelationFact["targetPillar"], Myeongsik["pillars"]["year"]]>).flatMap(([targetPillar, pillar]) => {
+    const relation = branchRelation(sourceBranch, pillar.earthlyBranch);
+    return relation ? [{ source, sourceGanZhi, sourceBranch, targetPillar, targetBranch: pillar.earthlyBranch, relation }] : [];
+  });
+}
+
+function natalRelations(myeongsik: Myeongsik): BranchRelationFact[] {
+  const entries = Object.entries(myeongsik.pillars) as Array<[BranchRelationFact["targetPillar"], Myeongsik["pillars"]["year"]]>;
+  return entries.flatMap(([leftName, left], index) => entries.slice(index + 1).flatMap(([rightName, right]) => {
+    const relation = branchRelation(left.earthlyBranch, right.earthlyBranch);
+    return relation ? [{ source: "natal", sourceGanZhi: left.ganZhi, sourceBranch: left.earthlyBranch, targetPillar: rightName, targetBranch: right.earthlyBranch, relation }] : [];
+  }));
+}
+
 /** Deterministic feature extraction. No interpretation prose is created here. */
 export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
   const targetYear = myeongsik.fortune.targetYear;
@@ -100,9 +146,29 @@ export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
   const combinations = collectMonthlyRelation(myeongsik, combinationSet);
   const monthlyRelation: MonthlyRelation = clashes.length ? "clash" : combinations.length ? "combination" : "none";
   const monthlyRelationMonths = monthlyRelation === "clash" ? clashes : monthlyRelation === "combination" ? combinations : [];
+  const natalBranchRelations = natalRelations(myeongsik);
+  const annualBranchRelations = relationsAgainstNatal("annual", annual.ganZhi, [...annual.ganZhi][1], myeongsik);
+  const daYunBranchRelations = relationsAgainstNatal("da-yun", daYun.ganZhi, daYunBranch, myeongsik);
+  const monthlyCalendar = myeongsik.fortune.monthly.map((month) => ({
+    ordinal: month.ordinal,
+    ganZhi: month.ganZhi,
+    branch: [...month.ganZhi][1],
+    relations: relationsAgainstNatal("monthly", month.ganZhi, [...month.ganZhi][1], myeongsik),
+  }));
+  const hasNatalClash = natalBranchRelations.some((relation) => relation.relation === "clash");
+  const hasRepeatedNatalBranch = natalBranchRelations.some((relation) => relation.relation === "overlap");
+  const daYunNatalRelation = (daYunBranchRelations.find((relation) => relation.relation === "clash")?.relation
+    ?? daYunBranchRelations.find((relation) => relation.relation === "combination")?.relation
+    ?? daYunBranchRelations.find((relation) => relation.relation === "overlap")?.relation
+    ?? "none") as ReportFacts["daYunNatalRelation"];
   const hasAsset = daYunTenGod === "정재" || daYunTenGod === "편재";
   const hasPeer = daYunHiddenTenGods.some((god) => god === "비견" || god === "겁재");
   const careerPattern = hasAsset && hasPeer ? "asset-with-peer" : hasAsset ? "asset" : daYunHiddenTenGods.some((god) => god === "정관" || god === "편관") ? "responsibility" : "general";
+  const annualDaYunTheme: ReportFacts["annualDaYunTheme"] = (annualTenGod === "정관" || annualTenGod === "편관") && hasAsset
+    ? "role-and-results"
+    : (annualTenGod === "식신" || annualTenGod === "상관") && hasAsset
+      ? "expression-and-results"
+      : "year-and-cycle";
 
   const facts: SajuFact[] = [
     { id: "day-master", type: "day-master", value: myeongsik.dayMaster, basis: `일간 ${myeongsik.dayMaster}`, timeScope: "태어난 명식" },
@@ -113,6 +179,10 @@ export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
   if (dominantTenGodGroup) facts.push({ id: "dominant-ten-god-group", type: "structure", value: dominantTenGodGroup, basis: `원국 천간·지장간 집계 ${dominant[1]}회`, timeScope: "태어난 명식" });
   if (mentalInteraction) facts.push({ id: "mental-interaction", type: "interaction", value: mentalInteraction, basis: `${annual.ganZhi} 세운과 ${myeongsik.dayMaster} 일간의 오행 관계`, timeScope: `${targetYear}년 세운` });
   if (monthlyRelation !== "none") facts.push({ id: "monthly-relation", type: "monthly-relation", value: monthlyRelation, basis: monthlyRelationMonths.map((item) => `${item.ordinal}월 ${item.ganZhi} ↔ 원국 ${item.against}`).join(" · "), timeScope: `${targetYear}년 월운` });
+  if (hasNatalClash) facts.push({ id: "natal-branch-clash", type: "structure", value: "natal-clash", basis: natalBranchRelations.filter((relation) => relation.relation === "clash").map((relation) => `${relation.sourceBranch} ↔ ${relation.targetPillar} ${relation.targetBranch}`).join(" · "), timeScope: "태어난 명식" });
+  if (hasRepeatedNatalBranch) facts.push({ id: "natal-branch-overlap", type: "structure", value: "repeated-branch", basis: natalBranchRelations.filter((relation) => relation.relation === "overlap").map((relation) => `${relation.sourceBranch} ↔ ${relation.targetPillar} ${relation.targetBranch}`).join(" · "), timeScope: "태어난 명식" });
+  if (daYunNatalRelation !== "none") facts.push({ id: "da-yun-branch-relation", type: "fortune", value: daYunNatalRelation, basis: daYunBranchRelations.map((relation) => `${daYun.ganZhi}의 ${relation.sourceBranch} ↔ ${relation.targetPillar} ${relation.targetBranch} ${relation.relation}`).join(" · "), timeScope: `${daYun.startYear}–${daYun.endYear}년 대운` });
+  facts.push({ id: "annual-da-yun-theme", type: "structure", value: annualDaYunTheme, basis: `${annual.ganZhi} 세운 ${annualTenGod} + ${daYun.ganZhi} 대운 ${daYunTenGod}`, timeScope: `${targetYear}년과 현재 대운의 교차` });
 
-  return { targetYear, dayMaster: myeongsik.dayMaster, annualGanZhi: annual.ganZhi, annualTenGod, daYunGanZhi: daYun.ganZhi, daYunTenGod, daYunHiddenTenGods, dominantTenGodGroup, mentalInteraction, monthlyRelation, monthlyRelationMonths, careerPattern, facts };
+  return { targetYear, dayMaster: myeongsik.dayMaster, annualGanZhi: annual.ganZhi, annualTenGod, daYunGanZhi: daYun.ganZhi, daYunTenGod, daYunHiddenTenGods, dominantTenGodGroup, mentalInteraction, monthlyRelation, monthlyRelationMonths, monthlyCalendar, natalBranchRelations, annualBranchRelations, daYunBranchRelations, hasNatalClash, hasRepeatedNatalBranch, daYunNatalRelation, annualDaYunTheme, careerPattern, facts };
 }

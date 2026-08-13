@@ -32,6 +32,7 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
     const paragraph = section.paragraph.trim().replace(/\p{Extended_Pictographic}/gu, "").replace(/\s{2,}/g, " ");
     if (!expectedSection.required_factual_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 필수 사주 근거가 빠졌습니다.`);
     if (expectedSection.required_timing_terms.some((term) => !paragraph.includes(term))) throw new Error(`${section.section_id}에 올해 월운 시점이 빠졌습니다.`);
+    if (expectedSection.prohibited_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 다른 문단 전용 시점이 반복되었습니다.`);
     if (!expectedSection.required_scene_terms.every((alternatives) => alternatives.some((term) => paragraph.includes(term)))) {
       throw new Error(`${section.section_id}에 선택된 현실 장면이 빠졌습니다.`);
     }
