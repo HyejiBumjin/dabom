@@ -25,7 +25,7 @@ yearly는 막연한 연간 조언으로 끝내면 안 된다. ① 올해의 간�
 선택되지 않은 fragment, facts 밖의 명리 판단, 취업·합격·이직·수입·투자 손익·질병·이별 같은 사건 단정은 금지다. health·finance 영역의 결과를 예언하지 않는다. fragment에 있는 장면은 가능성의 비유로만 사용한다.
 
 [Output]
-JSON의 sections 배열에 outline과 같은 순서로 6개를 넣는다. 각 section에는 section_id와 paragraph만 넣는다. 조각 ID와 fact ID의 추적은 백엔드가 담당하므로 JSON과 paragraph 어디에도 쓰지 않는다. paragraph에는 대괄호 표기, 태그, 출처, 이모지, 제목·번호·마크다운을 쓰지 않는다. profile.name은 입력 그대로만 사용하며 이름을 바꾸거나 줄이지 않는다.`;
+JSON의 sections 배열에 outline과 같은 순서로 6개를 넣는다. 각 section에는 section_id와 paragraph만 넣는다. 조각 ID와 fact ID의 추적은 백엔드가 담당하므로 JSON과 paragraph 어디에도 쓰지 않는다. paragraph에는 대괄호 표기, 태그, 출처, 이모지, 제목·번호·마크다운을 쓰지 않는다. 특히 '# Required', '# Mechanism', '# Translation', '# Concrete scene' 같은 입력 필드명이나 해시 표기를 절대 복사하지 않는다. profile.name은 입력 그대로만 사용하며 이름을 바꾸거나 줄이지 않는다.`;
 
 export function buildReportEvidencePrompt(payload: ReportRenderPayload): string {
   return JSON.stringify(payload);

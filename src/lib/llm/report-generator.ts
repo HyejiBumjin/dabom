@@ -39,6 +39,9 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   });
   const text = paragraphs.join("\n\n");
   if (/\[[^\]]+\]/.test(text)) throw new Error("내부 추적 태그가 본문에 노출되었습니다.");
+  if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(text)) {
+    throw new Error("내부 입력 라벨이 본문에 노출되었습니다.");
+  }
   if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/.test(text)) throw new Error("비정상 렌더링 문구가 포함되었습니다.");
   if ([...text].length < 2_580) throw new Error("리포트 분량이 부족합니다.");
   return {
@@ -66,7 +69,7 @@ export async function generateReport(reportId: string): Promise<void> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 50_000, maxRetries: 0 });
   let lastError = "리포트 생성에 실패했습니다.";
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       const response = await client.responses.create({
         model: process.env.OPENAI_MODEL || "gpt-4o",
@@ -74,7 +77,7 @@ export async function generateReport(reportId: string): Promise<void> {
         max_output_tokens: 4_800,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
-          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. outline 순서, 필수 사주 근거, 현실 장면 단어를 다시 확인하고 선택된 재료 안에서만 다시 작성하세요.` }] : []),
+          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하세요. 특히 relation에서 충 또는 합이 요구되면 그 한자를 문단 첫 두 문장 안에 정확히 쓰세요. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
           { role: "user", content: buildReportEvidencePrompt(context.payload) },
         ],
         text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: reportOutputSchema } },
