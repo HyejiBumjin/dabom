@@ -14,6 +14,19 @@ const pillarLabels: Record<PillarName, string> = {
 
 const pillarOrder: PillarName[] = ["year", "month", "day", "hour"];
 
+const clashPairs = new Set(["子午", "午子", "丑未", "未丑", "寅申", "申寅", "卯酉", "酉卯", "辰戌", "戌辰", "巳亥", "亥巳"]);
+
+function describeMonthlyBranchRelations(myeongsik: Myeongsik, monthlyGanZhi: string) {
+  const monthlyBranch = Array.from(monthlyGanZhi)[1];
+  const relations = pillarOrder.flatMap((name) => {
+    const natalBranch = myeongsik.pillars[name].earthlyBranch;
+    if (clashPairs.has(`${monthlyBranch}${natalBranch}`)) return [`${pillarLabels[name]} ${natalBranch}와 충`];
+    if (monthlyBranch === natalBranch) return [`${pillarLabels[name]} ${natalBranch}와 겹침`];
+    return [];
+  });
+  return relations.length ? relations : ["원국 지지와 계산된 충·겹침 없음"];
+}
+
 export default async function SajuProfilePage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = await params;
   const profile = await prisma.sajuProfile.findUnique({ where: { id: profileId } });
@@ -77,6 +90,23 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
         {yearlyFortune && <p className="mt-4 rounded-lg bg-zinc-50 px-4 py-3 text-sm text-zinc-700">{reportYear}년 세운: <span className="ml-2 text-lg font-semibold text-zinc-900">{yearlyFortune.ganZhi}</span></p>}
         <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5">
           {myeongsik.fortune.daYun.map((period) => <div key={`${period.startYear}-${period.ganZhi}`} className="rounded-lg bg-zinc-50 p-3 text-center"><p className="text-lg font-semibold text-zinc-900">{period.ganZhi}</p><p className="mt-1 text-xs text-zinc-500">{period.startYear}–{period.endYear}</p></div>)}
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="font-semibold text-zinc-900">{reportYear}년 1–12월 월운 계산표</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">월운은 절기 기준의 간지입니다. 모든 달을 표시하며, 여기서는 원국 지지와의 충·겹침 계산만 보여줍니다. 좋고 나쁨의 판단이나 해석은 포함하지 않습니다.</p>
+        <p className="mt-3 text-xs text-zinc-500">원국 지지 · {pillarOrder.map((name) => `${pillarLabels[name]} ${myeongsik.pillars[name].earthlyBranch}`).join(" · ")}</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {myeongsik.fortune.monthly.map((month) => (
+            <article key={month.ordinal} className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 className="font-medium text-zinc-900">{month.ordinal}월</h3>
+                <p className="text-lg font-semibold tracking-[0.15em] text-zinc-900">{month.ganZhi}</p>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-zinc-600">{describeMonthlyBranchRelations(myeongsik, month.ganZhi).join(" · ")}</p>
+            </article>
+          ))}
         </div>
       </section>
 
