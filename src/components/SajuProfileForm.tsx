@@ -31,7 +31,10 @@ export function SajuProfileForm() {
       const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "저장하지 못했습니다.");
-      router.push(`/saju/profiles/${data.profileId}`);
+      const reportResponse = await fetch(`/api/saju/profiles/${data.profileId}/reports`, { method: "POST" });
+      const reportData = await reportResponse.json();
+      if (!reportResponse.ok) throw new Error(reportData.error || "리포트를 준비하지 못했습니다.");
+      router.push(`/saju/reports/${reportData.reportId}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "저장 중 오류가 발생했습니다.");
     } finally {
@@ -47,6 +50,6 @@ export function SajuProfileForm() {
     <div><Label htmlFor="calendar">달력 기준</Label><CustomSelect id="calendar" value={calendar} onChange={setCalendar} options={[{ value: "solar", label: "양력" }, { value: "lunar", label: "음력" }]} /></div>
     {calendar === "lunar" && <label className="flex items-center gap-2 text-sm text-zinc-600"><input type="checkbox" checked={isLeapMonth} onChange={(event) => setIsLeapMonth(event.target.checked)} /> 윤달입니다</label>}
     {error && <p className="text-sm text-red-600">{error}</p>}
-    <Button type="submit" size="lg" className="w-full" disabled={pending}>{pending ? "명식을 계산하는 중..." : "사주 살펴보기"}</Button>
+    <Button type="submit" size="lg" className="w-full" disabled={pending}>{pending ? "리포트를 준비하는 중..." : "내 사주 리포트 보기"}</Button>
   </form>;
 }
