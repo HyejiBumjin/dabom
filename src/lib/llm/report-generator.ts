@@ -23,7 +23,7 @@ const reportOutputSchema = {
   },
 } as const;
 
-const genericCheerleading = /화이팅|응원할게|잘\s*하고\s*있(?:어|으니까)|충분히\s*잘|네가\s*할\s*수\s*있|성공은\s*차곡차곡|멋진\s*한\s*해|다잘지냈어/u;
+const genericCheerleading = /화이팅|응원할게|잘\s*하고\s*있(?:어|으니까)|충분히\s*잘|네가\s*할\s*수\s*있|성공은\s*차곡차곡|멋진\s*한\s*해|다잘지냈어|대표주자|그게\s*포인트야|능력치를\s*발휘|만족스러운\s*한\s*해|하나씩\s*차분히\s*쌓아|잘\s*넘길\s*수\s*있어|만들어가자/gu;
 
 function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>): ReportContent {
   const rendered = reportSchema.parse(raw);
