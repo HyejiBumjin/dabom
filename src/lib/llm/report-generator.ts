@@ -23,7 +23,7 @@ const reportOutputSchema = {
   },
 } as const;
 
-const genericCheerleading = /화이팅|응원할게|잘\s*하고\s*있(?:어|으니까)|충분히\s*잘|네가\s*할\s*수\s*있|성공은\s*차곡차곡|멋진\s*한\s*해|다잘지냈어/u;
+const genericCheerleading = /화이팅|충분히\s*잘|네가\s*할\s*수\s*있|넌\s*할\s*수\s*있|성공은\s*차곡차곡|멋진\s*한\s*해|다잘지냈어/u;
 
 function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>): ReportContent {
   const rendered = reportSchema.parse(raw);
@@ -78,7 +78,7 @@ export async function generateReport(reportId: string): Promise<void> {
         max_output_tokens: 4_800,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
-          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하되, 문단 흐름에 맞게 자연스럽게 배치하세요 (첫 문장에 억지로 박지 말 것, 용어로 문단을 시작하지 말 것). 토닥임은 사주 근거를 다시 짚는 한 문장으로만 표현하세요. 각 section은 구체적인 선택으로 끝내되, summary section의 마지막 2~3문장은 따뜻한 응원으로 끝냅니다. 근거 없는 치어리딩(화이팅, 무조건적 칭찬 같은 빈말)은 넣지 마세요. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
+          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하되, 문단 흐름에 맞게 자연스럽게 배치하세요 (첫 문장에 억지로 박지 말 것, 용어로 문단을 시작하지 말 것). 토닥임은 사주 근거를 다시 짚는 한 문장으로만 표현하세요. 각 section은 구체적인 선택으로 끝내되, summary section의 마지막은 2~3문장으로 올해의 서사에 근거한 확신형 응원으로 끝냅니다(예: '올해도 여기까지 온 것만으로 잘한 거야. 네 속도대로 가면 돼'). '화이팅', '성공은 차곡차곡', '멋진 한 해' 같은 빈말은 넣지 마세요. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
           { role: "user", content: buildReportEvidencePrompt(context.payload) },
         ],
         text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: reportOutputSchema } },
