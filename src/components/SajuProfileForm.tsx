@@ -9,10 +9,11 @@ import { CustomSelect } from "@/components/ui/custom-select";
 
 export function SajuProfileForm() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [gender, setGender] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [birthTime, setBirthTime] = useState("");
+  const isDevelopment = process.env.NODE_ENV === "development";
+  const [name, setName] = useState(isDevelopment ? "최혜지" : "");
+  const [gender, setGender] = useState(isDevelopment ? "female" : "");
+  const [birthDate, setBirthDate] = useState(isDevelopment ? "1995-05-20" : "");
+  const [birthTime, setBirthTime] = useState(isDevelopment ? "20:20" : "");
   const [timeUnknown, setTimeUnknown] = useState(false);
   const [calendar, setCalendar] = useState("solar");
   const [isLeapMonth, setIsLeapMonth] = useState(false);
