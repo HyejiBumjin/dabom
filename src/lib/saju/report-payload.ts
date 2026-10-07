@@ -5,6 +5,8 @@ import type { Myeongsik } from "@/lib/saju/myeongsik";
 export interface ReportRenderPayload {
   corpus_version: string;
   profile: { name: string; day_master: string };
+  /** 리포트 생성 시점 (KST 기준). 월운의 달을 과거/미래로 구분하는 데 사용. */
+  as_of: { year: number; month: number };
   seun: { year: number; ganji: string };
   yearly_context: {
     annual_pillar: string;
@@ -51,9 +53,12 @@ export interface ReportRenderPayload {
 export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
   const reportFacts = extractReportFacts(myeongsik);
   const selected = selectCorpus(reportFacts);
+  // KST 기준 현재 연월 — 월운 시점의 과거/미래 구분용
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const payload: ReportRenderPayload = {
     corpus_version: CORPUS_VERSION,
     profile: { name, day_master: reportFacts.dayMaster },
+    as_of: { year: kstNow.getUTCFullYear(), month: kstNow.getUTCMonth() + 1 },
     seun: { year: reportFacts.targetYear, ganji: reportFacts.annualGanZhi },
     yearly_context: {
       annual_pillar: reportFacts.annualGanZhi,
@@ -112,7 +117,7 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
         guidance: fragment.guidance,
       })),
     })),
-    style: { persona: "사주를 잘 풀어주는 20대 친한 친구 다봄", speech: "반말, 다정한 20대 친구 어조, 상황·심리 흐름 중심", paragraph_length: "섹션당 430~580자" },
+    style: { persona: "사주를 직설적으로 풀어주는 20대 친한 친구", speech: "반말, 직설적이고 구체적인 20대 친구 어조. 추상명사 대신 장면으로 말하기. 팩폭+위로+현실 솔루션", paragraph_length: "섹션당 430~580자" },
     constraints: [
       "선택된 fragments와 facts에 없는 명리 판단·사건 예고·직업·건강·금전 결과를 추가하지 않는다.",
       "yearly의 required_timing_terms가 비어 있지 않으면, 그 달들을 명리 월운 기준의 주의·조율 시점으로 모두 언급한다.",
