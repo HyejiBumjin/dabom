@@ -78,7 +78,7 @@ export async function generateReport(reportId: string): Promise<void> {
         max_output_tokens: 4_800,
         input: [
           { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
-          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하세요. 특히 relation에서 충 또는 합이 요구되면 그 한자를 문단 첫 두 문장 안에 정확히 쓰세요. 기분을 띄우는 응원·칭찬 문장을 넣지 말고, 토닥임은 사주 근거를 다시 짚는 한 문장으로만 표현하세요. 마지막은 구체적인 선택으로 끝냅니다. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
+          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하되, 문단 흐름에 맞게 자연스럽게 배치하세요 (첫 문장에 억지로 박지 말 것). 기분을 띄우는 응원·칭찬 문장을 넣지 말고, 토닥임은 사주 근거를 다시 짚는 한 문장으로만 표현하세요. 마지막은 구체적인 선택으로 끝냅니다. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
           { role: "user", content: buildReportEvidencePrompt(context.payload) },
         ],
         text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: reportOutputSchema } },
