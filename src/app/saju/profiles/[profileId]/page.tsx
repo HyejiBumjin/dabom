@@ -39,7 +39,7 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
   const yearlyFortune = myeongsik.fortune.yearly.find((item) => item.year === reportYear);
   const interpretationFacts = deriveInterpretationFacts(myeongsik);
   const blueprint = deriveSajuInterpretationBlueprint(myeongsik);
-  const reportContext = buildReportRenderPayload(myeongsik, profile.name);
+  const reportContext = buildReportRenderPayload(myeongsik);
   const calculationAndReportInput = {
     myeongsik,
     report_facts: reportContext.reportFacts,

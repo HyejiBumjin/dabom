@@ -2,49 +2,117 @@ import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { buildReportEvidencePrompt, REPORT_DEVELOPER_INSTRUCTIONS } from "@/lib/prompts/v6";
+import { buildReportEvidencePrompt, REPORT_DEVELOPER_INSTRUCTIONS, REPORT_PROMPT_VERSION } from "@/lib/prompts/v6";
 import { buildReportRenderPayload } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import type { ReportContent } from "./types";
+import { ANNUAL_OPENING, containsReaderName, countReportCharacters, hasReportTerm, normalizeReportParagraph, redactReaderName, repairRepeatedAnnualOpenings, REPORT_PARAGRAPH_LENGTHS, SUGGESTION_ENDING } from "./report-rules";
 
-const sectionSchema = z.object({ section_id: z.string(), paragraph: z.string().min(430).max(620) });
+const sectionSchema = z.object({
+  section_id: z.string(),
+  paragraph: z.preprocess((value) => typeof value === "string" ? normalizeReportParagraph(value) : value, z.string()),
+});
 const reportSchema = z.object({ sections: z.array(sectionSchema).length(6) });
-const reportOutputSchema = {
-  type: "object", additionalProperties: false, required: ["sections"], properties: {
-    sections: {
-      type: "array", minItems: 6, maxItems: 6,
-      items: {
-        type: "object", additionalProperties: false, required: ["section_id", "paragraph"], properties: {
-          section_id: { type: "string" },
-          paragraph: { type: "string", minLength: 430, maxLength: 620 },
+type RenderedReport = z.infer<typeof reportSchema>;
+const MIN_PARAGRAPH_LENGTH = Math.min(...Object.values(REPORT_PARAGRAPH_LENGTHS).map((range) => range.min));
+const MAX_PARAGRAPH_LENGTH = Math.max(...Object.values(REPORT_PARAGRAPH_LENGTHS).map((range) => range.max));
+const MAX_RENDER_ATTEMPTS = 5;
+const MAX_STYLE_REPAIR_FAILURES = 2;
+// Leave time for persistence within the API route's 55-second budget.
+const MAX_RENDER_TIME_MS = 45_000;
+
+function buildOutputSchema(sectionIds: string[]) {
+  return {
+    type: "object", additionalProperties: false, required: ["sections"], properties: {
+      sections: {
+        type: "array", minItems: sectionIds.length, maxItems: sectionIds.length,
+        items: {
+          type: "object", additionalProperties: false, required: ["section_id", "paragraph"], properties: {
+            section_id: { type: "string", enum: sectionIds },
+            paragraph: { type: "string", minLength: MIN_PARAGRAPH_LENGTH, maxLength: MAX_PARAGRAPH_LENGTH },
+          },
         },
       },
     },
-  },
-} as const;
+  } as const;
+}
+
+interface ValidationIssue { sectionId: string; message: string; severity: "blocking" | "style" }
+
+class ReportValidationError extends Error {
+  readonly sectionIds: string[];
+  readonly styleOnly: boolean;
+  constructor(readonly issues: ValidationIssue[]) {
+    super(issues.map(issue => issue.message).join("\n"));
+    this.sectionIds = [...new Set(issues.map(issue => issue.sectionId))];
+    this.styleOnly = issues.every(issue => issue.severity === "style");
+  }
+}
 
 const genericCheerleading = /화이팅|충분히\s*잘|네가\s*할\s*수\s*있|넌\s*할\s*수\s*있|성공은\s*차곡차곡|멋진\s*한\s*해|다잘지냈어/u;
 
-function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>): ReportContent {
+function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>, readerName: string, allowStyleIssues = false): ReportContent {
   const rendered = reportSchema.parse(raw);
   const expected = context.payload.sections;
+  const issues: ValidationIssue[] = [];
+  const seenSentences = new Set<string>();
+  let hasAnnualOpening = false;
   const paragraphs = rendered.sections.map((section, index) => {
     const expectedSection = expected[index];
-    if (section.section_id !== expectedSection.id) throw new Error(`리포트 section 순서가 맞지 않습니다: ${section.section_id}`);
-    const paragraph = section.paragraph.trim().replace(/\p{Extended_Pictographic}/gu, "").replace(/\s{2,}/g, " ");
-    if (!expectedSection.required_factual_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 필수 사주 근거가 빠졌습니다.`);
-    if (expectedSection.required_timing_terms.some((term) => !paragraph.includes(term))) throw new Error(`${section.section_id}에 올해 월운 시점이 빠졌습니다.`);
-    if (expectedSection.prohibited_terms.some((term) => paragraph.includes(term))) throw new Error(`${section.section_id}에 다른 문단 전용 시점이 반복되었습니다.`);
+    const paragraph = section.paragraph;
+    const fail = (message: string, severity: ValidationIssue["severity"] = "blocking") => {
+      if (allowStyleIssues && severity === "style") return;
+      issues.push({ sectionId: expectedSection.id, message: `${expectedSection.id}: ${message}`, severity });
+    };
+    const style = (message: string) => fail(message, "style");
+    const length = countReportCharacters(paragraph);
+    const range = expectedSection.paragraph_length;
+    // Small editorial deviations can be repaired or published. Empty, partial,
+    // and excessively long paragraphs still fail the content gate.
+    if (length < Math.max(60, range.min - 40) || length > range.max * 2) fail("문단이 불완전하거나 정상적인 리포트 분량을 크게 벗어났습니다.");
+    if (length < range.min || length > range.max) style(`문단 분량 ${length}자 (권장 ${range.min}~${range.max}자, 목표 ${range.target}자).`);
+    if (section.section_id !== expectedSection.id) fail(`문단 순서가 맞지 않습니다: ${section.section_id}.`);
+    if (containsReaderName(paragraph, readerName)) fail("독자의 이름이 본문에 포함되었습니다. 이름과 이름을 줄인 호칭을 빼고, 호칭이 필요하면 '너'를 쓰세요.");
+    if (ANNUAL_OPENING.test(paragraph)) {
+      if (hasAnnualOpening) style("올해·이번 해·연도로 시작하는 문단이 반복되었습니다. 이 문단은 배정된 주제의 의미로 시작하고 시간 표현은 필요할 때 문장 중간에 넣으세요.");
+      hasAnnualOpening = true;
+    }
+    if (expectedSection.required_factual_terms.length > 0 && !expectedSection.required_factual_terms.some((term) => hasReportTerm(paragraph, term))) fail(`필수 사주 근거가 빠졌습니다. 다음 용어 중 하나를 명리 용어로 그대로 포함하세요: ${expectedSection.required_factual_terms.join(", ")}.`);
+    for (const group of expectedSection.required_factual_groups) {
+      if (!group.some((term) => hasReportTerm(paragraph, term))) fail(`성향 또는 올해 운세 근거가 빠졌습니다: ${group.join(", ")}.`);
+    }
+    if (expectedSection.required_year_terms.length > 0 && !expectedSection.required_year_terms.some((term) => paragraph.includes(term))) fail(`올해 운세로 연결되지 않았습니다. ${expectedSection.required_year_terms.join(" 또는 ")}를 포함하세요.`);
+    if (expectedSection.id === "essence" && /[?？]/u.test(paragraph)) style("도입은 나의 성향과 올해 요점을 알려 주는 글입니다. 독자에게 대답을 묻는 질문을 빼고 서술하세요.");
+    if (expectedSection.id === "summary") {
+      const technicalTerms = expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]);
+      if (technicalTerms.some((term) => hasReportTerm(paragraph, term))) style("마무리에서 명리 용어를 다시 설명하지 마세요. 앞서 설명한 부담을 이해하는 짧은 응원만 남기세요.");
+    }
+    const firstSentence = paragraph.split(/[.!?。！？]/u)[0];
+    const technicalTerms = [...new Set(expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]).concat(["충", "합"]))];
+    if (technicalTerms.some((term) => hasReportTerm(firstSentence, term))) style("첫 문장에 명리 용어가 있습니다. 먼저 체감할 의미를 설명하고 용어는 두 번째 문장 이후에 넣으세요.");
+    const missingTimingTerms = expectedSection.required_timing_terms.filter((term) => !paragraph.includes(term));
+    if (missingTimingTerms.length > 0) fail(`올해 월운 시점이 빠졌습니다: ${missingTimingTerms.join(", ")}. 이미 지난 달도 계산상 과거 시점으로 짧게 포함하세요.`);
+    if (expectedSection.prohibited_terms.some((term) => paragraph.includes(term))) style("다른 문단 전용 시점이 반복되었습니다.");
+    if (/\[[^\]]+\]/u.test(paragraph)) fail("내부 추적 태그가 본문에 노출되었습니다.");
+    if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(paragraph)) fail("내부 입력 라벨이 본문에 노출되었습니다.");
+    if (genericCheerleading.test(paragraph)) style("근거 없는 치어리딩 문구가 포함되었습니다.");
+    if (SUGGESTION_ENDING.test(paragraph)) style("'해보자·하자·해봐' 같은 권유형이 포함되었습니다. 행동 지시 대신 그 선택이 올해 어떤 의미인지 설명하세요.");
+    const evasivePhrase = paragraph.match(/(?:일|였을|었을|느꼈을)\s*거야|것\s*같아|듯해|필요해\s*보여|뜻은 아니야|비춰 볼 수 있어|살펴볼 수 있어|할 수는 없어/u)?.[0];
+    if (evasivePhrase) style(`말을 흐리는 표현 '${evasivePhrase}'이 있습니다. 조건과 시간 범위를 분명히 한 뒤 해당 해석을 따뜻한 서술형으로 쓰세요.`);
+    const hanja = paragraph.match(/\p{Script=Han}/gu);
+    if (hanja) fail(`한자가 본문에 노출되었습니다: ${[...new Set(hanja)].join(", ")}. 이 한자와 괄호 병기는 전부 지우고 한국어 용어만 남기세요.`);
+    if (/절기 기준|원국 [일월년시]지/u.test(paragraph)) fail("내부 계산 용어가 본문에 노출되었습니다. 사용자에게 읽히는 생활 언어로 바꾸세요.");
+    if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/u.test(paragraph)) fail("비정상 렌더링 문구가 포함되었습니다.");
+    for (const sentence of paragraph.split(/[.!?。！？]/u)) {
+      const comparable = sentence.replace(/[\s'"‘’“”,]/gu, "");
+      if (comparable.length < 20) continue;
+      if (seenSentences.has(comparable)) style("같은 설명 문장이 반복되었습니다. 이 문단의 editorial_focus에 해당하는 새 설명만 남기세요.");
+      seenSentences.add(comparable);
+    }
     return paragraph;
   });
+  if (issues.length > 0) throw new ReportValidationError(issues);
   const text = paragraphs.join("\n\n");
-  if (/\[[^\]]+\]/.test(text)) throw new Error("내부 추적 태그가 본문에 노출되었습니다.");
-  if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(text)) {
-    throw new Error("내부 입력 라벨이 본문에 노출되었습니다.");
-  }
-  if (genericCheerleading.test(text)) throw new Error("근거 없는 치어리딩 문구가 포함되었습니다.");
-  if (/광고|외부 공유|삼성 광고|이하에|200자를 넘지/.test(text)) throw new Error("비정상 렌더링 문구가 포함되었습니다.");
-  if ([...text].length < 2_580) throw new Error("리포트 분량이 부족합니다.");
   return {
     paragraphs,
     meta: {
@@ -55,44 +123,138 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
   };
 }
 
-/** One structured rendering pass. Facts and approved corpus selection stay outside the LLM. */
+/** Facts and approved corpus selection stay outside the LLM. */
 export async function generateReport(reportId: string): Promise<void> {
+  const deadline = Date.now() + MAX_RENDER_TIME_MS;
   const report = await prisma.report.findUnique({ where: { id: reportId }, include: { sajuProfile: true } });
   if (!report || report.status === "COMPLETED") return;
-  if (!process.env.OPENAI_API_KEY) {
-    await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError: "OPENAI_API_KEY가 설정되지 않았습니다." } });
-    return;
-  }
-  const claim = await prisma.report.updateMany({ where: { id: reportId, status: { in: ["PENDING", "FAILED"] } }, data: { status: "GENERATING", lastError: null } });
+  const model = process.env.OPENAI_MODEL || "gpt-4o";
+  const claim = await prisma.report.updateMany({ where: { id: reportId, status: { in: ["PENDING", "FAILED"] } }, data: { status: "GENERATING", lastError: null, retryCount: 0, completedAt: null, promptVersion: REPORT_PROMPT_VERSION, model } });
   if (claim.count === 0) return;
 
-  const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik, report.sajuProfile.name);
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 50_000, maxRetries: 0 });
-  let lastError = "리포트 생성에 실패했습니다.";
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const response = await client.responses.create({
-        model: process.env.OPENAI_MODEL || "gpt-4o",
-        store: false,
-        max_output_tokens: 4_800,
-        input: [
-          { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
-          ...(attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패: ${lastError}. 각 문단의 required_factual_terms 중 하나는 반드시 원문 그대로 포함하되, 문단 흐름에 맞게 자연스럽게 배치하세요 (첫 문장에 억지로 박지 말 것, 용어로 문단을 시작하지 말 것). 토닥임은 사주 근거를 다시 짚는 한 문장으로만 표현하세요. 각 section은 구체적인 선택으로 끝내되, summary section의 마지막은 2~3문장으로 올해의 서사에 근거한 확신형 응원으로 끝냅니다(예: '올해도 여기까지 온 것만으로 잘한 거야. 네 속도대로 가면 돼'). '화이팅', '성공은 차곡차곡', '멋진 한 해' 같은 빈말은 넣지 마세요. 내부 라벨·해시 표기 없이, 선택된 재료 안에서만 다시 작성하세요.` }] : []),
-          { role: "user", content: buildReportEvidencePrompt(context.payload) },
-        ],
-        text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: reportOutputSchema } },
-      });
-      const content = validateReport(JSON.parse(response.output_text), context);
-      await prisma.report.update({
-        where: { id: reportId },
-        data: { status: "COMPLETED", content: content as unknown as Prisma.InputJsonValue, retryCount: attempt - 1, completedAt: new Date(), lastError: null },
-      });
-      return;
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
-      await prisma.report.update({ where: { id: reportId }, data: { retryCount: attempt, lastError } });
+  try {
+    const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik);
+    // The name is used only by local validation and draft redaction, never as
+    // interpretation evidence sent to the model.
+    const readerName = report.sajuProfile.name;
+    const allSectionIds = context.payload.sections.map((section) => section.id);
+    let lastError = "리포트 생성에 실패했습니다.";
+    let attemptsUsed = 0;
+    let styleRepairFailures = 0;
+    const recovery: { best: { content: ReportContent; styleIssueCount: number } | null } = { best: null };
+    const complete = async (content: ReportContent) => {
+      await prisma.report.update({ where: { id: reportId }, data: { status: "COMPLETED", content: content as unknown as Prisma.InputJsonValue, retryCount: Math.max(0, attemptsUsed - 1), completedAt: new Date(), lastError: null } });
+    };
+    const previousContent = z.object({ paragraphs: z.array(z.string()).length(6) }).safeParse(report.content);
+    let draft: RenderedReport | null = previousContent.success
+      ? { sections: previousContent.data.paragraphs.map((paragraph, index) => ({ section_id: allSectionIds[index], paragraph: normalizeReportParagraph(paragraph) })) }
+      : null;
+    const repairOpenings = () => {
+      if (!draft) return;
+      const repaired = repairRepeatedAnnualOpenings(draft.sections.map(section => section.paragraph), context.payload.sections.map(section => section.required_year_terms), context.reportFacts.targetYear);
+      draft = { sections: draft.sections.map((section, index) => ({ ...section, paragraph: repaired[index] })) };
+    };
+    const preserveUsableDraft = async (error: ReportValidationError) => {
+      if (!draft || !error.styleOnly) return;
+      const content = validateReport(draft, context, readerName, true);
+      if (!recovery.best || error.issues.length < recovery.best.styleIssueCount) {
+        recovery.best = { content, styleIssueCount: error.issues.length };
+        // Keep a complete, content-validated draft before another API request.
+        // A failed rewrite must not erase the usable report we already have.
+        await prisma.report.update({ where: { id: reportId }, data: { content: content as unknown as Prisma.InputJsonValue } });
+      }
+    };
+    repairOpenings();
+    let requestedIds = allSectionIds;
+    if (draft) {
+      try {
+        await complete(validateReport(draft, context, readerName));
+        return;
+      } catch (error) {
+        if (error instanceof ReportValidationError) {
+          lastError = error.message;
+          requestedIds = allSectionIds.filter((id) => error.sectionIds.includes(id));
+          await preserveUsableDraft(error);
+          if (error.styleOnly) styleRepairFailures += 1;
+        }
+      }
     }
+
+    if (!process.env.OPENAI_API_KEY) {
+      if (recovery.best) await complete(recovery.best.content);
+      else await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError: "OPENAI_API_KEY가 설정되지 않았습니다." } });
+      return;
+    }
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 50_000, maxRetries: 0 });
+
+    for (let attempt = 1; attempt <= MAX_RENDER_ATTEMPTS; attempt += 1) {
+      const remainingTime = deadline - Date.now();
+      if (remainingTime < 1_000) {
+        lastError = "리포트 준비 시간이 초과되었습니다. 다시 시도해 주세요.";
+        break;
+      }
+      try {
+        attemptsUsed = attempt;
+        const previousLengths = draft?.sections.map((section) => {
+          const length = countReportCharacters(section.paragraph);
+          const range = context.payload.sections.find((expectedSection) => expectedSection.id === section.section_id)?.paragraph_length;
+          if (!range) return `${section.section_id}: 문단 ID 오류`;
+          const revision = length < range.min ? `약 ${range.target - length}자 보강` : length > range.max ? `약 ${length - range.target}자 축약` : "분량 충족";
+          return `${section.section_id}: ${length}자 (${revision})`;
+        }).join(", ");
+        const repairRequirements = context.payload.sections.filter((section) => requestedIds.includes(section.id)).map((section) => ({
+          section_id: section.id,
+          paragraph_length: section.paragraph_length,
+          must_include_one_of: section.required_factual_terms,
+          must_include_one_from_each_group: section.required_factual_groups,
+          year_terms: section.required_year_terms,
+          month_terms: section.required_timing_terms,
+          role: section.editorial_focus,
+        }));
+        const response: OpenAI.Responses.Response = await client.responses.create({
+          model, store: false, max_output_tokens: 4_800,
+          input: [
+            { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
+            { role: "user", content: buildReportEvidencePrompt(context.payload) },
+            ...(draft ? [{ role: "assistant" as const, content: JSON.stringify({ sections: draft.sections.map((section) => ({ ...section, paragraph: redactReaderName(section.paragraph, readerName) })) }) }] : []),
+            ...(draft || attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패:\n${lastError}\n직전 문단별 글자 수와 수정량: ${previousLengths || "출력 없음"}. 직전 assistant 출력은 수정 대상이며 사주 사실의 근거가 아닙니다. 이번 요청은 부분 수정입니다. 출력 sections에는 ${requestedIds.join(", ")}만 이 순서로 넣으세요. 최초의 6개 문단 출력 지시보다 이 부분 수정 지시를 우선하세요. 나머지 문단은 코드가 보존하므로 출력하지 마세요. 이번 수정의 필수 조건:\n${JSON.stringify(repairRequirements)}\nmust_include_one_of는 배열 중 하나, must_include_one_from_each_group은 각 그룹에서 하나씩 그 표기 그대로 쓰라는 뜻입니다. 첫 문장에는 명리 용어를 넣지 말고 두 번째 문장 이후에 필요한 용어를 모두 포함하세요. 각 수정 문단의 paragraph_length.target에 맞추고, 부족하면 배정된 해석의 아직 설명하지 않은 이유나 선택의 차이를 더 설명하세요. 반복·공백으로 분량을 채우지 마세요. 도입은 성향과 올해 요점, 본문은 올해 운세의 서로 다른 측면, 마무리는 짧은 응원입니다. '해보자·하자·해봐' 같은 권유형은 쓰지 마세요. 월별 시점은 relation에서만 다루고 summary에서 요점과 행동 지시를 반복하지 마세요.` }] : []),
+          ],
+          text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: buildOutputSchema(requestedIds) } },
+        }, { timeout: remainingTime });
+        const patch = z.object({ sections: z.array(sectionSchema).length(requestedIds.length) }).parse(JSON.parse(response.output_text));
+        if (patch.sections.some((section, index) => section.section_id !== requestedIds[index])) throw new ReportValidationError(requestedIds.map(sectionId => ({ sectionId, message: "수정 대상 문단 ID 또는 순서가 맞지 않습니다.", severity: "blocking" })));
+        // Preserve valid prose exactly instead of asking the model to reproduce it.
+        if (draft) {
+          const repairs = new Map(patch.sections.map((section) => [section.section_id, section]));
+          draft = { sections: draft.sections.map((section) => repairs.get(section.section_id) ?? section) };
+        } else {
+          draft = reportSchema.parse(patch);
+        }
+        repairOpenings();
+        const content = validateReport(draft, context, readerName);
+        await complete(content);
+        return;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
+        if (error instanceof ReportValidationError) {
+          await preserveUsableDraft(error);
+          if (error.styleOnly) styleRepairFailures += 1;
+        }
+        const invalidIds = error instanceof ReportValidationError ? error.sectionIds : allSectionIds;
+        requestedIds = draft ? allSectionIds.filter((id) => invalidIds.includes(id)) : allSectionIds;
+        await prisma.report.update({ where: { id: reportId }, data: { retryCount: attempt, lastError } });
+        if (recovery.best && (styleRepairFailures >= MAX_STYLE_REPAIR_FAILURES || !(error instanceof ReportValidationError) || !error.styleOnly)) break;
+      }
+    }
+    if (recovery.best) {
+      console.warn("[Report] Published content-validated draft after editorial repair limit", { reportId, styleIssueCount: recovery.best.styleIssueCount, attemptsUsed });
+      await complete(recovery.best.content);
+      return;
+    }
+    await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError } });
+  } catch (error) {
+    const lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
+    console.error("[Report] Generation failed", { reportId });
+    await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError } });
   }
-  await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError } });
 }

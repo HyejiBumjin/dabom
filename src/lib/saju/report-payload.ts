@@ -1,10 +1,11 @@
 import { CORPUS_VERSION, selectCorpus } from "@/lib/saju/interpretation-corpus";
 import { extractReportFacts, type ReportFacts } from "@/lib/saju/report-facts";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
+import { REPORT_PARAGRAPH_LENGTHS, type ParagraphLength } from "@/lib/llm/report-rules";
 
 export interface ReportRenderPayload {
   corpus_version: string;
-  profile: { name: string; day_master: string };
+  profile: { day_master: string };
   /** 리포트 생성 시점 (KST 기준). 월운의 달을 과거/미래로 구분하는 데 사용. */
   as_of: { year: number; month: number };
   seun: { year: number; ganji: string };
@@ -12,7 +13,7 @@ export interface ReportRenderPayload {
     annual_pillar: string;
     annual_stem_ten_god: string;
     active_da_yun: string;
-    timing: Array<{ month: string; ganji: string; relation_to_natal: string }>;
+    timing: Array<{ month: string; ganji: string; relation_to_natal: string; phase: "past" | "current" | "future" }>;
   };
   structural_context: {
     natal_branch_relations: ReportFacts["natalBranchRelations"];
@@ -26,8 +27,11 @@ export interface ReportRenderPayload {
     id: string;
     title: string;
     required_factual_terms: string[];
+    required_factual_groups: string[][];
+    required_year_terms: string[];
     required_timing_terms: string[];
     prohibited_terms: string[];
+    paragraph_length: ParagraphLength;
     editorial_focus: string;
     fragments: Array<{
       domain: string[];
@@ -36,12 +40,9 @@ export interface ReportRenderPayload {
       grounds: string[];
       mechanism: string;
       translation: string;
-      concrete_scene: string;
       expansion?: {
         mechanism_steps: string[];
-        scene_variants: string[];
         decision_rule: string;
-        repetition_guard: string;
       };
       guidance: string;
     }>;
@@ -50,21 +51,48 @@ export interface ReportRenderPayload {
   constraints: string[];
 }
 
-export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
+export function buildReportRenderPayload(myeongsik: Myeongsik) {
   const reportFacts = extractReportFacts(myeongsik);
-  const selected = selectCorpus(reportFacts);
+  const baseSelected = selectCorpus(reportFacts);
+  const annualFragments = baseSelected.sections.find((section) => section.id === "yearly")!.fragments;
+  const annualCore = annualFragments.filter((fragment) => fragment.grounds.includes("annual-ten-god") && !fragment.grounds.includes("monthly-relation"));
+  const monthlyFragments = annualFragments.filter((fragment) => fragment.grounds.includes("monthly-relation"));
+  const titles = { essence: "나의 성향과 올해의 요점", yearly: "올해의 중심 흐름", relation: "올해의 관계와 시기", career: "올해의 일과 자원", mental: "올해의 마음의 부담", summary: "따뜻한 마무리" };
+  // Give each paragraph a distinct job. The opening only previews the annual
+  // theme; monthly interpretation belongs to the relationship paragraph.
+  const selected = {
+    ...baseSelected,
+    outline: baseSelected.outline.map((section) => ({ ...section, title: titles[section.id] })),
+    sections: baseSelected.sections.map((section) => ({
+      ...section,
+      title: titles[section.id],
+      fragments: section.id === "essence"
+        ? [...section.fragments.filter((fragment) => fragment.grounds.includes("day-master")), ...annualCore.slice(0, 1)]
+        : section.id === "yearly"
+          ? annualCore
+          : section.id === "relation"
+            ? [...section.fragments.filter((fragment) => !fragment.grounds.includes("natal-branch-clash")), ...monthlyFragments]
+            : section.id === "summary" ? [] : section.fragments,
+    })),
+  };
+  const dayMasterTerms = [({ 甲: "갑목", 乙: "을목", 丙: "병화", 丁: "정화", 戊: "무토", 己: "기토", 庚: "경금", 辛: "신금", 壬: "임수", 癸: "계수" }[reportFacts.dayMaster] ?? reportFacts.dayMaster)];
+  const annualTerms = [reportFacts.annualTenGod, ...(reportFacts.annualGanZhi === "丙午" ? ["병오"] : [])];
+  const monthlyTerms = reportFacts.monthlyRelationMonths.map((month) => `${month.ordinal}월`);
   // KST 기준 현재 연월 — 월운 시점의 과거/미래 구분용
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const payload: ReportRenderPayload = {
     corpus_version: CORPUS_VERSION,
-    profile: { name, day_master: reportFacts.dayMaster },
+    profile: { day_master: reportFacts.dayMaster },
     as_of: { year: kstNow.getUTCFullYear(), month: kstNow.getUTCMonth() + 1 },
     seun: { year: reportFacts.targetYear, ganji: reportFacts.annualGanZhi },
     yearly_context: {
       annual_pillar: reportFacts.annualGanZhi,
       annual_stem_ten_god: reportFacts.annualTenGod,
       active_da_yun: reportFacts.daYunGanZhi,
-      timing: reportFacts.monthlyRelationMonths.map((month) => ({ month: `${month.ordinal}월`, ganji: month.ganZhi, relation_to_natal: month.against })),
+      timing: reportFacts.monthlyRelationMonths.map((month) => {
+        const distance = (reportFacts.targetYear - kstNow.getUTCFullYear()) * 12 + month.ordinal - (kstNow.getUTCMonth() + 1);
+        return { month: `${month.ordinal}월`, ganji: month.ganZhi, relation_to_natal: month.against, phase: distance < 0 ? "past" : distance === 0 ? "current" : "future" };
+      }),
     },
     structural_context: {
       natal_branch_relations: reportFacts.natalBranchRelations,
@@ -77,29 +105,34 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
     sections: selected.sections.map((section) => ({
       ...section,
       editorial_focus: section.id === "essence"
-        ? "일간과 원국의 반복 구조를 이용해, 사용자가 자주 보일 법한 반응 패턴을 구체적으로 짚는다. 올해·월운은 언급하지 않는다."
+        ? "도입. 일간에서 읽는 나의 성향을 2~3문장으로 짚고, 올해 운세의 중심과 그 성향이 올해 어떻게 쓰이는지를 1~2문장으로 예고한다. 올해 세운 근거도 포함한다. 생활 예시·행동 지시·세부 월운은 넣지 않는다."
         : section.id === "yearly"
-          ? "세운×대운 조합을 올해의 중심 주제로 삼고, 월운 시점은 이 문단에서만 한 번 명시한다."
+          ? "올해 바깥 환경의 변화와 기회·부담의 양면을 설명한다. 올해 어떤 요구가 선명해지고 어떤 기준으로 선택이 갈리는지 새 정보를 더한다. 도입의 성격 설명, 커리어의 자원 관리, 특정 월의 관계 설명은 반복하지 않는다."
           : section.id === "relation"
-            ? "원국의 관계 반응 패턴과 충의 의미를 다룬다. 특정 월을 재나열하지 않는다."
+            ? "올해 사람과 약속·대화·일정을 조율하는 흐름을 월운 근거로 설명한다. required_timing_terms는 여기서만 언급한다. 지난 달은 계산상 과거 시점으로 다루고 실제로 겪었다고 단정하지 않는다. 원국의 관계를 올해 발생할 사건으로 바꾸지 않는다."
             : section.id === "career"
-              ? "대운 천간·지지와 원국의 관계를 이용해, 일을 결과물과 경력 자산으로 남기는 방식을 다룬다."
+              ? "올해 일과 자원 배분의 선택을 설명한다. 대운은 장기 배경으로 한 번만 짚고, 올해 시간·비용·협업의 몫을 어떻게 판단할지 구체화한다. 앞 문단의 역할·평가 설명을 다시 풀지 않는다. 수입이나 투자 결과를 예언하지 않는다."
               : section.id === "mental"
-                ? "세운과 일간 사이의 오행 작용이 멘탈 루틴에서 어떻게 느껴지는지만 다룬다."
-                : "세운×대운의 선택 기준을 한 문장으로 묶는다. 월운·관계 장면을 반복하지 않는다.",
+                ? "올해 세운과 일간의 작용이 마음의 부담에 닿는 지점을 설명한다. 성격 소개·대인 조율·자원 관리 대신 피드백을 받은 뒤 부담이 이어지는 방식과 멈출 기준만 다룬다. 건강 진단은 하지 않는다."
+                : "앞서 본문에서 설명한 부담과 망설임을 이해하는 마음을 2~3문장으로 전한다. 새 명리 해석이 아니므로 fragments는 비어 있다. 올해의 전망·결과·성장·좋은 시기라는 평가를 되풀이하지 않는다. 행동을 권하거나 다짐을 요구하지 않고, 그 부담을 이해하고 독자의 선택을 존중하는 짧은 응원으로 끝낸다.",
+      paragraph_length: REPORT_PARAGRAPH_LENGTHS[section.id],
       required_factual_terms: section.id === "essence"
-        ? [reportFacts.dayMaster, ({ 甲: "갑목", 乙: "을목", 丙: "병화", 丁: "정화", 戊: "무토", 己: "기토", 庚: "경금", 辛: "신금", 壬: "임수", 癸: "계수" }[reportFacts.dayMaster] ?? reportFacts.dayMaster)]
+        ? dayMasterTerms
         : section.id === "yearly"
-          ? [reportFacts.annualGanZhi, reportFacts.annualGanZhi === "丙午" ? "병오" : reportFacts.annualTenGod, reportFacts.annualTenGod]
+          ? annualTerms
           : section.id === "relation"
-            ? reportFacts.monthlyRelation === "clash" ? ["충"] : reportFacts.monthlyRelation === "combination" ? ["합"] : [reportFacts.annualTenGod]
+            ? []
             : section.id === "career"
-              ? [reportFacts.daYunGanZhi, reportFacts.daYunGanZhi === "甲申" ? "갑신" : "대운", "대운", reportFacts.daYunTenGod]
+              ? [...new Set([reportFacts.daYunGanZhi === "甲申" ? "갑신" : "대운", "대운", reportFacts.daYunTenGod])]
               : section.id === "mental"
                 ? [reportFacts.mentalInteraction ?? reportFacts.annualTenGod]
-                : [reportFacts.daYunGanZhi, reportFacts.daYunGanZhi === "甲申" ? "갑신" : reportFacts.annualGanZhi, reportFacts.annualGanZhi === "丙午" ? "병오" : reportFacts.annualGanZhi],
-      required_timing_terms: section.id === "yearly" ? reportFacts.monthlyRelationMonths.map((month) => `${month.ordinal}월`) : [],
-      prohibited_terms: section.id === "relation" ? reportFacts.monthlyRelationMonths.map((month) => `${month.ordinal}월`) : [],
+                : [],
+      required_factual_groups: section.id === "essence" ? [dayMasterTerms, annualTerms] : [],
+      // The opening and annual overview establish the time frame. Requiring
+      // another marker in every paragraph encourages identical annual openings.
+      required_year_terms: section.id === "essence" || section.id === "yearly" ? ["올해", `${reportFacts.targetYear}년`] : [],
+      required_timing_terms: section.id === "relation" ? monthlyTerms : [],
+      prohibited_terms: section.id === "relation" ? [] : monthlyTerms,
       fragments: section.fragments.map((fragment) => ({
         domain: fragment.domains,
         direction: fragment.direction,
@@ -107,23 +140,30 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, name: string) {
         grounds: fragment.grounds,
         mechanism: fragment.mechanism,
         translation: fragment.translation,
-        concrete_scene: fragment.concreteScene,
+        // Keep authored scenes in the corpus for reference; the renderer creates
+        // its own illustrations from the interpretation and decision principles.
         expansion: fragment.expansion && {
           mechanism_steps: fragment.expansion.mechanismSteps,
-          scene_variants: fragment.expansion.sceneVariants,
           decision_rule: fragment.expansion.decisionRule,
-          repetition_guard: fragment.expansion.repetitionGuard,
         },
-        guidance: fragment.guidance,
+        guidance: fragment.grounds.includes("monthly-relation")
+          ? "관계 문단에서만 해당 월의 대화·일정 조율로 풀어낸다. 이별·사고·실패나 사용자의 과거 경험을 단정하지 않는다."
+          : fragment.guidance,
       })),
     })),
-    style: { persona: "사주를 직설적으로 풀어주는 20대 친한 친구", speech: "반말, 직설적이고 구체적인 20대 친구 어조. 추상명사 대신 장면으로 말하기. 팩폭+위로+현실 솔루션", paragraph_length: "섹션당 430~580자" },
+    style: { persona: "사주를 풀어주는 친한 친구", speech: "따뜻하고 직설적인 반말. 운세를 설명하되 '~해보자'식 권유나 매 문단의 행동 지시로 마무리하지 않는다.", paragraph_length: "도입 약 230자, 올해 운세 본문 각 약 330자, 응원 마무리 약 140자. sections의 paragraph_length를 따른다." },
     constraints: [
       "선택된 fragments와 facts에 없는 명리 판단·사건 예고·직업·건강·금전 결과를 추가하지 않는다.",
-      "yearly의 required_timing_terms가 비어 있지 않으면, 그 달들을 명리 월운 기준의 주의·조율 시점으로 모두 언급한다.",
-      "structural_context의 12개월 월운표는 계산 투명성을 위한 자료다. 구체적인 월을 나열할 수 있는 section은 yearly뿐이다.",
+      "첫 문단은 나의 성향과 올해의 중심을 함께 소개한다. 두 번째 문단부터는 올해 운세의 서로 다른 측면을 설명한다.",
+      "올해·이번 해·연도로 시작하는 문단은 전체에서 최대 하나다. 이후 문단은 배정된 주제의 의미로 시작하고, 연도가 필요하면 문장 중간에 연결한다. 비슷한 시간 표현으로 첫머리만 바꾸지 않는다.",
+      "독자의 이름이나 이름을 줄인 호칭은 쓰지 않는다. 필요한 호칭은 너로 쓴다.",
+      "relation의 required_timing_terms가 비어 있지 않으면, 그 달들을 월운 기준의 대화·일정 조율 시점으로 모두 언급한다.",
+      "structural_context의 12개월 월운표는 계산 근거다. 구체적인 월을 나열하는 section은 relation뿐이다.",
+      "나의 원래 성향과 올해의 환경을 구분한다. 원국·대운의 계산을 올해 발생할 사건으로 바꾸지 않는다.",
+      "마지막 문단은 짧은 응원이다. 전체 운세와 같은 조언을 다시 나열하지 않는다. 분량을 채우려고 설명을 반복하지 않는다.",
       "각 section의 editorial_focus와 prohibited_terms를 지켜, 이미 다른 section에서 쓴 시점·장면을 반복하지 않는다.",
-      "outline 순서를 정확히 지키고, 사주 용어는 fragment의 translation과 concrete_scene으로 바로 풀어쓴다.",
+      "outline 순서를 정확히 지키고, 사주 용어는 fragment의 mechanism과 translation에 근거해 쉬운 말로 풀어쓴다.",
+      "생활 장면은 해석과 선택 원칙을 설명하기 위해 새로 만든다. 사용자의 실제 경험·직업·과거 사건으로 단정하지 않는다.",
     ],
   };
   return { reportFacts, selected, payload };
