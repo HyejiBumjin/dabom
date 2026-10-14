@@ -2,11 +2,12 @@ import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { buildReportEvidencePrompt, REPORT_DEVELOPER_INSTRUCTIONS, REPORT_PROMPT_VERSION } from "@/lib/prompts/v6";
-import { buildReportRenderPayload } from "@/lib/saju/report-payload";
+import { buildReportEvidencePrompt, getReportPrompt, getStoredReportTone } from "@/lib/prompts/v6";
+import { buildReportRenderPayload, type ReportTone } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import type { ReportContent } from "./types";
-import { ANNUAL_OPENING, containsReaderName, countReportCharacters, hasReportTerm, normalizeReportParagraph, redactReaderName, repairRepeatedAnnualOpenings, REPORT_PARAGRAPH_LENGTHS, SUGGESTION_ENDING } from "./report-rules";
+import { DEFAULT_REPORT_TONE, getConfiguredReportModel, getReportModelOptions } from "./report-config";
+import { ANNUAL_OPENING, containsReaderName, countReportCharacters, FORMAL_REPORT_ENDING, hasInlineTermExplanation, hasReportTerm, normalizeReportParagraph, redactReaderName, repairRepeatedAnnualOpenings, REPORT_PARAGRAPH_LENGTHS, SUGGESTION_ENDING } from "./report-rules";
 
 const sectionSchema = z.object({
   section_id: z.string(),
@@ -29,7 +30,9 @@ function buildOutputSchema(sectionIds: string[]) {
         items: {
           type: "object", additionalProperties: false, required: ["section_id", "paragraph"], properties: {
             section_id: { type: "string", enum: sectionIds },
-            paragraph: { type: "string", minLength: MIN_PARAGRAPH_LENGTH, maxLength: MAX_PARAGRAPH_LENGTH },
+            // Give the model room to finish a sentence, including message
+            // breaks and emoji. Per-section prose limits are validated below.
+            paragraph: { type: "string", minLength: MIN_PARAGRAPH_LENGTH, maxLength: MAX_PARAGRAPH_LENGTH * 2 },
           },
         },
       },
@@ -51,11 +54,12 @@ class ReportValidationError extends Error {
 
 const genericCheerleading = /화이팅|충분히\s*잘|네가\s*할\s*수\s*있|넌\s*할\s*수\s*있|성공은\s*차곡차곡|멋진\s*한\s*해|다잘지냈어/u;
 
-function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>, readerName: string, allowStyleIssues = false): ReportContent {
+export function validateReport(raw: unknown, context: ReturnType<typeof buildReportRenderPayload>, readerName: string, allowStyleIssues = false): ReportContent {
   const rendered = reportSchema.parse(raw);
   const expected = context.payload.sections;
   const issues: ValidationIssue[] = [];
   const seenSentences = new Set<string>();
+  const explainedTerms = new Set<string>();
   let hasAnnualOpening = false;
   const paragraphs = rendered.sections.map((section, index) => {
     const expectedSection = expected[index];
@@ -85,7 +89,17 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
     if (expectedSection.id === "essence" && /[?？]/u.test(paragraph)) style("도입은 나의 성향과 올해 요점을 알려 주는 글입니다. 독자에게 대답을 묻는 질문을 빼고 서술하세요.");
     if (expectedSection.id === "summary") {
       const technicalTerms = expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]);
-      if (technicalTerms.some((term) => hasReportTerm(paragraph, term))) style("마무리에서 명리 용어를 다시 설명하지 마세요. 앞서 설명한 부담을 이해하는 짧은 응원만 남기세요.");
+      if (technicalTerms.some((term) => hasReportTerm(paragraph, term))) style(context.payload.style.tone === "genz"
+        ? "마무리에서 명리 용어를 다시 설명하지 마세요. 본문에서 확인된 올해의 흐름을 생활 언어로 요약하고 응원을 전하세요."
+        : "마무리에서 명리 용어를 다시 설명하지 마세요. 앞서 설명한 부담을 이해하는 짧은 응원만 남기세요.");
+      if (context.payload.style.tone === "genz") {
+        const messages = paragraph.split(/\n\s*\n/u).filter(Boolean);
+        const firstMessage = messages[0] ?? "";
+        const yearTerms = ["올해", "이번 해", "한 해", `${context.reportFacts.targetYear}년`];
+        const sentences = firstMessage.split(/[.!?。！？]/u).filter(part => countReportCharacters(part) > 0);
+        if (!yearTerms.some(term => firstMessage.includes(term)) || sentences.length !== 1) style("첫 마무리 메시지는 본문에서 확인된 올해의 종합 운세를 한 문장으로 요약하세요. 시간 표현은 문장 중간에 자연스럽게 넣으세요.");
+        if (messages.length < 3 || countReportCharacters(messages.at(-1) ?? "") < 40) style("올해 운세 한 문장 뒤에 해석에 맞는 긍정의 메시지와 따뜻한 인사를 빈 줄로 나눠 보내세요. 마지막 인사는 약 50~90자로 마음을 충분히 전하세요.");
+      }
     }
     const firstSentence = paragraph.split(/[.!?。！？]/u)[0];
     const technicalTerms = [...new Set(expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]).concat(["충", "합"]))];
@@ -97,6 +111,7 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
     if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(paragraph)) fail("내부 입력 라벨이 본문에 노출되었습니다.");
     if (genericCheerleading.test(paragraph)) style("근거 없는 치어리딩 문구가 포함되었습니다.");
     if (SUGGESTION_ENDING.test(paragraph)) style("'해보자·하자·해봐' 같은 권유형이 포함되었습니다. 행동 지시 대신 그 선택이 올해 어떤 의미인지 설명하세요.");
+    if (context.payload.style.tone === "genz" && FORMAL_REPORT_ENDING.test(paragraph)) style("'~한다·~된다·~이다·~다'로 끝나는 서술체가 있습니다. 친구에게 보내는 긴 메시지처럼 '~해·~거든·~네·~지·~잖아'로 바꾸고, 자연스러운 줄바꿈과 이모티콘을 유지하세요.");
     const evasivePhrase = paragraph.match(/(?:일|였을|었을|느꼈을)\s*거야|것\s*같아|듯해|필요해\s*보여|뜻은 아니야|비춰 볼 수 있어|살펴볼 수 있어|할 수는 없어/u)?.[0];
     if (evasivePhrase) style(`말을 흐리는 표현 '${evasivePhrase}'이 있습니다. 조건과 시간 범위를 분명히 한 뒤 해당 해석을 따뜻한 서술형으로 쓰세요.`);
     const hanja = paragraph.match(/\p{Script=Han}/gu);
@@ -111,29 +126,49 @@ function validateReport(raw: unknown, context: ReturnType<typeof buildReportRend
     }
     return paragraph;
   });
+  // Fix missing facts first. Their repair can restore an earlier term mention;
+  // checking later glosses before that would rewrite unrelated sections.
+  if (context.payload.style.tone === "genz" && !allowStyleIssues && !issues.some(issue => issue.severity === "blocking")) {
+    paragraphs.forEach((paragraph, index) => {
+      for (const { term } of context.payload.terminology) {
+        if (!hasReportTerm(paragraph, term) || explainedTerms.has(term)) continue;
+        explainedTerms.add(term);
+        if (!hasInlineTermExplanation(paragraph, term)) issues.push({
+          sectionId: expected[index].id,
+          severity: "style",
+          message: `${expected[index].id}: 전문 용어 '${term}'의 첫 등장에 짧은 풀이가 빠졌습니다. terminology의 의미를 같은 메시지 안에서 용어 바로 뒤 괄호나 짧은 말로 풀어 주세요. 이후 같은 용어의 풀이는 반복하지 마세요.`,
+        });
+      }
+    });
+  }
   if (issues.length > 0) throw new ReportValidationError(issues);
   const text = paragraphs.join("\n\n");
   return {
     paragraphs,
     meta: {
+      presentation: context.payload.style.tone === "genz" ? "message" : "letter",
       charCount: [...text].length,
       beats: context.selected.sections.map((section) => `${section.id}:${section.fragments.map((fragment) => fragment.id).join(",")}`),
-      termsUsed: context.reportFacts.facts.map((fact) => ({ term: fact.value, gloss: fact.basis })),
+      termsUsed: context.payload.terminology.filter(({ term }) => paragraphs.some(paragraph => hasReportTerm(paragraph, term))).map(({ term, meaning }) => ({ term, gloss: meaning })),
     },
   };
 }
 
 /** Facts and approved corpus selection stay outside the LLM. */
-export async function generateReport(reportId: string): Promise<void> {
+export async function generateReport(reportId: string, options: { tone?: ReportTone; model?: string } = {}): Promise<void> {
   const deadline = Date.now() + MAX_RENDER_TIME_MS;
   const report = await prisma.report.findUnique({ where: { id: reportId }, include: { sajuProfile: true } });
   if (!report || report.status === "COMPLETED") return;
-  const model = process.env.OPENAI_MODEL || "gpt-4o";
-  const claim = await prisma.report.updateMany({ where: { id: reportId, status: { in: ["PENDING", "FAILED"] } }, data: { status: "GENERATING", lastError: null, retryCount: 0, completedAt: null, promptVersion: REPORT_PROMPT_VERSION, model } });
+  const storedTone = getStoredReportTone(report.promptVersion);
+  const prompt = getReportPrompt(options.tone ?? DEFAULT_REPORT_TONE);
+  // Resume a current-version report with its chosen model. Older unfinished
+  // reports switch to the approved defaults and don't reuse a different voice.
+  const model = options.model ?? (report.promptVersion === prompt.version ? report.model || getConfiguredReportModel() : getConfiguredReportModel());
+  const claim = await prisma.report.updateMany({ where: { id: reportId, status: { in: ["PENDING", "FAILED"] } }, data: { status: "GENERATING", lastError: null, retryCount: 0, completedAt: null, promptVersion: prompt.version, model } });
   if (claim.count === 0) return;
 
   try {
-    const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik);
+    const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik, prompt.tone);
     // The name is used only by local validation and draft redaction, never as
     // interpretation evidence sent to the model.
     const readerName = report.sajuProfile.name;
@@ -145,7 +180,7 @@ export async function generateReport(reportId: string): Promise<void> {
     const complete = async (content: ReportContent) => {
       await prisma.report.update({ where: { id: reportId }, data: { status: "COMPLETED", content: content as unknown as Prisma.InputJsonValue, retryCount: Math.max(0, attemptsUsed - 1), completedAt: new Date(), lastError: null } });
     };
-    const previousContent = z.object({ paragraphs: z.array(z.string()).length(6) }).safeParse(report.content);
+    const previousContent = z.object({ paragraphs: z.array(z.string()).length(6) }).safeParse(storedTone === prompt.tone ? report.content : null);
     let draft: RenderedReport | null = previousContent.success
       ? { sections: previousContent.data.paragraphs.map((paragraph, index) => ({ section_id: allSectionIds[index], paragraph: normalizeReportParagraph(paragraph) })) }
       : null;
@@ -211,13 +246,20 @@ export async function generateReport(reportId: string): Promise<void> {
           month_terms: section.required_timing_terms,
           role: section.editorial_focus,
         }));
+        const repairTone = prompt.tone === "genz" ? "\n수정 문단도 젠지 찐친의 말투를 유지하세요. '~다·~한다·~된다·~이다'로 끝내지 말고 '~해·~거든·~네·~지·~잖아'로 직접 말 건네세요. 한 메시지에 1~2문장, 약 50~100자로 끊고 빈 줄로 다음 메시지를 이어 주세요. 가벼운 이모티콘을 유지하세요. 전문 용어가 처음 나오면 terminology에 근거한 짧은 풀이를 용어 바로 뒤에 붙이세요. 다른 메시지로 풀이를 미루거나 이미 설명한 용어를 재정의하지 마세요. 해석에서 나온 장난스러운 비유·팩폭을 살리고, 분량을 채우려고 진지한 상담문이나 훈계로 바꾸지 마세요." : "";
+        const repairClosing = prompt.tone === "genz"
+          ? "마무리는 summary의 editorial_focus에 맞춰 첫 메시지에 올해 종합 운세를 한 문장으로 요약하고, 해석에 맞는 긍정의 메시지와 약 50~90자의 따뜻한 인사로 마칩니다. 요약은 이미 본문에서 설명한 올해의 의미만 압축하며 새 판단을 만들지 않습니다."
+          : "마무리는 짧은 응원입니다.";
+        const closingReminder = prompt.tone === "genz"
+          ? "summary의 한 문장 요약 뒤에는 본문의 상세 설명과 행동 지시를 반복하지 마세요."
+          : "summary에서 요점과 행동 지시를 반복하지 마세요.";
         const response: OpenAI.Responses.Response = await client.responses.create({
-          model, store: false, max_output_tokens: 4_800,
+          model, store: false, ...getReportModelOptions(model),
           input: [
-            { role: "developer", content: REPORT_DEVELOPER_INSTRUCTIONS },
+            { role: "developer", content: prompt.instructions },
             { role: "user", content: buildReportEvidencePrompt(context.payload) },
             ...(draft ? [{ role: "assistant" as const, content: JSON.stringify({ sections: draft.sections.map((section) => ({ ...section, paragraph: redactReaderName(section.paragraph, readerName) })) }) }] : []),
-            ...(draft || attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패:\n${lastError}\n직전 문단별 글자 수와 수정량: ${previousLengths || "출력 없음"}. 직전 assistant 출력은 수정 대상이며 사주 사실의 근거가 아닙니다. 이번 요청은 부분 수정입니다. 출력 sections에는 ${requestedIds.join(", ")}만 이 순서로 넣으세요. 최초의 6개 문단 출력 지시보다 이 부분 수정 지시를 우선하세요. 나머지 문단은 코드가 보존하므로 출력하지 마세요. 이번 수정의 필수 조건:\n${JSON.stringify(repairRequirements)}\nmust_include_one_of는 배열 중 하나, must_include_one_from_each_group은 각 그룹에서 하나씩 그 표기 그대로 쓰라는 뜻입니다. 첫 문장에는 명리 용어를 넣지 말고 두 번째 문장 이후에 필요한 용어를 모두 포함하세요. 각 수정 문단의 paragraph_length.target에 맞추고, 부족하면 배정된 해석의 아직 설명하지 않은 이유나 선택의 차이를 더 설명하세요. 반복·공백으로 분량을 채우지 마세요. 도입은 성향과 올해 요점, 본문은 올해 운세의 서로 다른 측면, 마무리는 짧은 응원입니다. '해보자·하자·해봐' 같은 권유형은 쓰지 마세요. 월별 시점은 relation에서만 다루고 summary에서 요점과 행동 지시를 반복하지 마세요.` }] : []),
+            ...(draft || attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패:\n${lastError}\n직전 문단별 글자 수와 수정량: ${previousLengths || "출력 없음"}. 직전 assistant 출력은 수정 대상이며 사주 사실의 근거가 아닙니다. 이번 요청은 부분 수정입니다. 출력 sections에는 ${requestedIds.join(", ")}만 이 순서로 넣으세요. 최초의 6개 문단 출력 지시보다 이 부분 수정 지시를 우선하세요. 나머지 문단은 코드가 보존하므로 출력하지 마세요. 이번 수정의 필수 조건:\n${JSON.stringify(repairRequirements)}\nmust_include_one_of는 배열 중 하나, must_include_one_from_each_group은 각 그룹에서 하나씩 그 표기 그대로 쓰라는 뜻입니다. 첫 문장에는 명리 용어를 넣지 말고 두 번째 문장 이후에 필요한 용어를 모두 포함하세요. 각 수정 문단의 paragraph_length.target에 맞추고, 부족하면 배정된 해석의 아직 설명하지 않은 이유나 선택의 차이를 더 설명하세요. 반복·공백으로 분량을 채우지 마세요. 도입은 성향과 올해 요점, 본문은 올해 운세의 서로 다른 측면, ${repairClosing} '해보자·하자·해봐' 같은 권유형은 쓰지 마세요. 월별 시점은 relation에서만 다루고 ${closingReminder}${repairTone}` }] : []),
           ],
           text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: buildOutputSchema(requestedIds) } },
         }, { timeout: remainingTime });

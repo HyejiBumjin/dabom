@@ -5,6 +5,8 @@ import type { Myeongsik, PillarName } from "@/lib/saju/myeongsik";
 import { deriveInterpretationFacts } from "@/lib/saju/interpretation-facts";
 import { deriveSajuInterpretationBlueprint } from "@/lib/saju/interpretation-blueprint";
 import { buildReportRenderPayload } from "@/lib/saju/report-payload";
+import { requireSajuAccount, canAccessSajuProfile } from "@/lib/saju/account";
+import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 
 const pillarLabels: Record<PillarName, string> = {
   year: "년주",
@@ -30,8 +32,9 @@ function describeMonthlyBranchRelations(myeongsik: Myeongsik, monthlyGanZhi: str
 
 export default async function SajuProfilePage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = await params;
+  const account = await requireSajuAccount(`/saju/profiles/${profileId}`);
   const profile = await prisma.sajuProfile.findUnique({ where: { id: profileId } });
-  if (!profile) notFound();
+  if (!profile || !canAccessSajuProfile(profile, account)) notFound();
 
   const myeongsik = profile.myeongsik as unknown as Myeongsik;
   const birthDate = profile.birthDate.toISOString().slice(0, 10);
@@ -52,7 +55,7 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
   };
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
+    <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath={`/saju/profiles/${profileId}`}><main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
       <Link href="/saju" className="text-sm text-zinc-500 hover:text-zinc-900">← 입력 다시 하기</Link>
 
       <header className="mt-8">
@@ -162,7 +165,7 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
         <p className="mt-3 text-sm leading-6 text-zinc-600">만세력 계산값에 더해, 이 명식에서 규칙으로 선택된 문장 조각과 GPT에 전달할 최종 입력값을 함께 표시합니다. 아직 생성된 리포트 본문은 포함하지 않습니다.</p>
         <pre className="mt-4 overflow-x-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100">{JSON.stringify(calculationAndReportInput, null, 2)}</pre>
       </details>
-    </main>
+    </main></AccountPrivacyBoundary>
   );
 }
 

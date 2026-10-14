@@ -1,0 +1,64 @@
+
+> dabom@0.1.0 security:http
+> node scripts/security-http-check.mjs
+
+PASS GET / => 200
+PASS security header x-content-type-options
+PASS security header x-frame-options
+PASS security header referrer-policy
+PASS POST /api/saju/profiles => 401
+PASS POST /api/saju/profiles/security-probe/reports => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS POST /api/saju/reports/security-probe/generate => 401
+PASS POST /api/saju/payments/prepare => 401
+PASS POST /api/saju/payments/confirm => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS GET /api/saju/reports/security-probe => 307
+PASS GET /api/saju/reports/security-probe?_rsc=HEAvJdHAQJrUAe2K => 401
+PASS GET /api/saju/reports/security-probe => 401
+PASS POST /api/saju/profiles => 403
+PASS POST /api/saju/profiles/security-probe/reports => 403
+PASS POST /api/saju/reports/security-probe/generate => 403
+PASS POST /api/saju/payments/prepare => 403
+PASS POST /api/saju/payments/confirm => 403
+PASS POST /api/auth/logout => 403
+PASS GET /saju => 307
+PASS GET /saju/library => 307
+PASS GET /saju/profiles/security-probe => 307
+PASS GET /saju/profiles/security-probe/checkout => 307
+PASS GET /saju/reports/security-probe => 307
+PASS GET /saju/checkout/return?orderId=probe => 307
+PASS POST /api/payments/prepare => 410
+PASS POST /api/payments/confirm => 410
+PASS POST /api/reports/create => 410
+PASS POST /api/letters/create => 410
+PASS POST /api/saju/test => 410
+PASS GET /api/reports/00000000-0000-4000-8000-000000000000 => 410
+PASS GET /.env => 404
+PASS GET /.env.local => 404
+PASS GET /.git/config => 404
+PASS GET /prisma/schema.prisma => 404
+PASS GET /scripts/security-check.ts => 404
+PASS GET /preview/report => 404
+PASS GET /design/report-essay => 404
+PASS GET /saju/preview/library => 404
+PASS GET /saju/preview/checkout => 404
+PASS GET /saju/preview/loading => 404
+PASS GET /reports/00000000-0000-4000-8000-000000000000 => 404
+PASS GET /gift/security-probe => 404
+PASS GET /checkout/success => 404
+PASS GET /_next/image?url=http%3A%2F%2Fexample.invalid%2Fprobe.png&w=640&q=75 => 400
+PASS GET /_next/image?url=http%3A%2F%2F127.0.0.1%3A3100%2F&w=640&q=75 => 400
+PASS GET /api/saju/payments/confirm => 405
+PASS DELETE /api/saju/profiles => 405
+PASS PUT /api/saju/reports/security-probe => 405
+PASS POST /api/saju/payments/webhook => 503
+PASS GET /api/auth/callback?next=%2F%2Fevil.invalid => 307
+
+74 PASS against production HTTP server (no valid auth cookies, provider charges, or LLM calls)

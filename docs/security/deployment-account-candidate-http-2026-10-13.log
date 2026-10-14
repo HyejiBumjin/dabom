@@ -1,0 +1,62 @@
+PASS GET /: 200
+PASS retro home renders
+PASS x-content-type-options
+PASS x-frame-options
+PASS referrer-policy
+PASS minimal CSP
+PASS HSTS
+PASS framework header suppressed
+PASS GET /login: 200
+PASS GET /api/auth/account: 401
+PASS private cache /api/auth/account
+PASS POST /api/saju/profiles: 401
+PASS private cache /api/saju/profiles
+PASS POST /api/saju/profiles: 403
+PASS POST /api/saju/profiles/security-deployment-probe/reports: 401
+PASS private cache /api/saju/profiles/security-deployment-probe/reports
+PASS POST /api/saju/profiles/security-deployment-probe/reports: 403
+PASS GET /api/saju/reports/security-deployment-probe: 401
+PASS private cache /api/saju/reports/security-deployment-probe
+PASS POST /api/saju/reports/security-deployment-probe/generate: 401
+PASS private cache /api/saju/reports/security-deployment-probe/generate
+PASS POST /api/saju/reports/security-deployment-probe/generate: 403
+PASS POST /api/saju/payments/prepare: 401
+PASS private cache /api/saju/payments/prepare
+PASS POST /api/saju/payments/prepare: 403
+PASS POST /api/saju/payments/confirm: 401
+PASS private cache /api/saju/payments/confirm
+PASS POST /api/saju/payments/confirm: 403
+PASS GET /saju: 307
+PASS login gate /saju
+PASS GET /saju/library: 307
+PASS login gate /saju/library
+PASS GET /saju/profiles/security-deployment-probe: 307
+PASS login gate /saju/profiles/security-deployment-probe
+PASS GET /saju/reports/security-deployment-probe: 307
+PASS login gate /saju/reports/security-deployment-probe
+PASS GET /saju/profiles/security-deployment-probe/checkout: 307
+PASS login gate /saju/profiles/security-deployment-probe/checkout
+PASS POST /api/payments/prepare: 410
+PASS POST /api/payments/confirm: 410
+PASS POST /api/reports/create: 410
+PASS POST /api/letters/create: 410
+PASS POST /api/saju/test: 410
+PASS GET /api/reports/00000000-0000-4000-8000-000000000000: 410
+PASS GET /.env.local: 404
+PASS GET /.git/config: 404
+PASS GET /prisma/schema.prisma: 404
+PASS GET /preview/report: 404
+PASS GET /design/report-essay: 404
+PASS GET /saju/preview/library: 404
+PASS GET /gift/security-deployment-probe: 404
+PASS GET /checkout/success: 404
+PASS POST /api/saju/payments/webhook: 503
+PASS GET /api/auth/callback?next=%2F%2Fevil.invalid: 307
+PASS callback fixed to owned origin
+PASS GET /api/auth/login?next=%2Fsaju%2Flibrary: 307
+PASS Kakao OAuth configured
+PASS OAuth return uses owned domain
+PASS PKCE cookie Secure
+PASS PKCE cookie SameSite=Lax
+
+60 PASS; anonymous/synthetic requests only, no user login, customer rows, real payments or LLM calls

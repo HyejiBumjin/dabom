@@ -1,19 +1,29 @@
 import { env } from "@/lib/env";
+import { z } from "zod";
 
 export interface PortOnePayment {
   id: string;
   paymentId: string;
   amount: number;
   status: string;
+  currency: string;
 }
 
-function extractAmount(rawAmount: unknown): number {
-  if (typeof rawAmount === "number") return rawAmount;
-  if (rawAmount && typeof rawAmount === "object") {
-    const total = (rawAmount as { total?: unknown }).total;
-    if (typeof total === "number") return total;
-  }
-  throw new Error("Invalid PortOne amount");
+export class PortOnePaymentLookupError extends Error {
+  constructor(public readonly status: number) { super("PortOne payment lookup failed"); }
+}
+
+export function parsePortOnePayment(raw: unknown, expectedId: string, expectedStoreId: string, expectedChannelKey = env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY, development = process.env.NODE_ENV === "development"): PortOnePayment {
+  const parsed = z.object({
+    id: z.string().min(1), storeId: z.string().min(1),
+    status: z.string().min(1), currency: z.string().min(1),
+    amount: z.object({ total: z.number().int().nonnegative(), cancelled: z.number().int().nonnegative().optional() }),
+    channel: z.object({ key: z.string().min(1), type: z.enum(["LIVE", "TEST"]) }).optional(),
+  }).parse(raw);
+  if (parsed.id !== expectedId || parsed.storeId !== expectedStoreId) throw new Error("PortOne payment identity mismatch");
+  if (parsed.status === "PAID" && (parsed.amount.cancelled ?? 0) !== 0) throw new Error("PortOne payment has cancellations");
+  if (parsed.status === "PAID" && (!parsed.channel || parsed.channel.key !== expectedChannelKey || (!development && parsed.channel.type !== "LIVE"))) throw new Error("PortOne payment channel mismatch");
+  return { id: parsed.id, paymentId: parsed.id, amount: parsed.amount.total, status: parsed.status, currency: parsed.currency };
 }
 
 export async function getPortOnePayment(paymentId: string): Promise<PortOnePayment> {
@@ -32,25 +42,13 @@ export async function getPortOnePayment(paymentId: string): Promise<PortOnePayme
       Authorization: `PortOne ${secret}`,
     },
     cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(10000),
   });
 
-  const data = (await res.json()) as {
-    id?: string;
-    paymentId?: string;
-    status?: string;
-    amount?: unknown;
-  };
-
-  if (!res.ok || !data) {
-    throw new Error("PortOne payment lookup failed");
+  if (!res.ok) {
+    throw new PortOnePaymentLookupError(res.status);
   }
 
-  const id = data.id || data.paymentId || paymentId;
-  const status = data.status || "";
-  return {
-    id,
-    paymentId: id,
-    status,
-    amount: extractAmount(data.amount),
-  };
+  return parsePortOnePayment(await res.json(), paymentId, storeId);
 }

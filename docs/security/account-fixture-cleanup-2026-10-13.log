@@ -1,0 +1,7 @@
+(node:62008) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS cleanup: 3 synthetic profiles; no provider/LLM calls
+(node:62097) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS all temporary B Auth/app identities for this run removed
+PASS test profiles cleaned; real accounts preserved

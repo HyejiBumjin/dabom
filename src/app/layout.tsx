@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { QueryProvider } from "@/components/providers/query-provider";
 import "./globals.css";
+import "@/styles/retro.css";
 
 export const metadata: Metadata = {
   title: "다봄 - 2026년 운세",

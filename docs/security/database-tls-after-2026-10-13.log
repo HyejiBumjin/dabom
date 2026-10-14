@@ -1,0 +1,18 @@
+
+> dabom@0.1.0 security:tls
+> tsx scripts/security-tls-check.ts
+
+PASS TLS required with certificate verification
+PASS server hostname pinned to configured DB address
+PASS SCRAM channel binding remains enabled
+PASS URI cannot override explicit TLS policy
+(node:22148) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS actual strict TLS query on pooler port 6543
+PASS actual strict TLS query on pooler port 5432
+PASS untrusted CA rejected before authentication
+PASS wrong server hostname rejected
+PASS server refusing TLS rejected even with sslmode=disable in URI
+PASS plaintext peer received only SSL negotiation, no credentials
+
+10 PASS; actual Prisma driver, trusted/untrusted CA, hostname and plaintext-downgrade checks; no customer rows

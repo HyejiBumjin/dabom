@@ -1,6 +1,28 @@
 import Link from "next/link";
 import { SajuProfileForm } from "@/components/SajuProfileForm";
+import { PixelCat, RetroFooter, RetroPage, RetroWindow } from "@/components/RetroWindow";
+import { requireSajuAccount } from "@/lib/saju/account";
+import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 
-export default function SajuInputPage() {
-  return <main className="mx-auto min-h-screen max-w-xl px-5 py-12 sm:py-20"><Link href="/" className="text-sm text-zinc-500 hover:text-zinc-900">← 처음으로</Link><header className="mt-8 mb-8"><p className="text-sm text-zinc-500">2026년을 위한 작은 시작</p><h1 className="mt-2 text-4xl font-bold tracking-tight text-zinc-900">당신의 시간을<br />들려주세요.</h1><p className="mt-4 leading-7 text-zinc-600">입력한 정보로 명식을 계산하고, 바로 당신의 사주 리포트를 준비할게요.</p></header><SajuProfileForm /></main>;
+export default async function SajuInputPage() {
+  const account = await requireSajuAccount("/saju");
+  return (
+    <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath="/saju"><RetroPage>
+      <RetroWindow title="다봄 · 내 정보" closeHref="/">
+        <div className="retro-input-page">
+          <Link href="/" className="retro-back-link">← 처음으로</Link>
+          <Link href="/saju/library" className="retro-input-library-link">내 운세함 →</Link>
+          <header className="retro-input-heading">
+            <div>
+              <h1 className="retro-heading">너의 시작을 알려줘.</h1>
+              <p>올해의 메시지를 준비할게.</p>
+            </div>
+            <PixelCat />
+          </header>
+          <SajuProfileForm accountId={account.id} />
+          <RetroFooter />
+        </div>
+      </RetroWindow>
+    </RetroPage></AccountPrivacyBoundary>
+  );
 }

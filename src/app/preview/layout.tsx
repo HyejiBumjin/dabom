@@ -1,11 +1,13 @@
 import { TopNav } from "@/components/TopNav";
 import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
 
 export default async function PreviewLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  if (process.env.NODE_ENV !== "development") notFound();
   const supabase = await createClient();
   const { data: { user } } = await (supabase?.auth.getUser() ?? { data: { user: null } });
 
@@ -13,6 +15,7 @@ export default async function PreviewLayout({
     <div className="relative min-h-screen bg-[#f7f7f7]">
       <TopNav
         userEmail={user?.email ?? null}
+        loggedIn={Boolean(user)}
         onLogout={async () => {
           "use server";
           const s = await createClient();

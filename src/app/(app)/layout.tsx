@@ -14,6 +14,7 @@ export default async function AppLayout({
     <div className="min-h-screen bg-[#f7f7f7]">
       <TopNav
         userEmail={user?.email ?? null}
+        loggedIn={Boolean(user)}
         onLogout={async () => {
           "use server";
           const s = await createClient();

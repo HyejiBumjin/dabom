@@ -1,0 +1,38 @@
+{
+  "migration": [
+    {
+      "migration_name": "20261012000000_security_hardening",
+      "checksum": "ff7e000e7a421b5277c67d8ad76c18adc24f5a34a4c980d88ba85a352d7d63f1",
+      "finished_at": "2026-10-12T22:25:21.239Z",
+      "rolled_back_at": null
+    }
+  ],
+  "indirectAccessPaths": [],
+  "leftoverTestSchemas": [],
+  "defaults": [
+    {
+      "creator": "postgres",
+      "schema": "global",
+      "kind": "f",
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "creator": "postgres",
+      "schema": "public",
+      "kind": "S",
+      "acl": "{postgres=rwU/postgres,service_role=rwU/postgres}"
+    },
+    {
+      "creator": "postgres",
+      "schema": "public",
+      "kind": "f",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "creator": "postgres",
+      "schema": "public",
+      "kind": "r",
+      "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}"
+    }
+  ]
+}

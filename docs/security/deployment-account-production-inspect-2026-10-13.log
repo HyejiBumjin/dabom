@@ -1,0 +1,28 @@
+Vercel CLI 58.7.1 (Node.js 26.5.0)
+Fetching deployment "dabom-letter.com" in bjhj
+> Fetched deployment "dabom-ogy3ni6gh-bjhj.vercel.app" in bjhj [300ms]
+
+  General
+
+    id		dpl_AxdWUzKoZ4aaNNPNwAXmfxCJMWSq
+    name	dabom
+    target	production
+    status	● Ready
+    url		https://dabom-ogy3ni6gh-bjhj.vercel.app
+    created	Tue Oct 13 2026 10:25:12 GMT-0700 (Pacific Daylight Time) [15m ago]
+
+
+  Aliases
+
+    ╶ https://dabom-bjhj.vercel.app
+
+
+  Builds
+
+    ┌ .        [0ms]
+    ├── λ index (33.01MB) [iad1]
+    ├── λ _not-found (33.01MB) [iad1]
+    ├── λ _not-found.rsc (33.01MB) [iad1]
+    ├── λ checkout/fail (33.01MB) [iad1]
+    ├── λ checkout/fail.rsc (33.01MB) [iad1]
+    └── 139 output items hidden

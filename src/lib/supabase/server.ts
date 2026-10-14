@@ -3,13 +3,14 @@ import { cookies } from "next/headers";
 import { env } from "../env";
 
 export async function createClient() {
-  const cookieStore = await cookies();
-
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
     return null;
   }
 
+  const cookieStore = await cookies();
+
   return createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    cookieOptions: { sameSite: "lax", secure: process.env.NODE_ENV === "production" },
     cookies: {
       getAll() {
         return cookieStore.getAll();

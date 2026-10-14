@@ -1,0 +1,42 @@
+{
+  "run": "1013-a9da58",
+  "checks": [
+    {
+      "name": "A real Kakao callback returns to production library",
+      "pass": true
+    },
+    {
+      "name": "A SELF/FAMILY/FRIEND profiles saved via authenticated form",
+      "pass": true
+    },
+    {
+      "name": "Family filter includes only family test profile",
+      "pass": true
+    },
+    {
+      "name": "Friend filter excludes SELF/FAMILY",
+      "pass": true
+    },
+    {
+      "name": "A can read only the synthetic owned purchased report",
+      "pass": true
+    },
+    {
+      "name": "A duplicate birth data shows existing report modal even with different name/relationship",
+      "pass": true
+    },
+    {
+      "name": "A duplicate check preserves original profile label",
+      "pass": true
+    },
+    {
+      "name": "Logout clears private report in other open tab",
+      "pass": false
+    }
+  ],
+  "secondAccount": "not logged in yet",
+  "calls": {
+    "payment": 0,
+    "llm": 0
+  }
+}

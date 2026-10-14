@@ -1,0 +1,12 @@
+# Keep local credentials and security evidence out of deployment uploads.
+.env*
+.git/
+.vercel/
+.next/
+node_modules/
+docs/
+scripts/
+coverage/
+*.tsbuildinfo
+.DS_Store
+*-debug.log*

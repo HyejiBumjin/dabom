@@ -1,0 +1,25 @@
+{
+  "framework": {
+    "name": "Next.js",
+    "slug": "nextjs"
+  },
+  "fileCount": 181,
+  "requiredFiles": [
+    "package.json",
+    "package-lock.json",
+    "next.config.mjs",
+    "prisma/schema.prisma",
+    "src/proxy.ts",
+    "src/lib/security/request.ts",
+    "src/lib/security/rate-limit.ts",
+    "src/app/api/saju/payments/webhook/route.ts",
+    "src/app/api/saju/payments/prepare/route.ts",
+    "src/lib/saju/account.ts",
+    "public/font/neodgm.woff2",
+    "public/font/neodgm-LICENSE.txt",
+    "public/font/neodgm-ATTRIBUTION.md"
+  ],
+  "missingFiles": [],
+  "forbiddenUploads": [],
+  "deprecatedMiddlewarePresent": false
+}

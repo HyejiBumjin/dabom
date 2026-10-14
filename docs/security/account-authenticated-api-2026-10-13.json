@@ -1,0 +1,124 @@
+{
+  "scope": "real production HTTP; real Kakao A fixtures versus temporary email-auth B; not a second Kakao browser login",
+  "results": [
+    {
+      "name": "temporary B uses a real verified non-anonymous Supabase session (email; not Kakao)",
+      "pass": true
+    },
+    {
+      "name": "same birth data belongs to a separate B profile, never A's duplicate report",
+      "pass": true
+    },
+    {
+      "name": "overposted A owner ID/admin/PAID fields cannot change verified B ownership",
+      "pass": true
+    },
+    {
+      "name": "real authenticated account endpoint exposes only current account ID with no-store",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A profile",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A checkout",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A report page",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A report API or its content/status metadata",
+      "pass": true
+    },
+    {
+      "name": "B cannot generate A completed fixture (no model call)",
+      "pass": true
+    },
+    {
+      "name": "B cannot create/reuse a report on A profile",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A profile",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A checkout",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A report page",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A report API or its content/status metadata",
+      "pass": true
+    },
+    {
+      "name": "B cannot generate A completed fixture (no model call)",
+      "pass": true
+    },
+    {
+      "name": "B cannot create/reuse a report on A profile",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A profile",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A checkout",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A report page",
+      "pass": true
+    },
+    {
+      "name": "B cannot read A report API or its content/status metadata",
+      "pass": true
+    },
+    {
+      "name": "B cannot generate A completed fixture (no model call)",
+      "pass": true
+    },
+    {
+      "name": "B cannot create/reuse a report on A profile",
+      "pass": true
+    },
+    {
+      "name": "B RSC prefetch exposes no A identity, profile or report data; normal page/API deny access",
+      "pass": true
+    },
+    {
+      "name": "B's own unpaid profile cannot obtain a production report",
+      "pass": true
+    },
+    {
+      "name": "B can read and reread its own fixed purchased report without regenerating",
+      "pass": true
+    },
+    {
+      "name": "B production library contains B fixture and excludes all A fixtures",
+      "pass": true
+    },
+    {
+      "name": "B duplicate flow reuses B report and never A report",
+      "pass": true
+    },
+    {
+      "name": "temporary B app profile/order/report/account removed; real A preserved",
+      "pass": true
+    },
+    {
+      "name": "temporary B Auth user removed and its old real session rejected",
+      "pass": true
+    }
+  ],
+  "paymentCalls": 0,
+  "llmCalls": 0,
+  "temporaryAccountCleaned": true
+}

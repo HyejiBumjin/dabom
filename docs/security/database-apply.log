@@ -1,0 +1,18 @@
+Applied at 2026-10-12T22:25:22.026Z
+Exit code: 0
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "postgres", schema "public" at "aws-1-ap-southeast-1.pooler.supabase.com:5432"
+
+4 migrations found in prisma/migrations
+
+Applying migration `20261012000000_security_hardening`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261012000000_security_hardening/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config

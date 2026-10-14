@@ -1,0 +1,13 @@
+
+> dabom@0.1.0 saju:compare
+> node scripts/saju-compare.cjs
+
+Reference: 무료만세력 (sajuinfo.co.kr)
+Policy: 양력, 서울, 태양시 보정 끔, 조자시 방식 켬, UTC+9
+Exact matches: 29/30
+Known policy differences: 1
+
+Known policy differences:
+- before-ipchun-1995: known-policy-difference
+  reference: 乙亥 戊寅 丙寅 庚寅
+  library:   甲戌 丁丑 丙寅 庚寅

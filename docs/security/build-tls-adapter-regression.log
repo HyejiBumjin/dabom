@@ -1,0 +1,87 @@
+
+> dabom@0.1.0 build
+> prisma generate && node prisma/check-production.cjs && next build
+
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.19.0) to ./node_modules/@prisma/client in 42ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+▲ Next.js 16.4.0 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.mjs took 6ms
+
+  Creating an optimized production build ...
+(node:21495) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✓ Compiled successfully in 875ms
+  Running TypeScript ...
+  Finished TypeScript in 1553ms ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/39) ...
+  Generating static pages using 9 workers (9/39)
+  Generating static pages using 9 workers (19/39)
+  Generating static pages using 9 workers (29/39)
+✓ Generating static pages using 9 workers (39/39) in 159ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /api/auth/callback
+├ ƒ /api/auth/login
+├ ƒ /api/auth/logout
+├ ƒ /api/letters/create
+├ ƒ /api/payments/confirm
+├ ƒ /api/payments/prepare
+├ ƒ /api/reports/[id]
+├ ƒ /api/reports/create
+├ ƒ /api/saju/payments/confirm
+├ ƒ /api/saju/payments/prepare
+├ ƒ /api/saju/payments/webhook
+├ ƒ /api/saju/profiles
+├ ƒ /api/saju/profiles/[profileId]/reports
+├ ƒ /api/saju/reports/[reportId]
+├ ƒ /api/saju/reports/[reportId]/generate
+├ ƒ /api/saju/test
+├ ƒ /checkout/fail
+├ ƒ /checkout/success
+├ ○ /design/report-essay
+├ ƒ /gift/[token]
+├ ○ /login
+├ ○ /preview/checkout-fail
+├ ○ /preview/checkout-success
+├ ○ /preview/gift-receiver
+├ ○ /preview/gift-sent
+├ ○ /preview/letter
+├ ○ /preview/login
+├ ○ /preview/products-2026
+├ ○ /preview/products-2026-gift
+├ ○ /preview/report
+├ ƒ /products/2026
+├ ƒ /products/2026-gift
+├ ƒ /products/2026-gift/sent
+├ ƒ /reports
+├ ƒ /reports/[id]
+├ ƒ /reports/[id]/letter
+├ ƒ /saju
+├ ƒ /saju/checkout/return
+├ ƒ /saju/library
+├ ○ /saju/preview/checkout
+├ ○ /saju/preview/library
+├ ○ /saju/preview/loading
+├ ƒ /saju/profiles/[profileId]
+├ ƒ /saju/profiles/[profileId]/checkout
+└ ƒ /saju/reports/[reportId]
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

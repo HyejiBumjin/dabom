@@ -1,0 +1,365 @@
+@font-face {
+  font-family: "NeoDunggeunmo";
+  src: url("/font/neodgm.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+.retro-page {
+  --retro-ink: #3d2a20;
+  --retro-yellow: #ffe766;
+  --retro-peach: #f1d2b5;
+  --retro-cream: #fff8e8;
+  --retro-rust: #9e5f4d;
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  padding: 12px 12px 32px;
+  color: var(--retro-ink);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.retro-page::before,
+.retro-page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.retro-page::before {
+  background-color: #c6bcb0;
+  background-image: linear-gradient(#f5eee533 1px, transparent 1px), linear-gradient(90deg, #f5eee533 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.retro-page::after {
+  background-image: url("/images/retro-pattern.svg");
+  background-size: 560px 560px;
+  opacity: .25;
+  filter: blur(2px);
+}
+
+.retro-window {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  border: 2px solid var(--retro-ink);
+  border-radius: 3px;
+  padding: 4px;
+  background: var(--retro-peach);
+  box-shadow: inset 2px 2px 0 #fff8e8, inset -2px -2px 0 #9e5f4d, 6px 6px 0 #6f74877a;
+}
+
+.retro-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 2px 4px;
+  font-family: "NeoDunggeunmo", monospace;
+}
+
+.retro-window-title {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.retro-title-stripes {
+  flex: 1;
+  min-width: 4px;
+  height: 18px;
+  background: repeating-linear-gradient(to bottom, var(--retro-rust) 0 2px, transparent 2px 4px);
+}
+
+.retro-window-mark,
+.retro-window-minimize,
+.retro-window-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--retro-rust);
+  background: var(--retro-peach);
+  box-shadow: inset 2px 2px 0 var(--retro-cream), inset -2px -2px 0 #bd8871;
+  color: var(--retro-rust);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.retro-window-mark { width: 16px; height: 20px; }
+.retro-window-minimize { align-items: flex-end; padding-bottom: 4px; }
+.retro-window-close { position: relative; text-decoration: none; }
+.retro-window-close::after { content: ""; position: absolute; inset: -8px; }
+.retro-window-close:hover { background: var(--retro-cream); }
+.retro-window-body { border: 2px solid var(--retro-ink); background: var(--retro-yellow); }
+.retro-page :is(a, button, input):focus-visible { outline: 3px solid #6f4937; outline-offset: 4px; }
+
+.retro-heading,
+.retro-button,
+.retro-footer,
+.retro-badge,
+.retro-back-link {
+  font-family: "NeoDunggeunmo", monospace;
+  font-weight: 400;
+}
+
+.retro-heading { font-size: 32px; line-height: 1.4; text-wrap: balance; word-break: keep-all; }
+.retro-cat { display: block; color: #211c17; width: 64px; height: auto; flex-shrink: 0; }
+.retro-cat-large { width: 160px; margin: 24px auto; }
+.retro-footer { margin-top: 24px; text-align: center; font-size: 14px; }
+
+.retro-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 16px;
+  border: 2px solid var(--retro-ink);
+  border-radius: 3px;
+  background: var(--retro-peach);
+  box-shadow: inset 3px 3px 0 #fff8e8, inset -3px -3px 0 #bc8971, 2px 2px 0 var(--retro-ink);
+  color: var(--retro-ink);
+  font-size: 18px;
+  line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.retro-button:hover:not(:disabled) { background: #f7dcc1; }
+.retro-button:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: inset 2px 2px 0 #bc8971, inset -2px -2px 0 #fff8e8; }
+.retro-button:disabled { color: #887263; cursor: wait; }
+
+.retro-bubble {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  border: 2px solid var(--retro-ink);
+  border-radius: 4px;
+  padding: 18px 20px;
+  background: var(--retro-cream);
+  box-shadow: 1px 1px 0 var(--retro-ink);
+  font-size: 16px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.retro-bubble::before,
+.retro-bubble::after {
+  content: "";
+  position: absolute;
+  clip-path: polygon(100% 0, 50% 0, 50% 22%, 25% 22%, 25% 44%, 0 44%, 0 56%, 25% 56%, 25% 78%, 50% 78%, 50% 100%, 100% 100%);
+}
+.retro-bubble::before { left: -14px; top: 18px; width: 14px; height: 22px; background: var(--retro-ink); }
+.retro-bubble::after { left: -10px; top: 21px; width: 12px; height: 16px; background: var(--retro-cream); }
+.retro-bubble p { margin: 0; white-space: pre-line; }
+.retro-bubble--summary { box-shadow: inset 0 0 0 5px var(--retro-peach), 1px 1px 0 var(--retro-ink); }
+
+.retro-home { padding: 32px 24px 28px; text-align: center; }
+.retro-home .retro-heading { font-size: clamp(24px, 7vw, 28px); }
+.retro-typewriter { display: inline-grid; position: relative; max-width: 100%; text-align: inherit; white-space: pre-line; }
+.retro-typewriter-reserve, .retro-typewriter-text { grid-area: 1 / 1; }
+.retro-typewriter-reserve { visibility: hidden; }
+.retro-typewriter-text { position: relative; }
+.retro-typewriter-cursor { position: absolute; display: inline-block; width: 2px; height: 1em; margin: .15em 0 0 3px; background: currentColor; }
+.retro-typewriter[data-typing="true"] .retro-typewriter-cursor { animation: retro-cursor .7s steps(1) infinite; }
+.retro-typewriter[data-typing="false"] .retro-typewriter-cursor { display: none; }
+.retro-badge { display: inline-block; margin-bottom: 24px; border: 2px solid var(--retro-ink); padding: 7px 12px; background: var(--retro-peach); font-size: 16px; }
+.retro-home-copy { margin-top: 20px; font-size: 17px; line-height: 1.8; }
+.retro-home .retro-cat-large { width: 180px; margin: 32px auto; }
+.retro-home .retro-bubble { margin: 0 auto 28px; text-align: center; }
+.retro-caption { margin-top: 20px; text-align: center; font-size: 14px; line-height: 1.7; }
+.retro-account-nav { margin-top: 20px; border-top: 1px solid #3d2a2033; }
+.retro-account-nav nav > div { height: auto; padding: 14px 0 0; justify-content: center; }
+.retro-account-nav button { border: 2px solid var(--retro-ink); border-radius: 2px; background: var(--retro-peach); color: var(--retro-ink); font-family: "NeoDunggeunmo", monospace; }
+
+.retro-auth-page { display: grid; align-content: center; }
+.retro-window--login { max-width: 440px; }
+.retro-window--login .retro-window-body { background: var(--retro-cream); }
+.retro-login { padding: 28px 22px 24px; text-align: left; }
+.retro-login .retro-heading { font-size: 32px; line-height: 1.2; }
+.retro-login-copy { margin-top: 12px; color: #796658; font-size: 15px; line-height: 1.7; word-break: keep-all; }
+.retro-login .retro-error { text-align: left; }
+.retro-kakao-button { margin-top: 32px; background: #fee500; }
+.retro-kakao-button:hover:not(:disabled) { background: #ffed55; }
+.retro-kakao-button:disabled { cursor: not-allowed; }
+.retro-login .retro-login-back { display: flex; justify-content: center; margin-top: 16px; font-size: 14px; }
+.retro-login .retro-footer { margin-top: 12px; color: #897b6f; font-size: 12px; }
+
+.retro-input-page { padding: 22px 18px 24px; }
+.retro-back-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; text-decoration: none; }
+.retro-input-heading { display: flex; align-items: center; gap: 12px; margin: 16px 0 24px; }
+.retro-input-heading > div { flex: 1; min-width: 0; }
+.retro-input-heading .retro-heading { font-size: 28px; }
+.retro-input-heading p { margin-top: 10px; font-size: 15px; line-height: 1.7; }
+.retro-input-heading .retro-cat { width: 56px; }
+.retro-form-panel { display: grid; gap: 18px; border: 2px solid var(--retro-ink); border-radius: 4px; padding: 20px 14px; background: var(--retro-cream); }
+.retro-form-panel:disabled { opacity: .7; }
+.retro-field { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 12px; }
+.retro-field > label,
+.retro-field > legend { font-size: 14px; font-weight: 600; }
+.retro-choice-field { min-width: 0; }
+.retro-choice-field legend { float: left; width: 72px; margin-right: 12px; padding-top: 13px; font-size: 14px; font-weight: 600; }
+.retro-choice-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.retro-relationship-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.retro-input-library-link { float: right; min-height: 44px; display: inline-flex; align-items: center; font-family: "NeoDunggeunmo", monospace; font-size: 15px; }
+.retro-input { display: block; min-width: 0; width: 100%; min-height: 48px; border: 2px solid var(--retro-ink); border-radius: 2px; background: #fffbf2; padding: 10px; color: var(--retro-ink); font: inherit; font-size: 16px; }
+.retro-input::placeholder { color: #897b6f; }
+.retro-input:disabled { background: #e8e1d6; color: #786d65; }
+.retro-choice { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; border: 2px solid var(--retro-ink); border-radius: 2px; background: #fffbf2; padding: 8px 4px; font-size: 15px; cursor: pointer; }
+.retro-choice:has(input:checked) { background: var(--retro-peach); }
+.retro-choice input { width: 16px; height: 16px; margin: 0; accent-color: var(--retro-ink); }
+.retro-choice input:focus-visible { outline-offset: 1px; }
+.retro-time-options { grid-column: 2; }
+.retro-checkbox { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; word-break: keep-all; cursor: pointer; }
+.retro-checkbox input { flex-shrink: 0; width: 20px; height: 20px; accent-color: var(--retro-ink); }
+.retro-form-help { font-size: 13px; line-height: 1.6; }
+.retro-form .retro-button { margin-top: 24px; }
+.retro-error { margin-top: 16px; border: 2px solid #a64732; padding: 12px; background: #fff0e6; font-size: 14px; line-height: 1.7; color: #813a29; }
+.retro-duplicate-dialog { position: fixed; width: min(440px, calc(100% - 32px)); max-height: calc(100svh - 32px); margin: auto; overflow-y: auto; color: var(--retro-ink); }
+.retro-duplicate-dialog::backdrop { background: #30251ecc; }
+.retro-duplicate-body { padding: 26px 20px 24px; text-align: center; }
+.retro-saved-fortune-cat { display: block; width: 112px; height: auto; margin: 0 auto 20px; }
+.retro-saved-cat-tail { transform-origin: 66px 48px; animation: retro-saved-tail 3.2s steps(3, end) infinite; }
+.retro-saved-cat-eyes { transform-box: fill-box; transform-origin: center; animation: retro-saved-blink 4.8s steps(1, end) infinite; }
+.retro-saved-cat-paw { animation: retro-saved-tap 4.2s steps(2, end) infinite; }
+.retro-saved-letter { transform-origin: 34px 54px; animation: retro-saved-letter 4.2s steps(2, end) infinite; }
+.retro-saved-cat-taps { opacity: 0; animation: retro-saved-tap-marks 4.2s steps(1, end) infinite; }
+.retro-duplicate-body .retro-heading { font-size: 25px; }
+.retro-duplicate-body > p { margin-top: 16px; font-size: 15px; line-height: 1.8; word-break: keep-all; }
+.retro-duplicate-body > .retro-duplicate-note { margin-top: 8px; font-size: 13px; }
+.retro-duplicate-actions { display: grid; gap: 12px; margin-top: 24px; }
+.retro-duplicate-actions .retro-button { font-size: 18px; }
+.retro-duplicate-actions .retro-button--secondary { background: var(--retro-cream); font-size: 16px; box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #dac7b4, 2px 2px 0 var(--retro-ink); }
+
+.retro-report-sender { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid var(--retro-ink); padding: 20px 22px; }
+.retro-report-sender .retro-cat { width: 56px; }
+.retro-sender-name { font-family: "NeoDunggeunmo", monospace; font-size: 24px; line-height: 1.4; }
+.retro-report-year { margin-top: 4px; font-size: 14px; line-height: 1.5; }
+.retro-messages { display: grid; gap: 20px; padding: 24px 22px 0; }
+.retro-message-group { display: grid; gap: 14px; }
+.retro-messages[data-reveal-motion="enabled"] [data-report-message] { transition: opacity .65s ease-out, transform .65s ease-out; }
+.retro-messages[data-reveal-motion="enabled"] [data-report-message]:not([data-revealed]) { opacity: 0; transform: translateY(14px); }
+.retro-report-closing { padding: 28px 24px; text-align: center; }
+.retro-report-closing .retro-cat { width: 72px; margin: 0 auto 12px; }
+.retro-report-closing > p { margin-bottom: 22px; font-size: 16px; }
+.retro-report-closing .retro-button { max-width: 300px; }
+.retro-status { padding: 36px 24px 28px; text-align: center; }
+.retro-status-note { width: fit-content; margin: 28px auto 0; padding: 12px 24px; }
+.retro-typing-cat { display: block; width: min(100%, 248px); height: auto; margin: 24px auto 0; }
+.retro-cat-paw { animation: retro-cat-type .34s steps(2, end) infinite; }
+.retro-cat-paw--right { animation-delay: -.17s; }
+.retro-typing-cat-body { animation: retro-cat-bob .68s steps(2, end) infinite; }
+.retro-typing-cat-eye { animation: retro-cat-blink 4.8s steps(1) infinite; }
+.retro-computer-cursor { animation: retro-cursor .7s steps(1) infinite; }
+.retro-keyboard-light { animation: retro-cursor .34s steps(1) infinite; }
+.retro-typing-spark { animation: retro-cursor .68s steps(1) infinite; }
+.retro-status-copy { margin-top: 18px; font-size: 17px; line-height: 1.85; }
+.retro-typing { margin: 24px auto 28px; border: 2px solid var(--retro-ink); padding: 20px; background: var(--retro-cream); max-width: 260px; }
+.retro-typing p { margin-top: 12px; font-size: 16px; }
+.retro-typing-dots { display: flex; justify-content: center; gap: 12px; }
+.retro-typing-dots i { width: 10px; height: 10px; background: var(--retro-ink); animation: retro-typing 1.4s infinite; }
+.retro-typing-dots i:nth-child(2) { animation-delay: .2s; }
+.retro-typing-dots i:nth-child(3) { animation-delay: .4s; }
+.retro-status > .retro-button { max-width: 320px; }
+.retro-status--error .retro-status-copy { font-size: 15px; }
+.retro-status--error .retro-button { margin-top: 28px; }
+.retro-letter { margin: 24px 18px; border: 2px solid var(--retro-ink); padding: 24px 20px; background: var(--retro-cream); font-size: 17px; line-height: 1.9; }
+.retro-letter p { white-space: pre-line; overflow-wrap: anywhere; }
+.retro-letter p + p { margin-top: 24px; }
+.retro-library { padding: 22px 22px 28px; }
+.retro-library-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
+.retro-library-filters button { border: 2px solid var(--retro-ink); background: var(--retro-cream); min-height: 44px; padding: 8px 12px; font-size: 15px; }
+.retro-library-filters button[aria-pressed="true"] { background: var(--retro-peach); box-shadow: inset 2px 2px 0 #bc8971; }
+.retro-library-list { display: grid; gap: 16px; margin-bottom: 24px; }
+.retro-library-card { border: 2px solid var(--retro-ink); border-radius: 4px; padding: 18px; background: var(--retro-cream); }
+.retro-library-person { display: flex; align-items: center; gap: 12px; }
+.retro-library-person h2 { font-size: 21px; font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
+.retro-library-person > span { flex-shrink: 0; border: 1px solid var(--retro-ink); padding: 3px 8px; background: var(--retro-peach); font-size: 13px; }
+.retro-library-birth { margin-top: 10px; font-size: 13px; line-height: 1.8; }
+.retro-library-report { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #3d2a2033; margin-top: 14px; padding-top: 14px; min-height: 66px; }
+.retro-library-report strong, .retro-library-report small { display: block; }
+.retro-library-report strong { font-size: 16px; font-weight: 600; }
+.retro-library-report small { margin-top: 6px; font-size: 12px; line-height: 1.7; }
+.retro-library-empty { text-align: center; padding: 24px 0 36px; }
+.retro-empty-mailbox-cat { display: block; width: min(100%, 192px); height: auto; margin: 0 auto 18px; }
+.retro-empty-cat-body { animation: retro-empty-cat-peek 6s steps(2, end) infinite; }
+.retro-empty-cat-tail { transform-origin: 34px 21px; animation: retro-empty-cat-tail 2.4s steps(3, end) infinite; }
+.retro-empty-cat-eyes { transform-box: fill-box; transform-origin: center; animation: retro-empty-cat-blink 4.8s steps(1, end) infinite; }
+.retro-empty-cat-paw { animation: retro-empty-cat-tap 6s steps(2, end) infinite; }
+.retro-empty-cat-thought { animation: retro-empty-cat-thought 6s steps(1, end) infinite; }
+.retro-library-empty p { white-space: pre-line; line-height: 1.85; }
+.retro-library-login { text-align: center; border: 2px solid var(--retro-ink); padding: 24px 18px; background: var(--retro-cream); }
+.retro-library-login p { margin-bottom: 24px; font-size: 16px; line-height: 1.85; word-break: keep-all; }
+.retro-checkout-heading { margin: 24px 0; font-size: 28px; }
+.retro-checkout-copy { margin-top: 20px; line-height: 1.85; font-size: 15px; word-break: keep-all; }
+.retro-checkout-action { margin-top: 24px; }
+.retro-report-closing > .retro-back-link { display: flex; justify-content: center; margin-bottom: 16px; }
+
+@keyframes retro-typing { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
+@keyframes retro-cursor { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes retro-cat-type { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+@keyframes retro-cat-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1px); } }
+@keyframes retro-cat-blink { 0%, 95%, 100% { opacity: 0; } 96%, 99% { opacity: 1; } }
+@keyframes retro-empty-cat-peek { 0%, 25%, 75%, 100% { transform: translate(0, 0); } 35%, 65% { transform: translate(-2px, 1px); } }
+@keyframes retro-empty-cat-tail { 0%, 50%, 100% { transform: skewX(0); } 25% { transform: skewX(-10deg); } 75% { transform: skewX(10deg); } }
+@keyframes retro-empty-cat-blink { 0%, 93%, 100% { transform: scaleY(1); } 94%, 97% { transform: scaleY(.15); } }
+@keyframes retro-empty-cat-tap { 0%, 35%, 65%, 100% { transform: translateY(0); } 40%, 50%, 60% { transform: translateY(3px); } 45%, 55% { transform: translateY(0); } }
+@keyframes retro-empty-cat-thought { 0%, 55%, 90%, 100% { opacity: 0; transform: translateY(0); } 60%, 85% { opacity: 1; transform: translateY(-2px); } }
+@keyframes retro-saved-tail { 0%, 50%, 100% { transform: skewX(0); } 25% { transform: skewX(-12deg); } 75% { transform: skewX(8deg); } }
+@keyframes retro-saved-blink { 0%, 91%, 100% { transform: scaleY(1); } 93%, 96% { transform: scaleY(.15); } }
+@keyframes retro-saved-tap { 0%, 14%, 28%, 42%, 100% { transform: translateY(0); } 20%, 34% { transform: translateY(4px); } }
+@keyframes retro-saved-letter { 0%, 14%, 28%, 42%, 100% { transform: rotate(0); } 20%, 34% { transform: rotate(-4deg); } }
+@keyframes retro-saved-tap-marks { 0%, 16%, 25%, 30%, 39%, 100% { opacity: 0; } 18%, 23%, 32%, 37% { opacity: 1; } }
+
+@media (max-width: 359px) {
+  .retro-form-panel { padding: 18px 10px; }
+  .retro-field { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
+  .retro-choice-field legend { width: 64px; margin-right: 8px; }
+  .retro-field > label, .retro-choice-field legend { font-size: 13px; }
+  .retro-input { padding-inline: 6px; }
+  .retro-checkbox { font-size: 13px; }
+}
+
+@media (min-width: 600px) {
+  .retro-page { padding: 40px 24px 48px; }
+  .retro-heading { font-size: 40px; }
+  .retro-button { font-size: 20px; }
+  .retro-window-title { font-size: 18px; }
+  .retro-titlebar { min-height: 44px; gap: 8px; }
+  .retro-home { padding: 36px 36px 28px; }
+  .retro-login { padding: 32px 28px 24px; }
+  .retro-home .retro-heading { font-size: 40px; }
+  .retro-home-copy { font-size: 18px; }
+  .retro-home .retro-cat-large { width: 200px; }
+  .retro-input-page { padding: 24px 28px 28px; }
+  .retro-input-heading .retro-heading { font-size: 32px; }
+  .retro-input-heading .retro-cat { width: 72px; }
+  .retro-form-panel { padding: 24px 20px; gap: 20px; }
+  .retro-field { grid-template-columns: 88px minmax(0, 1fr); gap: 16px; }
+  .retro-choice-field legend { width: 88px; margin-right: 16px; }
+  .retro-field > label, .retro-choice-field legend { font-size: 16px; }
+  .retro-choice { font-size: 16px; }
+  .retro-report-sender { padding: 22px 28px; }
+  .retro-messages { padding: 28px 28px 0; gap: 24px; }
+  .retro-message-group { gap: 18px; }
+  .retro-bubble { padding: 20px 24px; font-size: 18px; }
+  .retro-status { padding: 44px 32px 32px; }
+  .retro-status-note { padding: 12px 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .retro-typing-dots i, .retro-typing-cat *, .retro-typewriter-cursor, .retro-empty-mailbox-cat *, .retro-saved-fortune-cat * { animation: none; }
+  .retro-typewriter-text { visibility: hidden; }
+  .retro-typewriter-reserve { visibility: visible; }
+  .retro-messages[data-reveal-motion="enabled"] [data-report-message] { opacity: 1; transform: none; transition: none; }
+}

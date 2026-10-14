@@ -1,7 +1,22 @@
-import Link from "next/link";
 import { EssayReportView } from "@/components/EssayReportView";
+import { RetroPage, RetroWindow } from "@/components/RetroWindow";
+import { notFound, redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
+import { requireSajuAccount, canReadSajuReport, canAccessSajuProfile } from "@/lib/saju/account";
+import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 
 export default async function SajuReportPage({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params;
-  return <main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20"><Link href="/saju" className="text-sm text-zinc-500 hover:text-zinc-900">← 새로 입력하기</Link><header className="mb-8 mt-8"><p className="text-sm text-zinc-500">2026년의 흐름</p><h1 className="mt-2 text-3xl font-bold text-zinc-900">당신에게 보내는 편지</h1></header><EssayReportView key={reportId} reportId={reportId} /></main>;
+  const account = await requireSajuAccount(`/saju/reports/${reportId}`);
+  const report = await prisma.report.findUnique({ where: { id: reportId }, select: { sajuProfileId: true, sajuProfile: { select: { userId: true } }, order: { select: { userId: true, status: true } } } });
+  if (!report || !canAccessSajuProfile(report.sajuProfile, account)) notFound();
+  if (!canReadSajuReport(report, account)) redirect(`/saju/profiles/${report.sajuProfileId}/checkout`);
+  return (
+    <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath={`/saju/reports/${reportId}`}><RetroPage>
+      <RetroWindow title="다봄과의 대화" closeHref="/saju" closeLabel="새 운세 정보 입력하기">
+        <h1 className="sr-only">너에게 온 올해 운세</h1>
+        <EssayReportView key={reportId} reportId={reportId} />
+      </RetroWindow>
+    </RetroPage></AccountPrivacyBoundary>
+  );
 }

@@ -1,0 +1,34 @@
+[
+  {
+    "route": ".next/server/app/api/saju/payments/confirm/route.js.nft.json",
+    "certificateIncluded": true
+  },
+  {
+    "route": ".next/server/app/api/saju/payments/prepare/route.js.nft.json",
+    "certificateIncluded": true
+  },
+  {
+    "route": ".next/server/app/api/saju/payments/webhook/route.js.nft.json",
+    "certificateIncluded": true
+  },
+  {
+    "route": ".next/server/app/api/saju/profiles/[profileId]/reports/route.js.nft.json",
+    "certificateIncluded": true
+  },
+  {
+    "route": ".next/server/app/api/saju/profiles/route.js.nft.json",
+    "certificateIncluded": true
+  },
+  {
+    "route": ".next/server/app/api/saju/reports/[reportId]/generate/route.js.nft.json",
+    "certificateIncluded": true
+  },
+  {
+    "route": ".next/server/app/api/saju/reports/[reportId]/route.js.nft.json",
+    "certificateIncluded": true
+  },
+  {
+    "route": ".next/server/app/api/saju/test/route.js.nft.json",
+    "certificateIncluded": true
+  }
+]

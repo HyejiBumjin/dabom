@@ -1,7 +1,11 @@
 import { CORPUS_VERSION, selectCorpus } from "@/lib/saju/interpretation-corpus";
 import { extractReportFacts, type ReportFacts } from "@/lib/saju/report-facts";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
-import { REPORT_PARAGRAPH_LENGTHS, type ParagraphLength } from "@/lib/llm/report-rules";
+import { MESSAGE_CLOSING_LENGTH, REPORT_PARAGRAPH_LENGTHS, type ParagraphLength } from "@/lib/llm/report-rules";
+import { DEFAULT_REPORT_TONE } from "@/lib/llm/report-config";
+import { buildReportTerminology, type ReportTermMeaning } from "@/lib/saju/report-terminology";
+
+export type ReportTone = "warm" | "genz";
 
 export interface ReportRenderPayload {
   corpus_version: string;
@@ -22,6 +26,7 @@ export interface ReportRenderPayload {
     monthly_calendar: ReportFacts["monthlyCalendar"];
   };
   facts: ReportFacts["facts"];
+  terminology: ReportTermMeaning[];
   outline: Array<{ id: string; title: string }>;
   sections: Array<{
     id: string;
@@ -47,11 +52,11 @@ export interface ReportRenderPayload {
       guidance: string;
     }>;
   }>;
-  style: { persona: string; speech: string; paragraph_length: string };
+  style: { tone: ReportTone; persona: string; speech: string; paragraph_length: string };
   constraints: string[];
 }
 
-export function buildReportRenderPayload(myeongsik: Myeongsik) {
+export function buildReportRenderPayload(myeongsik: Myeongsik, tone: ReportTone = DEFAULT_REPORT_TONE) {
   const reportFacts = extractReportFacts(myeongsik);
   const baseSelected = selectCorpus(reportFacts);
   const annualFragments = baseSelected.sections.find((section) => section.id === "yearly")!.fragments;
@@ -101,6 +106,7 @@ export function buildReportRenderPayload(myeongsik: Myeongsik) {
       monthly_calendar: reportFacts.monthlyCalendar,
     },
     facts: reportFacts.facts,
+    terminology: buildReportTerminology(reportFacts),
     outline: selected.outline,
     sections: selected.sections.map((section) => ({
       ...section,
@@ -114,8 +120,10 @@ export function buildReportRenderPayload(myeongsik: Myeongsik) {
               ? "올해 일과 자원 배분의 선택을 설명한다. 대운은 장기 배경으로 한 번만 짚고, 올해 시간·비용·협업의 몫을 어떻게 판단할지 구체화한다. 앞 문단의 역할·평가 설명을 다시 풀지 않는다. 수입이나 투자 결과를 예언하지 않는다."
               : section.id === "mental"
                 ? "올해 세운과 일간의 작용이 마음의 부담에 닿는 지점을 설명한다. 성격 소개·대인 조율·자원 관리 대신 피드백을 받은 뒤 부담이 이어지는 방식과 멈출 기준만 다룬다. 건강 진단은 하지 않는다."
-                : "앞서 본문에서 설명한 부담과 망설임을 이해하는 마음을 2~3문장으로 전한다. 새 명리 해석이 아니므로 fragments는 비어 있다. 올해의 전망·결과·성장·좋은 시기라는 평가를 되풀이하지 않는다. 행동을 권하거나 다짐을 요구하지 않고, 그 부담을 이해하고 독자의 선택을 존중하는 짧은 응원으로 끝낸다.",
-      paragraph_length: REPORT_PARAGRAPH_LENGTHS[section.id],
+                : tone === "genz"
+                  ? "세 개의 짧은 메시지로 마무리한다. 첫 메시지는 앞서 설명한 세운의 중심 흐름과 선택 기준을 올해의 종합 운세 한 문장으로 압축하고, 문장 중간에 올해 또는 대상 연도를 넣는다. 두 번째는 해석에서 드러난 강점과 부담을 알아주는 긍정의 메시지다. 세 번째는 약 50~90자로 따뜻한 인사와 응원을 남긴다. 본문의 의미를 정리할 뿐 새 명리 판단은 하지 않으므로 fragments는 비어 있다. 명리 용어·세부 월운·행동 목록은 다시 설명하지 않는다. 결과를 보장하거나 다짐을 요구하지 않는다."
+                  : "앞서 본문에서 설명한 부담과 망설임을 이해하는 마음을 2~3문장으로 전한다. 새 명리 해석이 아니므로 fragments는 비어 있다. 올해의 전망·결과·성장·좋은 시기라는 평가를 되풀이하지 않는다. 행동을 권하거나 다짐을 요구하지 않고, 그 부담을 이해하고 독자의 선택을 존중한다. 짧은 응원 뒤에 이야기를 자연스럽게 맺는 한 문장을 더한다. 새 전망이나 같은 조언을 붙이지 않는다.",
+      paragraph_length: tone === "genz" && section.id === "summary" ? MESSAGE_CLOSING_LENGTH : REPORT_PARAGRAPH_LENGTHS[section.id],
       required_factual_terms: section.id === "essence"
         ? dayMasterTerms
         : section.id === "yearly"
@@ -151,7 +159,7 @@ export function buildReportRenderPayload(myeongsik: Myeongsik) {
           : fragment.guidance,
       })),
     })),
-    style: { persona: "사주를 풀어주는 친한 친구", speech: "따뜻하고 직설적인 반말. 운세를 설명하되 '~해보자'식 권유나 매 문단의 행동 지시로 마무리하지 않는다.", paragraph_length: "도입 약 230자, 올해 운세 본문 각 약 330자, 응원 마무리 약 140자. sections의 paragraph_length를 따른다." },
+    style: { tone, persona: tone === "genz" ? "짧은 메시지를 이어 보내며 사주를 알려 주는, 은근 킹받게 팩폭하는 젠지 찐친" : "사주를 풀어주는 친한 친구", speech: tone === "genz" ? "'~해·~거든·~네·~지·~잖아'로 말을 건네는 반말. '~다·~한다·~된다·~이다'로 끝내지 않는다. 해석에서 나온 웃긴 비유와 가벼운 팩폭을 섞되 유행어를 나열하지 않는다. 한 메시지에 1~2문장, 약 50~100자로 끊고 빈 줄로 다음 메시지를 이어 보낸다. 처음 나온 전문 용어 바로 옆에 짧은 풀이를 붙인다. 반응 이모티콘을 전체 4~6개 자연스럽게 섞는다. 마지막에는 올해 종합 운세를 한 문장으로 정리하고, 해석에 맞는 긍정의 메시지와 약 50~90자의 따뜻한 인사를 이어 보낸다. '~해보자'식 권유는 쓰지 않는다." : "따뜻하고 직설적인 반말. 운세를 설명하되 '~해보자'식 권유나 매 문단의 행동 지시로 마무리하지 않는다.", paragraph_length: tone === "genz" ? "도입 약 230자, 올해 운세 본문 각 약 330자, 마무리는 sections의 paragraph_length를 따른다. 올해 한 문장 요약과 응원, 마지막 인사도 마무리 분량에 포함한다." : "도입 약 230자, 올해 운세 본문 각 약 330자, 마무리는 sections의 paragraph_length를 따른다. 응원 뒤의 마지막 한마디도 분량에 포함한다." },
     constraints: [
       "선택된 fragments와 facts에 없는 명리 판단·사건 예고·직업·건강·금전 결과를 추가하지 않는다.",
       "첫 문단은 나의 성향과 올해의 중심을 함께 소개한다. 두 번째 문단부터는 올해 운세의 서로 다른 측면을 설명한다.",
@@ -160,9 +168,12 @@ export function buildReportRenderPayload(myeongsik: Myeongsik) {
       "relation의 required_timing_terms가 비어 있지 않으면, 그 달들을 월운 기준의 대화·일정 조율 시점으로 모두 언급한다.",
       "structural_context의 12개월 월운표는 계산 근거다. 구체적인 월을 나열하는 section은 relation뿐이다.",
       "나의 원래 성향과 올해의 환경을 구분한다. 원국·대운의 계산을 올해 발생할 사건으로 바꾸지 않는다.",
-      "마지막 문단은 짧은 응원이다. 전체 운세와 같은 조언을 다시 나열하지 않는다. 분량을 채우려고 설명을 반복하지 않는다.",
+      tone === "genz"
+        ? "마지막 문단은 올해 종합 운세 한 문장, 해석에 맞는 긍정의 메시지, 따뜻한 인사의 세 메시지로 쓴다. 요약은 본문에서 확인된 세운의 의미를 압축한다. 새 예측이나 같은 설명·행동 목록을 덧붙이지 않는다. 마지막 인사는 약 50~90자로 충분히 마음을 전한다."
+        : "마지막 문단은 짧은 응원 뒤에 대화를 맺는 한 문장을 더한다. 전체 운세와 같은 조언을 다시 나열하지 않는다. 분량을 채우려고 설명을 반복하지 않는다.",
       "각 section의 editorial_focus와 prohibited_terms를 지켜, 이미 다른 section에서 쓴 시점·장면을 반복하지 않는다.",
       "outline 순서를 정확히 지키고, 사주 용어는 fragment의 mechanism과 translation에 근거해 쉬운 말로 풀어쓴다.",
+      "terminology는 용어의 뜻이다. 용어의 첫 등장에 같은 메시지 안에서 짧게 풀고, 반복 등장 때 정의를 재탕하지 않는다. 풀이에서 새 명리 판단이나 사건 예고를 만들지 않는다.",
       "생활 장면은 해석과 선택 원칙을 설명하기 위해 새로 만든다. 사용자의 실제 경험·직업·과거 사건으로 단정하지 않는다.",
     ],
   };

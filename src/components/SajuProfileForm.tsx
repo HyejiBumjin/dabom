@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { CustomSelect } from "@/components/ui/custom-select";
+import { SavedFortuneCat } from "@/components/RetroWindow";
+import { RELATIONSHIPS, SAJU_REPORT_YEAR, type Relationship } from "@/lib/saju/profile-input";
+import { PROFILE_DRAFT_KEY as DRAFT_KEY, restoreProfileDraft } from "@/lib/profile-draft";
 
-export function SajuProfileForm() {
+export function SajuProfileForm({ accountId }: { accountId: string }) {
   const router = useRouter();
   const isDevelopment = process.env.NODE_ENV === "development";
   const [name, setName] = useState(isDevelopment ? "최혜지" : "");
+  const [relationship, setRelationship] = useState<Relationship>("SELF");
   const [gender, setGender] = useState(isDevelopment ? "female" : "");
   const [birthDate, setBirthDate] = useState(isDevelopment ? "1995-05-20" : "");
   const [birthTime, setBirthTime] = useState(isDevelopment ? "20:20" : "");
@@ -18,39 +18,201 @@ export function SajuProfileForm() {
   const [calendar, setCalendar] = useState("solar");
   const [isLeapMonth, setIsLeapMonth] = useState(false);
   const [pending, setPending] = useState(false);
+  const submissionInFlight = useRef(false);
+  const activeRequest = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const duplicateDialog = useRef<HTMLDialogElement>(null);
+  const libraryButton = useRef<HTMLButtonElement>(null);
+  const libraryNavigationInFlight = useRef(false);
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => () => { activeRequest.current?.abort(); }, []);
+
+  useEffect(() => {
+    const dialog = duplicateDialog.current;
+    if (!duplicateOpen || !dialog) return;
+    dialog.showModal();
+    libraryButton.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      dialog.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [duplicateOpen]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const stored = sessionStorage.getItem(DRAFT_KEY);
+        if (!stored) return;
+        const input = restoreProfileDraft(stored, accountId);
+        if (!input) { sessionStorage.removeItem(DRAFT_KEY); return; }
+        setName(input.name); setRelationship(input.relationship); setGender(input.gender);
+        setBirthDate(input.birthDate); setBirthTime(input.birthTime ?? ""); setTimeUnknown(!input.birthTime);
+        setCalendar(input.calendar); setIsLeapMonth(input.isLeapMonth);
+      } catch { /* Storage may be disabled; the form remains usable. */ }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [accountId]);
+
+  function showExistingFortune() {
+    setPending(false);
+    setDuplicateOpen(true);
+  }
+
+  function dismissDuplicate() {
+    duplicateDialog.current?.close();
+    setDuplicateOpen(false);
+    submissionInFlight.current = false;
+    nameInput.current?.focus();
+  }
+
+  function startNewQuery() {
+    dismissDuplicate();
+    setName(""); setRelationship("SELF"); setGender("");
+    setBirthDate(""); setBirthTime(""); setTimeUnknown(false);
+    setCalendar("solar"); setIsLeapMonth(false); setError(null);
+  }
+
+  function openLibrary() {
+    if (libraryNavigationInFlight.current) return;
+    libraryNavigationInFlight.current = true;
+    setPending(true);
+    router.push("/saju/library");
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submissionInFlight.current) return;
     setError(null);
     if (!name.trim() || !birthDate || !gender || (!timeUnknown && !birthTime)) {
       setError("이름, 성별, 생년월일과 태어난 시각을 입력해 주세요.");
       return;
     }
+    submissionInFlight.current = true;
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setPending(true);
     try {
-      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth }) });
+      const input = { name, relationship, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth };
+      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal: controller.signal });
       const data = await response.json();
+      if (controller.signal.aborted) return;
+      if (response.status === 401) {
+        try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ accountId, input })); } catch { /* Login still works without draft storage. */ }
+        router.push("/login?next=%2Fsaju"); return;
+      }
       if (!response.ok) throw new Error(data.error || "저장하지 못했습니다.");
-      const reportResponse = await fetch(`/api/saju/profiles/${data.profileId}/reports`, { method: "POST" });
+      try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* Optional storage. */ }
+      if (data.existingReport) { showExistingFortune(); return; }
+      const reportResponse = await fetch(`/api/saju/profiles/${data.profileId}/reports`, { method: "POST", signal: controller.signal });
       const reportData = await reportResponse.json();
+      if (controller.signal.aborted) return;
+      if (reportResponse.status === 402) { router.push(reportData.checkoutUrl); return; }
       if (!reportResponse.ok) throw new Error(reportData.error || "리포트를 준비하지 못했습니다.");
+      if (reportData.existing) { showExistingFortune(); return; }
       router.push(`/saju/reports/${reportData.reportId}`);
     } catch (cause) {
+      if (controller.signal.aborted) return;
       setError(cause instanceof Error ? cause.message : "저장 중 오류가 발생했습니다.");
-    } finally {
+      submissionInFlight.current = false;
       setPending(false);
     }
   }
 
-  return <form onSubmit={submit} className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-7">
-    <div><Label htmlFor="name">이름</Label><Input id="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="예: 김다봄" /></div>
-    <div><Label htmlFor="gender">성별</Label><CustomSelect id="gender" value={gender} onChange={setGender} placeholder="선택" options={[{ value: "female", label: "여성" }, { value: "male", label: "남성" }]} /></div>
-    <div><Label htmlFor="birthDate">생년월일</Label><Input id="birthDate" type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></div>
-    <div className="space-y-2"><Label htmlFor="birthTime">태어난 시각</Label><Input id="birthTime" type="time" value={birthTime} disabled={timeUnknown} onChange={(event) => setBirthTime(event.target.value)} /><label className="flex items-center gap-2 text-sm text-zinc-600"><input type="checkbox" checked={timeUnknown} onChange={(event) => setTimeUnknown(event.target.checked)} /> 태어난 시각을 모릅니다</label>{timeUnknown && <p className="text-xs text-amber-700">시주는 확정하지 않은 임시 명식으로 안내합니다.</p>}</div>
-    <div><Label htmlFor="calendar">달력 기준</Label><CustomSelect id="calendar" value={calendar} onChange={setCalendar} options={[{ value: "solar", label: "양력" }, { value: "lunar", label: "음력" }]} /></div>
-    {calendar === "lunar" && <label className="flex items-center gap-2 text-sm text-zinc-600"><input type="checkbox" checked={isLeapMonth} onChange={(event) => setIsLeapMonth(event.target.checked)} /> 윤달입니다</label>}
-    {error && <p className="text-sm text-red-600">{error}</p>}
-    <Button type="submit" size="lg" className="w-full" disabled={pending}>{pending ? "리포트를 준비하는 중..." : "내 사주 리포트 보기"}</Button>
-  </form>;
+  return (
+    <>
+      <form onSubmit={submit} className="retro-form" aria-busy={pending} aria-describedby={error ? "profile-error" : undefined}>
+        <fieldset className="retro-form-panel" disabled={pending} aria-label="생년월일 정보">
+          <fieldset className="retro-choice-field">
+            <legend>누구의 운세?</legend>
+            <div className="retro-choice-options retro-relationship-options">
+              {RELATIONSHIPS.map(option => (
+                <label className="retro-choice" key={option.value}>
+                  <input type="radio" name="relationship" value={option.value} checked={relationship === option.value} onChange={() => setRelationship(option.value)} />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div className="retro-field">
+            <label htmlFor="name">이름</label>
+            <input ref={nameInput} className="retro-input" id="name" name="name" autoComplete="name" value={name} onChange={event => setName(event.target.value)} placeholder="예: 김다봄" required />
+          </div>
+          <fieldset className="retro-choice-field">
+            <legend>성별</legend>
+            <div className="retro-choice-options">
+              {[{ value: "female", label: "여성" }, { value: "male", label: "남성" }].map(option => (
+                <label className="retro-choice" key={option.value}>
+                  <input type="radio" name="gender" value={option.value} checked={gender === option.value} onChange={event => setGender(event.target.value)} required />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div className="retro-field">
+            <label htmlFor="birthDate">생년월일</label>
+            <input className="retro-input" id="birthDate" name="birthDate" type="date" value={birthDate} onChange={event => setBirthDate(event.target.value)} required />
+          </div>
+          <fieldset className="retro-choice-field">
+            <legend>달력 기준</legend>
+            <div className="retro-choice-options">
+              {[{ value: "solar", label: "양력" }, { value: "lunar", label: "음력" }].map(option => (
+                <label className="retro-choice" key={option.value}>
+                  <input type="radio" name="calendar" value={option.value} checked={calendar === option.value} onChange={event => {
+                    setCalendar(event.target.value);
+                    if (event.target.value === "solar") setIsLeapMonth(false);
+                  }} />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {calendar === "lunar" && (
+            <label className="retro-checkbox"><input type="checkbox" checked={isLeapMonth} onChange={event => setIsLeapMonth(event.target.checked)} />윤달이야</label>
+          )}
+          <div className="retro-field">
+            <label htmlFor="birthTime">태어난 시각</label>
+            <input className="retro-input" id="birthTime" name="birthTime" type="time" value={birthTime} disabled={timeUnknown} onChange={event => setBirthTime(event.target.value)} required={!timeUnknown} />
+            <div className="retro-time-options">
+              <label className="retro-checkbox"><input type="checkbox" checked={timeUnknown} onChange={event => setTimeUnknown(event.target.checked)} />태어난 시각을 몰라</label>
+              {timeUnknown && <p className="retro-form-help">시간은 모르는 상태로 운세를 읽어줄게.</p>}
+            </div>
+          </div>
+        </fieldset>
+        {error && <p id="profile-error" className="retro-error" role="alert">{error}</p>}
+        <button type="submit" className="retro-button" disabled={pending || duplicateOpen}>
+          {pending ? "메시지를 준비하는 중…" : <>운세 메시지 받기 <span aria-hidden="true">→</span></>}
+        </button>
+        <p className="retro-caption">이제 다봄이 올해의 흐름을 읽어줄게.</p>
+      </form>
+      <dialog
+        ref={duplicateDialog}
+        className="retro-window retro-duplicate-dialog"
+        aria-labelledby="duplicate-fortune-title"
+        aria-describedby="duplicate-fortune-description"
+        aria-busy={pending}
+        onCancel={event => { event.preventDefault(); if (!pending) dismissDuplicate(); }}
+      >
+        <div className="retro-titlebar">
+          <span className="retro-window-mark" aria-hidden="true" />
+          <span className="retro-title-stripes" aria-hidden="true" />
+          <p className="retro-window-title">다봄 · 알림</p>
+          <span className="retro-title-stripes" aria-hidden="true" />
+          <button type="button" className="retro-window-close" aria-label="입력 내용 수정하기" disabled={pending} onClick={dismissDuplicate}>×</button>
+        </div>
+        <div className="retro-window-body retro-duplicate-body">
+          <SavedFortuneCat />
+          <h2 className="retro-heading" id="duplicate-fortune-title">이미 조회한 운세가 있어.</h2>
+          <p id="duplicate-fortune-description">같은 정보로 조회한 {SAJU_REPORT_YEAR}년 운세가<br />내 운세함에 보관돼 있어.</p>
+          <p className="retro-duplicate-note">다시 결제하지 않고 확인할 수 있어.</p>
+          <div className="retro-duplicate-actions">
+            <button ref={libraryButton} type="button" className="retro-button" disabled={pending} onClick={openLibrary}>{pending ? "운세함으로 이동 중…" : "내 운세함으로 이동"}</button>
+            <button type="button" className="retro-button retro-button--secondary" disabled={pending} onClick={startNewQuery}>새로운 정보 입력</button>
+          </div>
+        </div>
+      </dialog>
+    </>
+  );
 }

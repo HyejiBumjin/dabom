@@ -1,0 +1,7 @@
+
+> dabom@0.1.0 security:tls
+> tsx scripts/security-tls-check.ts
+
+(node:45350) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Strict database TLS connection failed { code: 'unknown', certificateError: true }

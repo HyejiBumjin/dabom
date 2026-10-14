@@ -12,7 +12,13 @@ export const REPORT_PARAGRAPH_LENGTHS: Record<ReportDomain, ParagraphLength> = {
   summary: { min: 100, target: 140, max: 180 },
 };
 
+/** Annual overview, grounded encouragement, and a complete messenger farewell. */
+export const MESSAGE_CLOSING_LENGTH: ParagraphLength = { min: 160, target: 230, max: 290 };
+
 export const SUGGESTION_ENDING = /해\s*보자|(?<!후|홍|제|정)보자(?=[.!?…\s]|$)|(?:하자|해봐|힘내자|이어가자|나아가자|남기자|정하자|두자)(?=[.!?…]|$)/u;
+
+/** Message-style reports use conversational endings, including before emoji. */
+export const FORMAL_REPORT_ENDING = /[가-힣]+다(?=[.!?。！？…]+[”’"')]*(?:\s|$|\p{Extended_Pictographic})|[”’"')]*\s*(?:\n|$|\p{Extended_Pictographic}))/u;
 
 /** A single annual opening is enough to establish the essay's time frame. */
 export const ANNUAL_OPENING = /^[\s'"‘’“”]*(?:올해|올\s*한\s*해|금년|이번\s*(?:해|년도?|한\s*해)|\d{4}년)/u;
@@ -56,11 +62,18 @@ export function redactReaderName(text: string, name: string) {
 }
 
 export function normalizeReportParagraph(paragraph: string) {
-  return paragraph.trim().replace(/\p{Extended_Pictographic}/gu, "").replace(/\s{2,}/g, " ");
+  return paragraph.replace(/\r\n?/g, "\n").trim()
+    .replace(/[^\S\n]+/gu, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 export function countReportCharacters(paragraph: string) {
-  return [...normalizeReportParagraph(paragraph)].length;
+  // Decorations and line breaks must not fill the minimum evidence length.
+  const prose = normalizeReportParagraph(paragraph)
+    .replace(/\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|\uFE0F|\u200D|\u20E3/gu, "")
+    .replace(/\s+/gu, " ").trim();
+  return [...prose].length;
 }
 
 export function hasReportTerm(text: string, term: string) {
@@ -70,4 +83,22 @@ export function hasReportTerm(text: string, term: string) {
     return new RegExp(`(?:^|[\\s\\p{P}])${term}(?=$|[\\s\\p{P}]|은|이|을|과|의|에|으로|이라|라는|도|부터)`, "u").test(text);
   }
   return text.includes(term);
+}
+
+/** Editorial check only: the first mention should explain itself nearby. */
+export function hasInlineTermExplanation(paragraph: string, term: string) {
+  const block = paragraph.split(/\n+/u).find(message => hasReportTerm(message, term));
+  if (!block) return false;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const mention = block.match(new RegExp(`(?:^|[\\s\\p{P}])${escaped}`, "u"));
+  const start = mention ? block.indexOf(term, mention.index) : block.indexOf(term);
+  // A year label already explains the name of the annual pillar.
+  if (term === "병오" && /\d{4}년(?:인|의)?\s*$/u.test(block.slice(0, start))) return true;
+  const nearby = block.slice(start + term.length, start + term.length + 140);
+  if (/^[”’'"]?\s*\([^()\n]{4,65}\)/u.test(nearby)) return true;
+  const clause = nearby.split(/[.!?。！？]/u)[0];
+  // A definition of a different term later in the sentence does not explain
+  // this one (e.g. "병오 세운에 식신, 쉽게 말하면 ...").
+  if (/갑목|을목|병화|정화|무토|기토|경금|신금|임수|계수|식신|상관|비견|겁재|정재|편재|정관|편관|정인|편인|비겁|식상|재성|관성|인성|일간|원국|세운|대운|월운|병오|갑신/u.test(clause)) return false;
+  return /쉽게\s*(?:말하면|풀면)|말하자면|그러니까|즉[,\s]|(?:뜻|말|흐름|기운|힘)(?:이야|이지|이거든|이네|인데|을\s*(?:말|뜻|가리))|가리켜|뜻해/u.test(clause);
 }

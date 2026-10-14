@@ -12,6 +12,14 @@ enum Gender {
   FEMALE
 }
 
+enum ProfileRelationship {
+  SELF
+  FAMILY
+  FRIEND
+  PARTNER
+  OTHER
+}
+
 enum OrderStatus {
   READY
   PAID
@@ -36,10 +44,20 @@ model User {
   orders       Order[]
 }
 
+model SecurityRateLimit {
+  key     String   @id
+  hits    Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
+}
+
 model SajuProfile {
   id          String   @id @default(cuid())
   userId      String?
   name        String
+  relationship ProfileRelationship @default(SELF)
+  birthKey    String?
   gender      Gender
   birthDate   DateTime @db.Date
   birthTime   String?
@@ -54,6 +72,7 @@ model SajuProfile {
   reports Report[]
 
   @@index([userId])
+  @@unique([userId, birthKey])
 }
 
 model Product {
@@ -74,6 +93,7 @@ model Order {
   merchantUid   String      @unique
   status        OrderStatus @default(READY)
   paidAmount    Int?
+  amount        Int?
   paidAt        DateTime?
   pgTxId        String?
   createdAt     DateTime    @default(now())
@@ -86,6 +106,7 @@ model Order {
   @@index([userId])
   @@index([productId])
   @@index([sajuProfileId])
+  @@unique([userId, sajuProfileId, productId])
 }
 
 model Report {

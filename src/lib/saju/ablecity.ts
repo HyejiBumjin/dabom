@@ -33,12 +33,6 @@ export async function fetchAblecitySaju(input: NormalizedSajuInput): Promise<Abl
     url.searchParams.set("birth", normalizeBirth(input));
     url.searchParams.set("gender", normalizeGender(input.gender));
     url.searchParams.set("city", env.ABLECITY_CITY);
-    console.info("[Ablecity] request", {
-      url: url.toString(),
-      birthDate: input.birthDate,
-      birthTime: input.birthTime,
-      gender: input.gender,
-    });
 
     const res = await fetch(url.toString(), {
       method: "GET",
@@ -51,7 +45,7 @@ export async function fetchAblecitySaju(input: NormalizedSajuInput): Promise<Abl
 
     const data = (await res.json().catch(() => ({}))) as AblecitySajuResponse;
     if (!res.ok) {
-      throw new Error(`Ablecity request failed (${res.status}): ${JSON.stringify(data)}`);
+      throw new Error(`Ablecity request failed (${res.status})`);
     }
     console.info("[Ablecity] response ok", { status: res.status });
 

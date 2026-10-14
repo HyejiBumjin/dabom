@@ -1,0 +1,49 @@
+
+> dabom@0.1.0 library:check
+> tsx scripts/saju-library-check.ts
+
+PASS 표시 이름과 관계를 바꿔도 출생 정보는 같은 키
+PASS 시각 모름과 정오 출생은 별개
+PASS 성별이 다르면 별개
+PASS 양력의 숨겨진 윤달 플래그는 무시
+PASS 잘못된 시각 거부
+PASS 클라이언트가 보낸 소유자 ID 제거
+PASS 로그인 복귀 경로 유지
+PASS 외부 로그인 리다이렉트 차단
+PASS 다른 계정 소유자는 열람 불가
+PASS 로그아웃 상태에서는 본인 프로필도 열람 불가
+PASS 익명 프로필은 로그인해도 열람 불가
+PASS 개발 환경도 익명 리포트 열람 불가
+PASS 개발 환경도 로그인 없이 계정 소유 리포트 열람 불가
+PASS 개발 테스트 결제 생략은 로그인한 소유자만 허용
+PASS 운영 환경의 익명 리포트 열람 불가
+PASS 미결제 리포트 열람 불가
+PASS 다른 계정의 결제는 권한이 아님
+PASS 본인 결제만 저장 결과 열람
+PASS 결제 금액은 구매 당시 가격으로 확인
+PASS 다른 결제 ID 거부
+PASS 조작한 금액 거부
+PASS 다른 통화 거부
+PASS 실패한 결제 거부
+(node:61640) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS 계정 없이 프로필 저장 차단
+PASS 같은 계정과 정보는 프로필 재사용
+PASS 관계와 표시 이름 저장
+PASS 다른 계정은 별도 프로필과 구매권
+PASS 다른 계정의 프로필 결제 준비 차단
+PASS 재시도는 같은 주문과 paymentId 사용
+PASS 운영 중복 안내는 미결제 리포트를 구매 내역으로 표시하지 않음
+PASS 개발 환경에서는 보관된 테스트 운세 중복 안내
+PASS 다른 계정의 기존 운세를 중복으로 안내하지 않음
+PASS 금액 검증 실패 시 주문은 미결제
+PASS 재확인과 재조회 모두 같은 리포트 반환
+PASS 재조회 시 저장한 내용 보존
+PASS 이름과 관계가 달라도 출생 정보와 연도로 중복 안내
+PASS 중복 확인만으로 기존 운세함의 이름과 관계를 바꾸지 않음
+PASS 중복 주문과 리포트 없음
+PASS 다른 계정의 구매 확인 차단
+PASS 개발 재조회도 저장된 리포트 재사용
+PASS 테스트 계정과 모의 결제를 남기지 않음
+
+41 PASS

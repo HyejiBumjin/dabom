@@ -1,0 +1,9 @@
+
+> dabom@0.1.0 report:check
+> tsx scripts/report-generation-check.ts
+
+[Report] Generation failed { reportId: 'check-invalid-calculation-exits-generating' }
+[Report] Generation failed { reportId: 'fixture' }
+PASS: 55 report recovery checks; repeat openings repaired, style-only failures/timeouts publish a validated draft, missing evidence and private data stay blocked, internal errors hidden in API and UI.
+(node:19943) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)

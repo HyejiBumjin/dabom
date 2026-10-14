@@ -1,0 +1,22 @@
+{
+  "run": "1013-a9da58",
+  "checks": [
+    {
+      "name": "After fix: logout clears other open report tab",
+      "pass": true
+    },
+    {
+      "name": "After fix: logout clears other open library tab",
+      "pass": true
+    },
+    {
+      "name": "After fix: back navigation after logout does not restore A fixture data",
+      "pass": true
+    }
+  ],
+  "secondKakaoAccount": "unavailable; real browser crossover not performed",
+  "aSessionRestored": true,
+  "testCardsRemaining": 0,
+  "paymentCalls": 0,
+  "llmCalls": 0
+}

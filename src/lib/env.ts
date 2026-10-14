@@ -12,7 +12,11 @@ const required = (key: string, value: string | undefined): string => {
 export const env = {
   // Supabase
   SUPABASE_URL: required("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
-  SUPABASE_ANON_KEY: required("NEXT_PUBLIC_SUPABASE_ANON_KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  // Publishable keys are the current public client key; legacy anon keys also work.
+  SUPABASE_ANON_KEY: required(
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ),
   SUPABASE_SERVICE_ROLE_KEY: required("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY),
 
   // App
@@ -28,6 +32,7 @@ export const env = {
     process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
   ),
   PORTONE_API_SECRET: required("PORTONE_API_SECRET", process.env.PORTONE_API_SECRET),
+  PORTONE_WEBHOOK_SECRET: required("PORTONE_WEBHOOK_SECRET", process.env.PORTONE_WEBHOOK_SECRET),
 
   // Saju Provider (Ablecity)
   ABLECITY_API_URL: required("ABLECITY_API_URL", process.env.ABLECITY_API_URL),

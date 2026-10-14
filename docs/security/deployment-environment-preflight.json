@@ -1,0 +1,26 @@
+{
+  "appOriginCorrect": true,
+  "supabaseProjectMatchesLocal": true,
+  "required": {
+    "DATABASE_URL": true,
+    "NEXT_PUBLIC_SUPABASE_URL": true,
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": true,
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": true,
+    "SUPABASE_SERVICE_ROLE_KEY": true,
+    "OPENAI_API_KEY": true,
+    "OPENAI_MODEL": true
+  },
+  "payments": {
+    "NEXT_PUBLIC_PORTONE_STORE_ID": true,
+    "NEXT_PUBLIC_PORTONE_CHANNEL_KEY": true,
+    "PORTONE_API_SECRET": true,
+    "PORTONE_WEBHOOK_SECRET": false
+  },
+  "database": {
+    "valueReadable": false,
+    "redactedSensitiveValue": true,
+    "runtimeProjectNotVerified": true
+  },
+  "productionEnvFileMode": "600",
+  "inspectionNote": "Presence flags only. Vercel sensitive DATABASE_URL and OPENAI_MODEL values are redacted in the downloaded environment, so their actual runtime values were not inspected."
+}

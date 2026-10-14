@@ -1,0 +1,33 @@
+(node:61422) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS temporary B uses a real verified non-anonymous Supabase session (email; not Kakao)
+PASS same birth data belongs to a separate B profile, never A's duplicate report
+PASS overposted A owner ID/admin/PAID fields cannot change verified B ownership
+PASS real authenticated account endpoint exposes only current account ID with no-store
+PASS B cannot read A profile
+PASS B cannot read A checkout
+PASS B cannot read A report page
+PASS B cannot read A report API or its content/status metadata
+PASS B cannot generate A completed fixture (no model call)
+PASS B cannot create/reuse a report on A profile
+PASS B cannot read A profile
+PASS B cannot read A checkout
+PASS B cannot read A report page
+PASS B cannot read A report API or its content/status metadata
+PASS B cannot generate A completed fixture (no model call)
+PASS B cannot create/reuse a report on A profile
+PASS B cannot read A profile
+PASS B cannot read A checkout
+PASS B cannot read A report page
+PASS B cannot read A report API or its content/status metadata
+PASS B cannot generate A completed fixture (no model call)
+PASS B cannot create/reuse a report on A profile
+PASS B RSC prefetch exposes no A identity, profile or report data; normal page/API deny access
+PASS B's own unpaid profile cannot obtain a production report
+PASS B can read and reread its own fixed purchased report without regenerating
+PASS B production library contains B fixture and excludes all A fixtures
+PASS B duplicate flow reuses B report and never A report
+PASS temporary B app profile/order/report/account removed; real A preserved
+PASS temporary B Auth user removed and its old real session rejected
+
+29 PASS (real verified Supabase B, synthetic data; no second Kakao browser account)

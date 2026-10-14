@@ -1,0 +1,22 @@
+
+> dabom@0.1.0 security:data-api
+> tsx scripts/security-data-api-check.ts
+
+(node:57840) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS configured public API key and Auth service
+PASS anonymous Data API User: HTTP 401, 42501
+PASS anonymous Data API SajuProfile: HTTP 401, 42501
+PASS anonymous Data API Product: HTTP 401, 42501
+PASS anonymous Data API Order: HTTP 401, 42501
+PASS anonymous Data API Report: HTTP 401, 42501
+PASS anonymous Data API SecurityRateLimit: HTTP 401, 42501
+PASS anonymous Data API _prisma_migrations: HTTP 401, 42501
+PASS anonymous Data API products: HTTP 401, 42501
+PASS anonymous Data API orders: HTTP 401, 42501
+PASS anonymous Data API gifts: HTTP 401, 42501
+PASS anonymous Data API fortune_reports: HTTP 401, 42501
+PASS anonymous Data API fortune_letters: HTTP 401, 42501
+PASS anonymous Data API saju_calculations: HTTP 401, 42501
+
+14 PASS; zero-row public requests only, no customer rows retrieved

@@ -1,0 +1,13 @@
+{
+  "scope": "Read-only HEAD of user-owned production domain; no authentication or customer API requests",
+  "status": 200,
+  "headers": {
+    "content-security-policy": null,
+    "x-frame-options": null,
+    "x-content-type-options": null,
+    "referrer-policy": null,
+    "strict-transport-security": "max-age=63072000",
+    "permissions-policy": null,
+    "x-powered-by": "Next.js"
+  }
+}

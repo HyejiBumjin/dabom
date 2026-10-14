@@ -1,0 +1,15 @@
+{
+  "publicAccessWithoutPlatformBypass": true,
+  "homepageStatus": 200,
+  "retroHome": true,
+  "anonymousReportStatus": 401,
+  "headers": {
+    "content-security-policy": "base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+    "x-frame-options": "DENY",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "strict-transport-security": "max-age=31536000",
+    "x-powered-by": null
+  }
+}

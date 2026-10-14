@@ -1,0 +1,171 @@
+
+> dabom@0.1.0 security:db-regression
+> tsx scripts/security-db-regression.ts
+
+(node:20565) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS LIVE: synthetic owner cannot forge legacy paid status
+PASS LIVE: anonymous role cannot read synthetic birth cache
+PASS future tables do not regain browser access
+PASS future privileged functions are not public RPCs
+PASS all 13 tables and both browser roles checked
+PASS AFTER: anon cannot SELECT Order
+PASS AFTER: authenticated cannot SELECT Order
+PASS AFTER: anon cannot SELECT Product
+PASS AFTER: authenticated cannot SELECT Product
+PASS AFTER: anon cannot SELECT Report
+PASS AFTER: authenticated cannot SELECT Report
+PASS AFTER: anon cannot SELECT SajuProfile
+PASS AFTER: authenticated cannot SELECT SajuProfile
+PASS AFTER: anon cannot SELECT SecurityRateLimit
+PASS AFTER: authenticated cannot SELECT SecurityRateLimit
+PASS AFTER: anon cannot SELECT User
+PASS AFTER: authenticated cannot SELECT User
+PASS AFTER: anon cannot SELECT _prisma_migrations
+PASS AFTER: authenticated cannot SELECT _prisma_migrations
+PASS AFTER: anon cannot SELECT fortune_letters
+PASS AFTER: authenticated cannot SELECT fortune_letters
+PASS AFTER: anon cannot SELECT fortune_reports
+PASS AFTER: authenticated cannot SELECT fortune_reports
+PASS AFTER: anon cannot SELECT gifts
+PASS AFTER: authenticated cannot SELECT gifts
+PASS AFTER: anon cannot SELECT orders
+PASS AFTER: authenticated cannot SELECT orders
+PASS AFTER: anon cannot SELECT products
+PASS AFTER: authenticated cannot SELECT products
+PASS AFTER: anon cannot SELECT saju_calculations
+PASS AFTER: authenticated cannot SELECT saju_calculations
+PASS AFTER: anon cannot INSERT Order
+PASS AFTER: authenticated cannot INSERT Order
+PASS AFTER: anon cannot INSERT Product
+PASS AFTER: authenticated cannot INSERT Product
+PASS AFTER: anon cannot INSERT Report
+PASS AFTER: authenticated cannot INSERT Report
+PASS AFTER: anon cannot INSERT SajuProfile
+PASS AFTER: authenticated cannot INSERT SajuProfile
+PASS AFTER: anon cannot INSERT SecurityRateLimit
+PASS AFTER: authenticated cannot INSERT SecurityRateLimit
+PASS AFTER: anon cannot INSERT User
+PASS AFTER: authenticated cannot INSERT User
+PASS AFTER: anon cannot INSERT _prisma_migrations
+PASS AFTER: authenticated cannot INSERT _prisma_migrations
+PASS AFTER: anon cannot INSERT fortune_letters
+PASS AFTER: authenticated cannot INSERT fortune_letters
+PASS AFTER: anon cannot INSERT fortune_reports
+PASS AFTER: authenticated cannot INSERT fortune_reports
+PASS AFTER: anon cannot INSERT gifts
+PASS AFTER: authenticated cannot INSERT gifts
+PASS AFTER: anon cannot INSERT orders
+PASS AFTER: authenticated cannot INSERT orders
+PASS AFTER: anon cannot INSERT products
+PASS AFTER: authenticated cannot INSERT products
+PASS AFTER: anon cannot INSERT saju_calculations
+PASS AFTER: authenticated cannot INSERT saju_calculations
+PASS AFTER: anon cannot UPDATE Order
+PASS AFTER: authenticated cannot UPDATE Order
+PASS AFTER: anon cannot UPDATE Product
+PASS AFTER: authenticated cannot UPDATE Product
+PASS AFTER: anon cannot UPDATE Report
+PASS AFTER: authenticated cannot UPDATE Report
+PASS AFTER: anon cannot UPDATE SajuProfile
+PASS AFTER: authenticated cannot UPDATE SajuProfile
+PASS AFTER: anon cannot UPDATE SecurityRateLimit
+PASS AFTER: authenticated cannot UPDATE SecurityRateLimit
+PASS AFTER: anon cannot UPDATE User
+PASS AFTER: authenticated cannot UPDATE User
+PASS AFTER: anon cannot UPDATE _prisma_migrations
+PASS AFTER: authenticated cannot UPDATE _prisma_migrations
+PASS AFTER: anon cannot UPDATE fortune_letters
+PASS AFTER: authenticated cannot UPDATE fortune_letters
+PASS AFTER: anon cannot UPDATE fortune_reports
+PASS AFTER: authenticated cannot UPDATE fortune_reports
+PASS AFTER: anon cannot UPDATE gifts
+PASS AFTER: authenticated cannot UPDATE gifts
+PASS AFTER: anon cannot UPDATE orders
+PASS AFTER: authenticated cannot UPDATE orders
+PASS AFTER: anon cannot UPDATE products
+PASS AFTER: authenticated cannot UPDATE products
+PASS AFTER: anon cannot UPDATE saju_calculations
+PASS AFTER: authenticated cannot UPDATE saju_calculations
+PASS AFTER: anon cannot DELETE Order
+PASS AFTER: authenticated cannot DELETE Order
+PASS AFTER: anon cannot DELETE Product
+PASS AFTER: authenticated cannot DELETE Product
+PASS AFTER: anon cannot DELETE Report
+PASS AFTER: authenticated cannot DELETE Report
+PASS AFTER: anon cannot DELETE SajuProfile
+PASS AFTER: authenticated cannot DELETE SajuProfile
+PASS AFTER: anon cannot DELETE SecurityRateLimit
+PASS AFTER: authenticated cannot DELETE SecurityRateLimit
+PASS AFTER: anon cannot DELETE User
+PASS AFTER: authenticated cannot DELETE User
+PASS AFTER: anon cannot DELETE _prisma_migrations
+PASS AFTER: authenticated cannot DELETE _prisma_migrations
+PASS AFTER: anon cannot DELETE fortune_letters
+PASS AFTER: authenticated cannot DELETE fortune_letters
+PASS AFTER: anon cannot DELETE fortune_reports
+PASS AFTER: authenticated cannot DELETE fortune_reports
+PASS AFTER: anon cannot DELETE gifts
+PASS AFTER: authenticated cannot DELETE gifts
+PASS AFTER: anon cannot DELETE orders
+PASS AFTER: authenticated cannot DELETE orders
+PASS AFTER: anon cannot DELETE products
+PASS AFTER: authenticated cannot DELETE products
+PASS AFTER: anon cannot DELETE saju_calculations
+PASS AFTER: authenticated cannot DELETE saju_calculations
+PASS AFTER: anon cannot TRUNCATE Order
+PASS AFTER: authenticated cannot TRUNCATE Order
+PASS AFTER: anon cannot TRUNCATE Product
+PASS AFTER: authenticated cannot TRUNCATE Product
+PASS AFTER: anon cannot TRUNCATE Report
+PASS AFTER: authenticated cannot TRUNCATE Report
+PASS AFTER: anon cannot TRUNCATE SajuProfile
+PASS AFTER: authenticated cannot TRUNCATE SajuProfile
+PASS AFTER: anon cannot TRUNCATE SecurityRateLimit
+PASS AFTER: authenticated cannot TRUNCATE SecurityRateLimit
+PASS AFTER: anon cannot TRUNCATE User
+PASS AFTER: authenticated cannot TRUNCATE User
+PASS AFTER: anon cannot TRUNCATE _prisma_migrations
+PASS AFTER: authenticated cannot TRUNCATE _prisma_migrations
+PASS AFTER: anon cannot TRUNCATE fortune_letters
+PASS AFTER: authenticated cannot TRUNCATE fortune_letters
+PASS AFTER: anon cannot TRUNCATE fortune_reports
+PASS AFTER: authenticated cannot TRUNCATE fortune_reports
+PASS AFTER: anon cannot TRUNCATE gifts
+PASS AFTER: authenticated cannot TRUNCATE gifts
+PASS AFTER: anon cannot TRUNCATE orders
+PASS AFTER: authenticated cannot TRUNCATE orders
+PASS AFTER: anon cannot TRUNCATE products
+PASS AFTER: authenticated cannot TRUNCATE products
+PASS AFTER: anon cannot TRUNCATE saju_calculations
+PASS AFTER: authenticated cannot TRUNCATE saju_calculations
+PASS AFTER: RLS enabled on Order
+PASS AFTER: RLS enabled on Product
+PASS AFTER: RLS enabled on Report
+PASS AFTER: RLS enabled on SajuProfile
+PASS AFTER: RLS enabled on SecurityRateLimit
+PASS AFTER: RLS enabled on User
+PASS AFTER: RLS enabled on _prisma_migrations
+PASS AFTER: RLS enabled on fortune_letters
+PASS AFTER: RLS enabled on fortune_reports
+PASS AFTER: RLS enabled on gifts
+PASS AFTER: RLS enabled on orders
+PASS AFTER: RLS enabled on products
+PASS AFTER: RLS enabled on saju_calculations
+PASS AFTER: actual anon SQL denied
+PASS AFTER: actual anon SQL denied
+PASS AFTER: actual anon SQL denied
+PASS AFTER: actual authenticated SQL denied
+PASS AFTER: actual authenticated SQL denied
+PASS AFTER: actual authenticated SQL denied
+PASS rate counter attempt 1
+PASS rate counter attempt 2
+PASS rate counter attempt 3
+PASS rate counter attempt 4
+PASS rate counter attempt 5
+PASS rate counter attempt 6
+PASS rate counter attempt 7
+PASS synthetic auth identity fully rolled back
+PASS synthetic payment fully rolled back
+
+163 PASS; deployed permissions verified; all test data and probe objects rolled back

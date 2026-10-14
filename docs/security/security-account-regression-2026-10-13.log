@@ -1,0 +1,126 @@
+
+> dabom@0.1.0 security:check
+> tsx scripts/security-check.ts
+
+PASS same account can restore its validated profile draft
+PASS B cannot restore late A draft
+PASS legacy unscoped birth/name draft is discarded
+PASS malformed draft never exposes input
+PASS no verified account cannot restore a draft
+PASS non-string draft account cannot impersonate owner
+PASS invalid birth data is not restored
+PASS server validates user rather than trusting session
+PASS forged/expired token cannot create account
+PASS Supabase anonymous auth session is not a customer account
+PASS privacy identity endpoint returns only verified account ID
+PASS privacy identity endpoint uses private no-store
+PASS privacy identity revalidation never creates or updates an account
+PASS privacy identity endpoint rejects logged-out session
+PASS privacy identity endpoint rejects anonymous auth
+PASS privacy identity endpoint rejects invalid token
+PASS privacy identity database failure exposes no internal error
+PASS temporary Auth failure hides content without treating it as logout
+PASS unsafe redirect rejected "//evil.test"
+PASS unsafe redirect rejected "/\\evil.test"
+PASS unsafe redirect rejected "https://evil.test"
+PASS unsafe redirect rejected "javascript:alert(1)"
+PASS unsafe redirect rejected "//dabom.invalid@evil.test"
+PASS unsafe redirect rejected "/\n/evil.test"
+PASS unsafe redirect rejected "/..//evil.test"
+PASS unsafe redirect rejected "/x/..//evil.test"
+PASS unsafe redirect rejected "/%2e%2e//evil.test"
+PASS unsafe redirect rejected "/.%2e//evil.test"
+PASS unsafe redirect rejected "/x/%2E%2E//evil.test"
+PASS internal return path preserved
+PASS model/report HTML is escaped rather than executed
+PASS LLM evidence omits exact birth date, time and display name
+PASS cross-origin blocked https://evil.test
+PASS cross-origin blocked null
+PASS cross-origin blocked https://dabom.test.evil.test
+PASS cross-origin blocked https://dabom.test@evil.test
+PASS cross-site fetch metadata denied
+PASS same-origin allowed
+PASS invalid birth rejected 0000-01-01
+PASS invalid birth rejected 9999-01-01
+PASS invalid birth rejected 2025-02-29
+PASS invalid birth rejected 2026-02-31
+PASS invalid birth rejected 2026-13-01
+PASS invalid birth rejected 1995-05-20 OR 1=1
+PASS invalid profile field rejected
+PASS invalid profile field rejected
+PASS invalid profile field rejected
+PASS invalid profile field rejected
+PASS invalid profile field rejected
+PASS owner/payment fields cannot be mass assigned
+PASS simple cross-site form content type denied
+PASS oversized streamed body denied without Content-Length
+PASS oversized declared body denied
+PASS malformed JSON denied
+(node:62880) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS stalled body has a bounded read deadline
+PASS malformed/mismatched/refunded provider response denied
+PASS malformed/mismatched/refunded provider response denied
+PASS malformed/mismatched/refunded provider response denied
+PASS malformed/mismatched/refunded provider response denied
+PASS malformed/mismatched/refunded provider response denied
+PASS malformed/mismatched/refunded provider response denied
+PASS missing/wrong/test payment channel denied in production
+PASS missing/wrong/test payment channel denied in production
+PASS missing/wrong/test payment channel denied in production
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS unpaid or manipulated payment denied
+PASS anonymous profiles denied
+PASS anonymous prepare denied
+PASS anonymous confirm denied
+PASS anonymous report denied
+PASS anonymous generate denied
+PASS anonymous create report denied
+PASS anonymous requests make no provider or LLM call
+PASS cross-account report read denied
+PASS cross-account generation denied
+PASS cross-account report creation denied
+PASS cross-account checkout denied
+PASS cross-account payment confirmation denied
+PASS IDOR makes no provider or LLM call
+PASS unpaid report denied in production
+PASS production has no free-report endpoint
+PASS unpaid generation denied
+PASS client paymentId swapping denied before provider lookup
+PASS server catches amount fraud
+PASS verified payment grants report
+PASS payment retry returns same report
+PASS paid owner reads private uncached report
+PASS generation abuse limited before LLM
+PASS profile abuse limited before calculation/write
+PASS payment lookup abuse limited
+PASS database error never leaks connection/SQL details
+PASS cross-site profile write denied before auth
+PASS unsigned webhook denied without DB mutation
+PASS forged signature denied
+PASS expired signature denied
+PASS future signature denied
+PASS signed wrong-store event denied
+PASS webhook event alone cannot fake cancellation
+PASS verified cancellation removes entitlement
+PASS cancelled report access denied
+PASS cancelled report generation denied
+PASS delayed Paid event cannot reactivate cancellation
+PASS payment replay cannot reactivate cancelled order
+PASS cancellation between read and update cannot be overwritten
+PASS retired payments/prepare closed
+PASS retired payments/confirm closed
+PASS retired reports/create closed
+PASS retired letters/create closed
+PASS retired saju/test closed
+PASS retired report lookup closed
+PASS orphan profile cannot be claimed
+
+118 PASS (synthetic accounts and mocked providers; no external requests)

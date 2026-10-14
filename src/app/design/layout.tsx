@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+
 /**
  * 디자인 미리보기 레이아웃
  *
@@ -9,6 +11,7 @@ export default function DesignLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (process.env.NODE_ENV !== "development") notFound();
   return (
     <div className="min-h-screen bg-[#f7f7f7]">
       <div className="sticky top-0 z-10 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-center text-sm text-amber-800 backdrop-blur">

@@ -1,0 +1,15 @@
+
+> dabom@0.1.0 security:concurrency
+> tsx scripts/security-concurrency-check.ts
+
+(node:19539) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS six concurrent profile saves create one profile
+PASS six concurrent checkouts create one stable payment ID
+PASS six concurrent confirmations return one report
+PASS eight simultaneous generation claims have one winner
+PASS shared rate limit admits exactly three of ten concurrent requests
+PASS real DB cancellation between read and write stays CANCELLED
+PASS isolated schema and all synthetic fixtures removed
+
+7 PASS with two independent DB clients; no customer rows, real charges, or LLM calls

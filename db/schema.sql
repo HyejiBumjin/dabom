@@ -116,35 +116,6 @@ ALTER TABLE fortune_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fortune_letters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saju_calculations ENABLE ROW LEVEL SECURITY;
 
--- products: select all
-CREATE POLICY "products_select_all" ON products FOR SELECT USING (true);
-
--- orders: owner select/insert/update
-CREATE POLICY "orders_select_owner" ON orders FOR SELECT USING (auth.uid() = owner_id);
-CREATE POLICY "orders_insert_owner" ON orders FOR INSERT WITH CHECK (auth.uid() = owner_id);
-CREATE POLICY "orders_update_owner" ON orders FOR UPDATE USING (auth.uid() = owner_id);
-
--- gifts: buyer select/insert/update
-CREATE POLICY "gifts_select_buyer" ON gifts FOR SELECT USING (auth.uid() = buyer_id);
-CREATE POLICY "gifts_insert_buyer" ON gifts FOR INSERT WITH CHECK (auth.uid() = buyer_id);
-CREATE POLICY "gifts_update_buyer" ON gifts FOR UPDATE USING (auth.uid() = buyer_id);
-
--- reports: owner select only
-CREATE POLICY "reports_select_owner" ON fortune_reports FOR SELECT USING (auth.uid() = owner_id);
-CREATE POLICY "reports_insert_service" ON fortune_reports FOR INSERT WITH CHECK (true);
-CREATE POLICY "reports_update_service" ON fortune_reports FOR UPDATE USING (true);
-
--- letters: readable if linked report owner is auth user (gift flow uses service role)
-CREATE POLICY "letters_select_via_report" ON fortune_letters FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM fortune_reports r
-      WHERE r.id = fortune_letters.report_id
-      AND r.owner_id = auth.uid()
-    )
-  );
-CREATE POLICY "letters_insert_service" ON fortune_letters FOR INSERT WITH CHECK (true);
-
--- saju_calculations: service-only usage (service role bypasses RLS)
-CREATE POLICY "saju_calculations_select_service" ON saju_calculations FOR SELECT USING (true);
-CREATE POLICY "saju_calculations_insert_service" ON saju_calculations FOR INSERT WITH CHECK (true);
+-- Legacy records are server-only. No browser client may forge paid status or
+-- inspect the shared calculation cache. service_role already bypasses RLS.
+REVOKE ALL ON TABLE products, orders, gifts, fortune_reports, fortune_letters, saju_calculations FROM PUBLIC, anon, authenticated;
