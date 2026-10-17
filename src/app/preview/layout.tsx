@@ -1,5 +1,5 @@
 import { TopNav } from "@/components/TopNav";
-import { createClient } from "@/lib/supabase/server";
+import { getSajuAccount } from "@/lib/saju/account";
 import { notFound } from "next/navigation";
 
 export default async function PreviewLayout({
@@ -8,19 +8,14 @@ export default async function PreviewLayout({
   children: React.ReactNode;
 }) {
   if (process.env.NODE_ENV !== "development") notFound();
-  const supabase = await createClient();
-  const { data: { user } } = await (supabase?.auth.getUser() ?? { data: { user: null } });
+  const user = await getSajuAccount();
 
   return (
     <div className="relative min-h-screen bg-[#f7f7f7]">
       <TopNav
         userEmail={user?.email ?? null}
         loggedIn={Boolean(user)}
-        onLogout={async () => {
-          "use server";
-          const s = await createClient();
-          await s?.auth.signOut();
-        }}
+
       />
       <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10">
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">

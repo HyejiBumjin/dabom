@@ -1,22 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/db";
+import { getFirebaseAccount } from "@/lib/firebase/auth";
 import { redirect } from "next/navigation";
 import { safeReturnPath } from "@/lib/auth-return-path";
 
-/** The verified login owns the library; the person whose fortune is read is separate. */
-export async function getSajuAccount() {
-  const supabase = await createClient();
-  if (!supabase) return null;
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user || user.is_anonymous) return null;
-  const nickname = String(user.user_metadata?.nickname ?? user.user_metadata?.name ?? "다봄 사용자").slice(0, 80);
-  // Use Supabase's stable verified identity rather than accepting an owner ID from input.
-  return prisma.user.upsert({
-    where: { kakaoId: user.id },
-    create: { kakaoId: user.id, nickname },
-    update: { nickname },
-  });
-}
+/** The verified login owns the library, independently of the subject of a report. */
+export const getSajuAccount = getFirebaseAccount;
 
 export async function requireSajuAccount(returnPath: string) {
   const account = await getSajuAccount();

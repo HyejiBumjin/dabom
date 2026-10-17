@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SavedFortuneCat } from "@/components/RetroWindow";
+import { RetroTitleBar, SavedFortuneCat } from "@/components/RetroWindow";
 import { RELATIONSHIPS, SAJU_REPORT_YEAR, type Relationship } from "@/lib/saju/profile-input";
 import { PROFILE_DRAFT_KEY as DRAFT_KEY, restoreProfileDraft } from "@/lib/profile-draft";
 
@@ -195,13 +195,9 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
         aria-busy={pending}
         onCancel={event => { event.preventDefault(); if (!pending) dismissDuplicate(); }}
       >
-        <div className="retro-titlebar">
-          <span className="retro-window-mark" aria-hidden="true" />
-          <span className="retro-title-stripes" aria-hidden="true" />
-          <p className="retro-window-title">다봄 · 알림</p>
-          <span className="retro-title-stripes" aria-hidden="true" />
+        <RetroTitleBar title="다봄 · 알림">
           <button type="button" className="retro-window-close" aria-label="입력 내용 수정하기" disabled={pending} onClick={dismissDuplicate}>×</button>
-        </div>
+        </RetroTitleBar>
         <div className="retro-window-body retro-duplicate-body">
           <SavedFortuneCat />
           <h2 className="retro-heading" id="duplicate-fortune-title">이미 조회한 운세가 있어.</h2>

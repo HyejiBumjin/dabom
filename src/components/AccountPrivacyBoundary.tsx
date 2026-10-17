@@ -17,6 +17,7 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
   const abortVerification = useCallback(() => {
     generation.current++;
     request.current?.abort();
+    request.current = null;
   }, []);
 
   const revoke = useCallback(() => {
@@ -32,13 +33,15 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
   }, [queryClient, loginUrl, abortVerification]);
 
   const verify = useCallback(async () => {
-    if (revoked.current || document.visibilityState === "hidden") return;
+    // Focus and visibility events often arrive together. Share the pending check.
+    if (revoked.current || document.visibilityState === "hidden" || request.current) return;
     const current = ++generation.current;
-    request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     const deadline = setTimeout(() => controller.abort(), 8000);
-    setState("checking");
+    // Keep a verified screen visible during routine polling/foreground checks.
+    // Initial display, failed checks and BFCache restores still fail closed.
+    setState(previous => previous === "verified" ? previous : "checking");
     try {
       const response = await fetch("/api/auth/account", { cache: "no-store", signal: controller.signal });
       if (current !== generation.current || revoked.current) return;
@@ -51,12 +54,19 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
       setState("verified");
     } catch {
       if (current === generation.current && !revoked.current) setState("unavailable");
-    } finally { clearTimeout(deadline); }
+    } finally {
+      clearTimeout(deadline);
+      if (request.current === controller) request.current = null;
+    }
   }, [accountId, revoke]);
 
   useEffect(() => {
     const checkVisible = () => { if (document.visibilityState === "visible") void verify(); };
-    const hideForRestore = () => { flushSync(() => setState("checking")); };
+    const hideForRestore = () => {
+      // A pending response must not uncover the snapshot after pagehide.
+      abortVerification();
+      flushSync(() => setState("checking"));
+    };
     const restored = (event: PageTransitionEvent) => { if (event.persisted) void verify(); };
     const storage = (event: StorageEvent) => { if (event.key === AUTH_CHANGE_KEY && event.newValue) revoke(); };
     let channel: BroadcastChannel | undefined;
@@ -87,9 +97,19 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
 
   if (state === "revoked") return <p role="status">로그인 화면으로 이동할게.</p>;
   return <>
-    {state !== "verified" && <section className={compact ? "text-sm" : "retro-status"} role="status">
-      <p>{state === "unavailable" ? "로그인 상태를 확인하지 못했어. 다시 확인해줘." : "로그인 상태를 확인하고 있어."}</p>
-      {state === "unavailable" && <button type="button" className="retro-button" onClick={() => void verify()}>다시 확인하기</button>}
+    {state === "checking" && <div className={compact ? "h-14" : "retro-page"} role="status" aria-label="화면 불러오는 중" aria-busy="true">
+      {!compact && <div className="retro-window" aria-hidden="true">
+        <div className="retro-titlebar"><span className="h-4 w-24 rounded bg-white/60" /></div>
+        <div className="space-y-6 p-8 motion-safe:animate-pulse">
+          <div className="h-8 w-36 rounded bg-violet-100" />
+          <div className="h-4 w-3/4 rounded bg-slate-100" />
+          <div className="h-40 rounded bg-slate-100" />
+        </div>
+      </div>}
+    </div>}
+    {state === "unavailable" && <section className={compact ? "text-sm" : "retro-status"} role="status">
+      <p>연결이 잠깐 끊겼어. 다시 연결해줘.</p>
+      <button type="button" className="retro-button" onClick={() => void verify()}>다시 연결하기</button>
     </section>}
     {/* Keep an in-progress form mounted during a same-account foreground check. */}
     {mounted && <div hidden={state !== "verified"} inert={state !== "verified"}>{children}</div>}

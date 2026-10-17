@@ -10,15 +10,6 @@ const required = (key: string, value: string | undefined): string => {
 };
 
 export const env = {
-  // Supabase
-  SUPABASE_URL: required("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
-  // Publishable keys are the current public client key; legacy anon keys also work.
-  SUPABASE_ANON_KEY: required(
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ),
-  SUPABASE_SERVICE_ROLE_KEY: required("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY),
-
   // App
   APP_URL: required("NEXT_PUBLIC_APP_URL", process.env.NEXT_PUBLIC_APP_URL) || "http://localhost:3000",
 
@@ -45,9 +36,6 @@ export const env = {
   OPENAI_API_KEY: required("OPENAI_API_KEY", process.env.OPENAI_API_KEY),
   OPENAI_MODEL: required("OPENAI_MODEL", process.env.OPENAI_MODEL) || "gpt-4.1-mini",
 } as const;
-
-export const hasSupabase = (): boolean =>
-  !!env.SUPABASE_URL && !!env.SUPABASE_ANON_KEY;
 
 export const hasPortOne = (): boolean =>
   !!env.NEXT_PUBLIC_PORTONE_STORE_ID &&

@@ -57,37 +57,26 @@ export function ScrollRevealMessages({ children }: { children: ReactNode }) {
     if (!container || motion.matches || !("IntersectionObserver" in window)) return;
 
     const messages = Array.from(container.querySelectorAll<HTMLElement>("[data-report-message]"));
-    const waiting = new Set<HTMLElement>();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    function scheduleReveal(delay: number) {
-      if (timer !== undefined || waiting.size === 0) return;
-      timer = setTimeout(() => {
-        timer = undefined;
-        // DOM order keeps bubbles sequential even when a fast scroll intersects many.
-        const next = messages.find(message => waiting.has(message));
-        if (next) {
-          waiting.delete(next);
-          next.dataset.revealed = "true";
-          observer.unobserve(next);
-        }
-        scheduleReveal(750);
-      }, delay);
-    }
+    // Keep the initial view readable; reveal the rest just before it scrolls into view.
+    messages.forEach(message => {
+      if (message.getBoundingClientRect().top < window.innerHeight + 96) {
+        message.dataset.revealed = "true";
+      }
+    });
     container.dataset.revealMotion = "enabled";
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
         const message = entry.target as HTMLElement;
-        if (entry.isIntersecting) waiting.add(message);
-        else waiting.delete(message);
+        if (entry.isIntersecting) {
+          message.dataset.revealed = "true";
+          observer.unobserve(message);
+        }
       }
-      scheduleReveal(300);
-    }, { threshold: 0, rootMargin: "0px 0px -24px 0px" });
-    messages.forEach(message => observer.observe(message));
+    }, { threshold: 0, rootMargin: "0px 0px 96px 0px" });
+    messages.filter(message => !message.dataset.revealed).forEach(message => observer.observe(message));
 
     function showAll() {
       if (motion.matches && container) {
-        clearTimeout(timer);
-        waiting.clear();
         delete container.dataset.revealMotion;
         observer.disconnect();
       }
@@ -95,8 +84,6 @@ export function ScrollRevealMessages({ children }: { children: ReactNode }) {
     motion.addEventListener("change", showAll);
     return () => {
       observer.disconnect();
-      clearTimeout(timer);
-      waiting.clear();
       delete container.dataset.revealMotion;
       motion.removeEventListener("change", showAll);
     };

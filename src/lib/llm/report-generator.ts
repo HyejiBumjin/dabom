@@ -1,7 +1,6 @@
 import OpenAI from "openai";
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
+import { firebaseStore } from "@/lib/firebase/store";
 import { buildReportEvidencePrompt, getReportPrompt, getStoredReportTone } from "@/lib/prompts/v6";
 import { buildReportRenderPayload, type ReportTone } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
@@ -157,15 +156,15 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
 /** Facts and approved corpus selection stay outside the LLM. */
 export async function generateReport(reportId: string, options: { tone?: ReportTone; model?: string } = {}): Promise<void> {
   const deadline = Date.now() + MAX_RENDER_TIME_MS;
-  const report = await prisma.report.findUnique({ where: { id: reportId }, include: { sajuProfile: true } });
+  const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || report.status === "COMPLETED") return;
   const storedTone = getStoredReportTone(report.promptVersion);
   const prompt = getReportPrompt(options.tone ?? DEFAULT_REPORT_TONE);
   // Resume a current-version report with its chosen model. Older unfinished
   // reports switch to the approved defaults and don't reuse a different voice.
   const model = options.model ?? (report.promptVersion === prompt.version ? report.model || getConfiguredReportModel() : getConfiguredReportModel());
-  const claim = await prisma.report.updateMany({ where: { id: reportId, status: { in: ["PENDING", "FAILED"] } }, data: { status: "GENERATING", lastError: null, retryCount: 0, completedAt: null, promptVersion: prompt.version, model } });
-  if (claim.count === 0) return;
+  const claim = await firebaseStore.claimReport(reportId, { lastError: null, retryCount: 0, completedAt: null, promptVersion: prompt.version, model }, report.userId);
+  if (!claim) return;
 
   try {
     const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik, prompt.tone);
@@ -178,7 +177,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
     let styleRepairFailures = 0;
     const recovery: { best: { content: ReportContent; styleIssueCount: number } | null } = { best: null };
     const complete = async (content: ReportContent) => {
-      await prisma.report.update({ where: { id: reportId }, data: { status: "COMPLETED", content: content as unknown as Prisma.InputJsonValue, retryCount: Math.max(0, attemptsUsed - 1), completedAt: new Date(), lastError: null } });
+      await firebaseStore.updateReport(reportId, claim, { status: "COMPLETED", content: content, retryCount: Math.max(0, attemptsUsed - 1), completedAt: new Date(), lastError: null });
     };
     const previousContent = z.object({ paragraphs: z.array(z.string()).length(6) }).safeParse(storedTone === prompt.tone ? report.content : null);
     let draft: RenderedReport | null = previousContent.success
@@ -196,7 +195,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
         recovery.best = { content, styleIssueCount: error.issues.length };
         // Keep a complete, content-validated draft before another API request.
         // A failed rewrite must not erase the usable report we already have.
-        await prisma.report.update({ where: { id: reportId }, data: { content: content as unknown as Prisma.InputJsonValue } });
+        await firebaseStore.updateReport(reportId, claim, { content: content });
       }
     };
     repairOpenings();
@@ -217,7 +216,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
 
     if (!process.env.OPENAI_API_KEY) {
       if (recovery.best) await complete(recovery.best.content);
-      else await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError: "OPENAI_API_KEY가 설정되지 않았습니다." } });
+      else await firebaseStore.updateReport(reportId, claim, { status: "FAILED", lastError: "OPENAI_API_KEY가 설정되지 않았습니다." });
       return;
     }
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 50_000, maxRetries: 0 });
@@ -284,7 +283,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
         }
         const invalidIds = error instanceof ReportValidationError ? error.sectionIds : allSectionIds;
         requestedIds = draft ? allSectionIds.filter((id) => invalidIds.includes(id)) : allSectionIds;
-        await prisma.report.update({ where: { id: reportId }, data: { retryCount: attempt, lastError } });
+        await firebaseStore.updateReport(reportId, claim, { retryCount: attempt, lastError });
         if (recovery.best && (styleRepairFailures >= MAX_STYLE_REPAIR_FAILURES || !(error instanceof ReportValidationError) || !error.styleOnly)) break;
       }
     }
@@ -293,10 +292,10 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
       await complete(recovery.best.content);
       return;
     }
-    await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError } });
+    await firebaseStore.updateReport(reportId, claim, { status: "FAILED", lastError });
   } catch (error) {
     const lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
     console.error("[Report] Generation failed", { reportId });
-    await prisma.report.update({ where: { id: reportId }, data: { status: "FAILED", lastError } });
+    await firebaseStore.updateReport(reportId, claim, { status: "FAILED", lastError });
   }
 }

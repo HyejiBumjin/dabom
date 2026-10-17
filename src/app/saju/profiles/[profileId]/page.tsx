@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { firebaseStore } from "@/lib/firebase/store";
 import type { Myeongsik, PillarName } from "@/lib/saju/myeongsik";
 import { deriveInterpretationFacts } from "@/lib/saju/interpretation-facts";
 import { deriveSajuInterpretationBlueprint } from "@/lib/saju/interpretation-blueprint";
@@ -33,7 +33,7 @@ function describeMonthlyBranchRelations(myeongsik: Myeongsik, monthlyGanZhi: str
 export default async function SajuProfilePage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = await params;
   const account = await requireSajuAccount(`/saju/profiles/${profileId}`);
-  const profile = await prisma.sajuProfile.findUnique({ where: { id: profileId } });
+  const profile = await firebaseStore.getProfile(profileId);
   if (!profile || !canAccessSajuProfile(profile, account)) notFound();
 
   const myeongsik = profile.myeongsik as unknown as Myeongsik;

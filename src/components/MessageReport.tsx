@@ -13,7 +13,7 @@ export function MessageReport({ content }: { content: ReportContent }) {
       <header className="retro-report-sender">
         <PixelCat />
         <div>
-          <p className="retro-sender-name">다봄</p>
+          <p className="retro-sender-name">다봄과의 대화</p>
           <p className="retro-report-year">2026년 올해 운세</p>
         </div>
       </header>

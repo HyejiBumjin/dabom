@@ -6,7 +6,7 @@ import { renderToStaticMarkup as renderStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Responses } from "openai/resources/responses/responses";
-import { prisma } from "../src/lib/db";
+import { firebaseStore as store } from "../src/lib/firebase/store";
 import { generateReport } from "../src/lib/llm/report-generator";
 import { ANNUAL_OPENING, containsReaderName, countReportCharacters, FORMAL_REPORT_ENDING, hasInlineTermExplanation, normalizeReportParagraph, repairRepeatedAnnualOpenings } from "../src/lib/llm/report-rules";
 import { splitReportMessages } from "../src/lib/report-message-layout";
@@ -50,7 +50,7 @@ let storedPromptVersion = REPORT_PROMPT_VERSION;
 let storedModel = DEFAULT_REPORT_MODEL;
 let tests = 0;
 
-const originals = { create: Responses.prototype.create, find: prisma.report.findUnique, claim: prisma.report.updateMany, update: prisma.report.update, now: Date.now, warn: console.warn, apiKey: process.env.OPENAI_API_KEY, findProfile: prisma.sajuProfile.findUnique, createReport: prisma.report.create, upsertReport: prisma.report.upsert, nodeEnv: process.env.NODE_ENV, queryRaw: prisma.$queryRaw };
+const originals = { create: Responses.prototype.create, find: store.getReportWithAccess, claim: store.claimReport, update: store.updateReport, now: Date.now, warn: console.warn, apiKey: process.env.OPENAI_API_KEY, findProfile: store.getProfile, upsertReport: store.ensureReport, nodeEnv: process.env.NODE_ENV, queryRaw: store.consumeRateLimit };
 const testEnvironment = process.env as Record<string, string | undefined>;
 
 async function scenario(name: string, options: { change?: (draft: Draft) => void; response?: typeof reply; resume?: boolean; timeout?: boolean; claim?: number; alreadyComplete?: boolean; invalidCalculation?: boolean; tone?: ReportTone; model?: string; storedPromptVersion?: string; storedModel?: string } = {}) {
@@ -86,9 +86,9 @@ async function main() {
   try {
     Date.now = () => originals.now() + timeOffset;
     console.warn = (...args: unknown[]) => { warnings.push(args); };
-    prisma.report.findUnique = (async () => ({ id: "fixture", status: completedAtStart ? "COMPLETED" : stored ? "FAILED" : "PENDING", content: stored, promptVersion: storedPromptVersion, model: storedModel, sajuProfile: { name: readerName, myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
-    prisma.report.updateMany = (async (args: { data: { promptVersion: string; model: string } }) => { claims.push(args.data); return { count: claimCount }; }) as unknown as typeof originals.claim;
-    prisma.report.update = (async (args: { data: Update }) => { updates.push(structuredClone(args.data)); return args.data; }) as unknown as typeof originals.update;
+    store.getReportWithAccess = (async () => ({ id: "fixture", status: completedAtStart ? "COMPLETED" : stored ? "FAILED" : "PENDING", content: stored, promptVersion: storedPromptVersion, model: storedModel, sajuProfile: { name: readerName, myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
+    store.claimReport = (async (_id: string, data: { promptVersion: string; model: string }) => { claims.push(data); return claimCount ? "fixture-lease" : null; }) as unknown as typeof originals.claim;
+    store.updateReport = (async (_id: string, _lease: string, data: Update) => { updates.push(structuredClone(data)); }) as unknown as typeof originals.update;
     Responses.prototype.create = (async (raw: unknown) => {
       const request = raw as RenderRequest;
       requests.push(request);
@@ -361,17 +361,17 @@ async function main() {
     const { GET } = require("../src/app/api/saju/reports/[reportId]/route") as typeof import("../src/app/api/saju/reports/[reportId]/route");
     const { POST } = require("../src/app/api/saju/reports/[reportId]/generate/route") as typeof import("../src/app/api/saju/reports/[reportId]/generate/route");
     const { POST: createReport } = require("../src/app/api/saju/profiles/[profileId]/reports/route") as typeof import("../src/app/api/saju/profiles/[profileId]/reports/route");
-    prisma.$queryRaw = (async () => [{ hits: 1 }]) as never;
-    prisma.sajuProfile.findUnique = (async () => ({ id: "profile-fixture", userId: "reader-account" })) as unknown as typeof originals.findProfile;
-    prisma.report.findUnique = (async () => null) as unknown as typeof originals.find;
-    prisma.report.upsert = (async (args: { create: typeof creations[number] }) => { creations.push(args.create); return { id: "default-message-report" }; }) as unknown as typeof originals.upsertReport;
+    store.consumeRateLimit = (async () => true) as never;
+    store.getProfile = (async () => ({ id: "profile-fixture", userId: "reader-account" })) as unknown as typeof originals.findProfile;
+    store.getReportWithAccess = (async () => null) as unknown as typeof originals.find;
+    store.ensureReport = (async (_uid: string, _id: string, metadata: typeof creations[number]) => { creations.push(metadata); return { id: "default-message-report" }; }) as unknown as typeof originals.upsertReport;
     const createdResponse = await createReport(new Request("http://localhost/api/saju/profiles/profile-fixture/reports", { method: "POST" }), { params: Promise.resolve({ profileId: "profile-fixture" }) });
     assert.equal(createdResponse.status, 201);
     assert.equal((await createdResponse.json()).reportId, "default-message-report");
     assert.equal(creations[0].promptVersion, REPORT_PROMPT_VERSION);
     assert.equal(creations[0].model, getConfiguredReportModel());
     assert.equal(creations[0].productCode, "yearly_2026");
-    prisma.report.findUnique = (async () => ({ id: "issued-report", status: "COMPLETED" })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "issued-report", status: "COMPLETED" })) as unknown as typeof originals.find;
     const existingResponse = await createReport(new Request("http://localhost/api/saju/profiles/profile-fixture/reports", { method: "POST" }), { params: Promise.resolve({ profileId: "profile-fixture" }) });
     assert.equal(existingResponse.status, 200);
     assert.deepEqual(await existingResponse.json(), { reportId: "issued-report", existing: true });
@@ -379,7 +379,7 @@ async function main() {
     tests += 2;
 
     for (const status of ["FAILED", "GENERATING", "COMPLETED"]) {
-      prisma.report.findUnique = (async () => ({ id: "fixture", status, content: null, sajuProfile: { userId: "reader-account" }, order: null, lastError: "career: internal validator details and provider configuration" })) as unknown as typeof originals.find;
+      store.getReportWithAccess = (async () => ({ id: "fixture", status, content: null, sajuProfile: { userId: "reader-account" }, order: null, lastError: "career: internal validator details and provider configuration" })) as unknown as typeof originals.find;
       const response = await GET(new Request("http://localhost/api/saju/reports/fixture"), { params: Promise.resolve({ reportId: "fixture" }) });
       const body = await response.json();
       assert.equal(body.lastError, status === "FAILED" ? PUBLIC_REPORT_FAILURE_MESSAGE : null);
@@ -389,11 +389,11 @@ async function main() {
 
     // A completed request is idempotent; failed generation is not reported as a
     // successful HTTP request, and provider details stay private.
-    prisma.report.findUnique = (async () => ({ id: "fixture", status: "COMPLETED", sajuProfile: { userId: "reader-account" }, order: null })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "fixture", status: "COMPLETED", sajuProfile: { userId: "reader-account" }, order: null })) as unknown as typeof originals.find;
     let generationResponse = await POST(new Request("http://localhost/api/saju/reports/fixture/generate", { method: "POST" }), { params: Promise.resolve({ reportId: "fixture" }) });
     assert.equal(generationResponse.status, 200);
     assert.equal((await generationResponse.json()).status, "COMPLETED");
-    prisma.report.findUnique = (async () => ({ id: "fixture", status: "FAILED", content: null, sajuProfile: { userId: "reader-account", name: readerName, myeongsik: {} }, order: null })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "fixture", status: "FAILED", content: null, sajuProfile: { userId: "reader-account", name: readerName, myeongsik: {} }, order: null })) as unknown as typeof originals.find;
     generationResponse = await POST(new Request("http://localhost/api/saju/reports/fixture/generate", { method: "POST" }), { params: Promise.resolve({ reportId: "fixture" }) });
     assert.equal(generationResponse.status, 503);
     assert.equal((await generationResponse.json()).error, PUBLIC_REPORT_FAILURE_MESSAGE);
@@ -450,20 +450,18 @@ async function main() {
     console.log(`PASS: ${tests} report recovery checks; repeat openings repaired, style-only failures/timeouts publish a validated draft, missing evidence and private data stay blocked, internal errors hidden in API and UI.`);
   } finally {
     Responses.prototype.create = originals.create;
-    prisma.report.findUnique = originals.find;
-    prisma.report.updateMany = originals.claim;
-    prisma.report.update = originals.update;
-    prisma.sajuProfile.findUnique = originals.findProfile;
-    prisma.report.create = originals.createReport;
-    prisma.report.upsert = originals.upsertReport;
+    store.getReportWithAccess = originals.find;
+    store.claimReport = originals.claim;
+    store.updateReport = originals.update;
+    store.getProfile = originals.findProfile;
+    store.ensureReport = originals.upsertReport;
     if (originals.nodeEnv === undefined) delete testEnvironment.NODE_ENV;
     else testEnvironment.NODE_ENV = originals.nodeEnv;
     Date.now = originals.now;
     console.warn = originals.warn;
-    prisma.$queryRaw = originals.queryRaw;
+    store.consumeRateLimit = originals.queryRaw;
     if (originals.apiKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originals.apiKey;
-    await prisma.$disconnect();
   }
 }
 

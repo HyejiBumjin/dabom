@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSajuAccount } from "@/lib/saju/account";
-import { prepareSajuOrder, fulfillSajuOrder, PAYMENT_TRANSACTION_OPTIONS } from "@/lib/saju/library-service";
+import { prepareSajuOrder, fulfillSajuOrder } from "@/lib/saju/library-service";
 import { env } from "@/lib/env";
-import { prisma } from "@/lib/db";
 import { getPortOnePayment, PortOnePaymentLookupError } from "@/lib/portone/server";
 import { guardedMutation, readJsonBody } from "@/lib/security/request";
 import { enforceAccountRateLimit } from "@/lib/security/rate-limit";
@@ -24,7 +23,7 @@ export async function POST(request: Request) {
     try {
       const payment = await getPortOnePayment(result.orderId);
       if (payment.status === "PAID") {
-        const report = await prisma.$transaction(tx => fulfillSajuOrder(account.id, result.orderId, payment, tx), PAYMENT_TRANSACTION_OPTIONS);
+        const report = await fulfillSajuOrder(account.id, result.orderId, payment);
         return NextResponse.json({ existing: true, reportId: report.id });
       }
       if (!["READY", "FAILED"].includes(payment.status)) return NextResponse.json({ error: "이 주문의 결제 상태를 확인 중이야. 결제 확인을 이어가줘." }, { status: 409 });

@@ -41,8 +41,31 @@ for (const file of files) {
 const history = execFileSync("git", ["log", "--all", "-p", "--format=commit %H"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const historyFindings = patterns.filter(([, pattern]) => pattern.test(history)).map(([kind]) => kind);
 historyFindings.push(...legacySecretKinds(history));
-const secretNames = ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY", "PORTONE_API_SECRET", "PORTONE_WEBHOOK_SECRET", "DATABASE_URL", "ABLECITY_API_KEY"];
+const secretNames = ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY", "PORTONE_API_SECRET", "PORTONE_WEBHOOK_SECRET", "DATABASE_URL", "ABLECITY_API_KEY", "FIREBASE_ADMIN_CREDENTIALS_JSON", "KAKAO_CLIENT_SECRET"];
 const secrets = secretNames.filter(name => (process.env[name]?.length ?? 0) >= 16).map(name => ({ name, value: process.env[name] }));
+// Credential files are intentionally ignored by Git, but their contents must also
+// stay out of browser bundles and tracked history. Never print matching values.
+const firebaseCredentialSources = [];
+if (process.env.FIREBASE_ADMIN_CREDENTIALS_JSON) firebaseCredentialSources.push(process.env.FIREBASE_ADMIN_CREDENTIALS_JSON);
+if (process.env.FIREBASE_ADMIN_CREDENTIALS_FILE) {
+  try {
+    firebaseCredentialSources.push(fs.readFileSync(path.resolve(process.env.FIREBASE_ADMIN_CREDENTIALS_FILE), "utf8"));
+  } catch {
+    console.error("Unable to inspect configured Firebase credential file for secret leakage.");
+    process.exit(1);
+  }
+}
+for (const source of firebaseCredentialSources) {
+  try {
+    const key = JSON.parse(source).private_key;
+    if (typeof key !== "string" || key.length < 64) throw new Error("Invalid credential.");
+    secrets.push({ name: "FIREBASE_ADMIN_PRIVATE_KEY", value: key });
+    secrets.push({ name: "FIREBASE_ADMIN_PRIVATE_KEY_ESCAPED", value: JSON.stringify(key).slice(1, -1) });
+  } catch {
+    console.error("Unable to parse configured Firebase credentials for secret leakage.");
+    process.exit(1);
+  }
+}
 const bundleFindings = [];
 for (const secret of secrets) if (history.includes(secret.value)) historyFindings.push(`current-${secret.name}`);
 function scan(dir) {

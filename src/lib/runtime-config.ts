@@ -1,10 +1,9 @@
-import { hasPortOne, hasSupabase } from "./env";
+import { hasPortOne } from "./env";
 
 /**
  * Runtime feature flags for preview mode
  */
 export const runtimeConfig = {
-  supabaseReady: hasSupabase(),
   portoneReady: hasPortOne(),
-  previewMode: !hasSupabase() || !hasPortOne(),
+  previewMode: !hasPortOne(),
 } as const;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { RELATIONSHIPS, relationshipLabel, type Relationship } from "@/lib/saju/profile-input";
-import { EmptyMailboxCat } from "@/components/RetroWindow";
+import { EmptyMailboxCat, PixelEnvelope } from "@/components/RetroWindow";
 
 export type LibraryProfile = {
   id: string; name: string; relationship: Relationship; birthDate: string;
@@ -32,7 +32,9 @@ export function SajuLibrary({ profiles, preview = false }: { profiles: LibraryPr
       ) : (
         <div className="retro-library-list">
           {visible.map(profile => (
-            <section key={profile.id} className="retro-library-card" aria-label={`${profile.name}의 운세`}>
+            <section key={profile.id} className="retro-library-card" data-relationship={profile.relationship} aria-label={`${profile.name}의 운세`}>
+              <div className="retro-library-card-bar" aria-hidden="true"><PixelEnvelope /><span>다봄의 메시지</span><span>✧</span></div>
+              <div className="retro-library-card-body">
               <div className="retro-library-person"><h2>{profile.name}</h2><span>{relationshipLabel(profile.relationship)}</span></div>
               <p className="retro-library-birth">{profile.birthDate.replaceAll("-", ".")} · {profile.isLunar ? "음력" : "양력"} · {profile.birthTime ?? "시각 모름"}</p>
               {profile.reports.length ? profile.reports.map(report => (
@@ -41,6 +43,7 @@ export function SajuLibrary({ profiles, preview = false }: { profiles: LibraryPr
                   <span aria-hidden="true">→</span>
                 </ReportLink>
               )) : <ReportLink preview={preview} href={`/saju/profiles/${profile.id}/checkout`}><span><strong>올해 운세 받기</strong><small>등록한 정보로 메시지를 준비할게.</small></span><span aria-hidden="true">→</span></ReportLink>}
+              </div>
             </section>
           ))}
         </div>

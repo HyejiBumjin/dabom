@@ -1,0 +1,106 @@
+import assert from "node:assert/strict";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
+import { loadEnvConfig } from "@next/env";
+import { Timestamp } from "firebase-admin/firestore";
+import type { Auth, DecodedIdToken } from "firebase-admin/auth";
+import { getFirebaseAdminFirestore } from "../src/lib/firebase/admin";
+import { FirebaseStore } from "../src/lib/firebase/store";
+import { consumeOAuthAttempt, verifyFirebaseSession, revokeCurrentSession } from "../src/lib/firebase/auth";
+import { saveSajuProfile, findExistingSajuReport, profileBirthKey } from "../src/lib/saju/library-service";
+import { canReadSajuReport } from "../src/lib/saju/account";
+
+loadEnvConfig(process.cwd(), true);
+const prefix = `test_${randomUUID().replaceAll("-", "")}_`;
+const db = getFirebaseAdminFirestore();
+const store = new FirebaseStore(() => db, prefix);
+const collections = ["users", "profiles", "products", "orders", "reports", "rateLimits", "oauthAttempts", "sessions"];
+const input = { name: "합성 검사", relationship: "SELF" as const, gender: "female" as const, birthDate: "1995-05-20", birthTime: "20:20", calendar: "solar" as const, isLeapMonth: false };
+const metadata = { productCode: "yearly_2026", model: "test-no-model-call", promptVersion: "test" };
+const sha = (value: string) => createHash("sha256").update(value).digest("hex");
+let passed = 0;
+function check(name: string, condition: unknown) { assert.ok(condition, name); passed++; console.log(`PASS ${name}`); }
+async function rejects(name: string, action: () => Promise<unknown>) { await assert.rejects(action); check(name, true); }
+async function main() {
+  await store.collection("products").doc(metadata.productCode).create({ ...metadata, code: metadata.productCode, name: "합성 상품", active: true, price: 3900 });
+  const profiles = await Promise.all(Array.from({length: 4}, () => saveSajuProfile("kakao_10001", input, store)));
+  const profileId = profiles[0].profileId;
+  check("concurrent identical profile writes create one document", new Set(profiles.map(p => p.profileId)).size === 1 && profiles.filter(p => !p.existing).length === 1);
+  const other = await saveSajuProfile("kakao_10002", input, store);
+  check("identical birthdays are isolated by account", other.profileId !== profileId);
+  const renamed = await saveSajuProfile("kakao_10001", { ...input, name: "바뀐 표시 이름", relationship: "FAMILY" }, store);
+  check("name/relationship edit reuses birth profile", renamed.profileId === profileId && (await store.getProfile(profileId))?.name === "바뀐 표시 이름");
+  check("calendar and unknown time affect birth identity", profileBirthKey(input) !== profileBirthKey({ ...input, birthTime: null }) && profileBirthKey(input) !== profileBirthKey({ ...input, calendar: "lunar" }));
+  check("unsafe document paths do not resolve", await store.getProfile("../users/owner") === null);
+  const profile = await store.getProfile(profileId);
+  check("calculation JSON and date round trip", profile?.birthDate instanceof Date && typeof profile.myeongsik === "object");
+  await rejects("cross-account order rejected", () => store.prepareOrder("kakao_10002", profileId, metadata));
+  await rejects("production free report rejected", () => store.ensureReport("kakao_10001", profileId, metadata, undefined, false));
+  const prepared = await Promise.all(Array.from({length: 4}, () => store.prepareOrder("kakao_10001", profileId, metadata)));
+  const orderId = store.orderId("kakao_10001", profileId, metadata.productCode);
+  check("concurrent prepares reuse one unpaid order", prepared.every(o => !o.existing && o.orderId === orderId) && (await store.collection("orders").get()).size === 1);
+  const payment = { id: orderId, status: "PAID", currency: "KRW", amount: 3900 };
+  for (const patch of [{ id: "stolen" }, { amount: 1 }, { amount: NaN }, { status: "READY" }, { currency: "USD" }]) await rejects("forged payment cannot grant entitlement", () => store.fulfillOrder("kakao_10001", orderId, { ...payment, ...patch }, metadata));
+  await rejects("other account cannot confirm payment", () => store.fulfillOrder("kakao_10002", orderId, payment, metadata));
+  const paid = await Promise.all(Array.from({length: 4}, () => store.fulfillOrder("kakao_10001", orderId, payment, metadata)));
+  const reportId = paid[0].id;
+  check("concurrent confirms create exactly one report", new Set(paid.map(r => r.id)).size === 1 && (await store.collection("reports").get()).size === 1);
+  check("paid recheckout reopens existing report", (await store.prepareOrder("kakao_10001", profileId, metadata)).existing);
+  const access = (await store.getReportWithAccess(reportId))!;
+  check("paid owner allowed; other user denied", canReadSajuReport(access, {id:"kakao_10001"}, false) && !canReadSajuReport(access, {id:"kakao_10002"}, false));
+  check("duplicate lookup returns own paid report", (await findExistingSajuReport("kakao_10001", input, store, false))?.id === reportId && await findExistingSajuReport("kakao_10002", input, store, false) === null);
+  const claims = await Promise.all(Array.from({length: 4}, () => store.claimReport(reportId, {}, "kakao_10001", false)));
+  check("concurrent generation has one lease", claims.filter(Boolean).length === 1);
+  const lease = claims.find(Boolean)!;
+  await rejects("foreign lease cannot overwrite report", () => store.updateReport(reportId, "stolen-lease", {status:"COMPLETED"}));
+  await store.collection("reports").doc(reportId).update({ generationStartedAt: Timestamp.fromMillis(Date.now()-180_000) });
+  const nextLease = await store.claimReport(reportId, {}, "kakao_10001", false);
+  check("interrupted generation can recover", nextLease && nextLease !== lease);
+  await rejects("stale worker cannot overwrite recovery", () => store.updateReport(reportId, lease, {status:"COMPLETED"}));
+  const content = { paragraphs: ["합성 내용"], nested: [[1,2],[3]] };
+  await store.updateReport(reportId, nextLease!, {status:"COMPLETED", content});
+  check("report nested JSON round trip", JSON.stringify((await store.getReport(reportId))?.content) === JSON.stringify(content));
+  check("completed generation is idempotent", await store.claimReport(reportId, {}, "kakao_10001", false) === null);
+  check("library exposes only own paid reports", (await store.listLibrary("kakao_10001", false))[0].reports.length === 1 && (await store.listLibrary("kakao_10002", false))[0].reports.length === 0);
+  await Promise.allSettled([store.cancelOrder("kakao_10001", orderId), store.fulfillOrder("kakao_10001", orderId, payment, metadata)]);
+  check("cancellation wins confirmation race", (await store.getOrder(orderId))?.status === "CANCELLED");
+  await rejects("delayed confirmation cannot revive cancelled payment", () => store.fulfillOrder("kakao_10001", orderId, payment, metadata));
+  await rejects("cancelled payment cannot create/rebind report", () => store.ensureReport("kakao_10001", profileId, metadata, orderId, false));
+  check("cancelled access and library entitlement removed", !canReadSajuReport((await store.getReportWithAccess(reportId))!, {id:"kakao_10001"}, false) && (await store.listLibrary("kakao_10001", false))[0].reports.length === 0);
+  const limits = await Promise.all(Array.from({length: 6}, () => store.consumeRateLimit("kakao_10001", "test", 3, 60_000)));
+  check("concurrent rate limit allows exactly budget", limits.filter(Boolean).length === 3);
+  check("other account has separate rate budget", await store.consumeRateLimit("kakao_10002", "test", 3, 60_000));
+  const state = randomBytes(32).toString("base64url"), binding = randomBytes(32).toString("base64url");
+  const attempt = store.collection("oauthAttempts").doc(sha(state));
+  await attempt.create({binding:sha(binding), next:"/saju/library", expiresAt:Timestamp.fromMillis(Date.now()+60_000)});
+  check("OAuth state needs matching browser binding", await consumeOAuthAttempt(state, `${state}.${randomBytes(32).toString("base64url")}`, store) === null && await consumeOAuthAttempt(state, undefined, store) === null);
+  const states = await Promise.all(Array.from({length: 3}, () => consumeOAuthAttempt(state, `${state}.${binding}`, store)));
+  check("OAuth state consumed exactly once under concurrency", states.filter(Boolean).length === 1);
+  check("OAuth replay denied", await consumeOAuthAttempt(state, `${state}.${binding}`, store) === null);
+  await attempt.create({binding:sha(binding), next:"https://evil.test", expiresAt:Timestamp.fromMillis(Date.now()-1)});
+  check("expired OAuth state denied", await consumeOAuthAttempt(state, `${state}.${binding}`, store) === null);
+  const uid = "kakao_10001", cookie = "synthetic-session-no-real-token";
+  await store.saveAccount(uid,"10001","합성 사용자");
+  let identity = { uid, loginProvider:"kakao", firebase:{sign_in_provider:"custom"} } as unknown as DecodedIdToken;
+  let revoked = false;
+  const auth = {verifySessionCookie: async (_token:string, checkRevoked:boolean) => { assert.equal(checkRevoked,true); if(revoked) throw Object.assign(new Error("invalid"),{code:"auth/session-cookie-revoked"}); return identity; }} as Auth;
+  check("signed cookie without active server session denied", await verifyFirebaseSession(cookie,store,auth) === null);
+  await store.collection("sessions").doc(sha(cookie)).create({uid,expiresAt:Timestamp.fromMillis(Date.now()+60_000)});
+  check("verified custom Kakao session resolves account", (await verifyFirebaseSession(cookie,store,auth))?.id === uid);
+  identity = {...identity, loginProvider:"anonymous"};
+  check("anonymous/custom non-Kakao identity denied", await verifyFirebaseSession(cookie,store,auth) === null);
+  identity = {...identity, loginProvider:"kakao"}; revoked=true;
+  check("Firebase revocation is enforced", await verifyFirebaseSession(cookie,store,auth) === null); revoked=false;
+  await revokeCurrentSession(cookie,store);
+  check("logout immediately invalidates copied session", await verifyFirebaseSession(cookie,store,auth) === null);
+  const url = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/${prefix}profiles/${profileId}`;
+  for (const method of ["GET","PATCH"]) {
+    const response = await fetch(url, {method, ...(method === "PATCH" ? {headers:{"Content-Type":"application/json"},body:JSON.stringify({fields:{userId:{stringValue:"attacker"}}})} : {})});
+    check(`deployed Firestore rules deny unauthenticated ${method}`, response.status === 403);
+  }
+  console.log(`\n${passed} PASS against isolated Firestore collections; no model/payment API calls.`);
+}
+main().catch(error => {console.error(error);process.exitCode=1;}).finally(async () => {
+  for(const name of collections) {const docs=await store.collection(name).get(); await Promise.all(docs.docs.map(doc=>doc.ref.delete()));}
+  console.log("Synthetic Firestore records removed.");
+  await db.terminate();
+});

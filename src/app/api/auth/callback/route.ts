@@ -1,40 +1,22 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import { safeReturnPath } from "@/lib/auth-return-path";
-import { env } from "@/lib/env";
-
-const callbackQuerySchema = z.object({
-  code: z.string().min(1).max(2048),
-  next: z.string().max(2048).optional(),
-});
+import { authOrigin, consumeOAuthAttempt, finishKakaoLogin, oauthCookieName, SESSION_SECONDS, sessionCookieName, sessionCookieOptions } from "@/lib/firebase/auth";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  // Trusted configuration, rather than a client-supplied Host/forwarded host.
-  const origin = new URL(env.APP_URL).origin;
-  const parsed = callbackQuerySchema.safeParse({
-    code: searchParams.get("code"),
-    next: searchParams.get("next") ?? "/",
-  });
-  if (!parsed.success) {
-    return NextResponse.redirect(`${origin}/login?error=no_code`);
+  const query = new URL(request.url).searchParams;
+  let response: NextResponse;
+  try {
+    const attempt = await consumeOAuthAttempt(query.get("state") ?? "", (await cookies()).get(oauthCookieName())?.value);
+    const code = query.get("code");
+    if (!attempt || !code || code.length > 2048 || query.has("error")) throw new Error("INVALID_CALLBACK");
+    const session = await finishKakaoLogin(code);
+    response = NextResponse.redirect(new URL(attempt.next, authOrigin()));
+    response.cookies.set(sessionCookieName(), session, { ...sessionCookieOptions(), maxAge: SESSION_SECONDS });
+  } catch {
+    response = NextResponse.redirect(new URL("/login?error=oauth", authOrigin()));
   }
-  const { code, next } = parsed.data;
-
-  const supabase = await createClient();
-  if (!supabase) {
-    return NextResponse.redirect(`${origin}/login?error=config`);
-  }
-
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-  if (error) {
-    const retry = new URL("/login", origin);
-    retry.searchParams.set("error", "oauth");
-    retry.searchParams.set("next", safeReturnPath(next));
-    return NextResponse.redirect(retry);
-  }
-
-  return NextResponse.redirect(new URL(safeReturnPath(next), origin));
+  response.cookies.set(oauthCookieName(), "", { ...sessionCookieOptions(), maxAge: 0 });
+  response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
 }

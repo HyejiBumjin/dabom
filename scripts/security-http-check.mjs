@@ -45,12 +45,10 @@ async function main() {
     assert.equal(canonical.origin, origin.origin);
     await check(canonical.pathname + canonical.search, { status: 401, headers: prefetchHeaders });
   }
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    const project = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname.split(".")[0];
-    const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
-    const jwt = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: "00000000-0000-4000-8000-000000000000", role: "authenticated", exp: Math.floor(Date.now()/1000)+3600 })}.forged-signature`;
-    const session = { access_token: jwt, refresh_token: "forged-refresh-token", expires_at: Math.floor(Date.now()/1000)+3600, expires_in: 3600, token_type: "bearer", user: { id: "00000000-0000-4000-8000-000000000000" } };
-    await check("/api/saju/reports/security-probe", { status: 401, headers: { cookie: `sb-${project}-auth-token=base64-${encode(session)}` } });
+  const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const forged = `${encode({alg:"HS256",typ:"JWT"})}.${encode({sub:"kakao_1",aud:"dabom-10a35",loginProvider:"kakao",exp:Math.floor(Date.now()/1000)+3600})}.forged-signature`;
+  for (const cookie of [`__Host-dabom_session=${forged}`, "__Host-dabom_session=invalid", "sb-old-auth-token=forged"]) {
+    await check("/api/saju/reports/security-probe", {status:401,headers:{cookie}});
   }
   for (const [method, path] of api.filter(([method]) => method === "POST")) await check(path, { method, status: 403, headers: { origin: "https://evil.invalid", "content-type": "application/json" }, body: "{}" });
   await check("/api/auth/logout", { method: "POST", status: 403, headers: { origin: "https://evil.invalid" } });
@@ -60,7 +58,7 @@ async function main() {
   }
   for (const path of ["/api/payments/prepare", "/api/payments/confirm", "/api/reports/create", "/api/letters/create", "/api/saju/test"]) await check(path, { method: "POST", status: 410, headers: { "content-type": "application/json" }, body: "{}" });
   await check("/api/reports/00000000-0000-4000-8000-000000000000", { status: 410 });
-  for (const path of ["/.env", "/.env.local", "/.git/config", "/prisma/schema.prisma", "/scripts/security-check.ts", "/preview/report", "/design/report-essay", "/saju/preview/library", "/saju/preview/checkout", "/saju/preview/loading", "/reports/00000000-0000-4000-8000-000000000000", "/gift/security-probe", "/checkout/success"]) await check(path, { status: 404 });
+  for (const path of ["/.env", "/.env.local", "/.git/config", "/secrets/firebase-admin.json", "/prisma/schema.prisma", "/scripts/security-check.ts", "/preview/report", "/design/report-essay", "/saju/preview/library", "/saju/preview/checkout", "/saju/preview/loading", "/reports/00000000-0000-4000-8000-000000000000", "/gift/security-probe", "/checkout/success"]) await check(path, { status: 404 });
   await check("/_next/image?url=http%3A%2F%2Fexample.invalid%2Fprobe.png&w=640&q=75", { status: 400 });
   await check("/_next/image?url=http%3A%2F%2F127.0.0.1%3A3100%2F&w=640&q=75", { status: 400 });
   for (const [method, path] of [["GET", "/api/saju/payments/confirm"], ["DELETE", "/api/saju/profiles"], ["PUT", "/api/saju/reports/security-probe"]]) await check(path, { method, status: 405 });

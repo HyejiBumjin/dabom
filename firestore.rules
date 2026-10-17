@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Private customer and payment data are served only by the Next.js server.
+    // The Admin SDK uses IAM; every server route must verify owner/payment access.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

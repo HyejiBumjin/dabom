@@ -18,26 +18,21 @@ globalThis.fetch = async () => { throw new Error("Unexpected network call in sec
 
 let passed = 0;
 function check(name: string, ok: unknown) { assert.ok(ok, name); passed++; console.log(`PASS ${name}`); }
-const { prisma } = require("../src/lib/db") as typeof import("../src/lib/db");
+const { firebaseStore: store } = require("../src/lib/firebase/store") as typeof import("../src/lib/firebase/store");
 let identity: string | null = "A";
 let authError = false;
 let temporaryAuthError = false;
 let anonymousSession = false;
 let authCalls = 0;
 let writes = 0;
-const serverPath = require.resolve("../src/lib/supabase/server");
-require(serverPath);
-require.cache[serverPath]!.exports = { createClient: async () => ({ auth: {
-  getUser: async () => { authCalls++; return { data: { user: identity ? { id: identity, is_anonymous: anonymousSession, user_metadata: {} } : null }, error: temporaryAuthError ? Object.assign(new Error("private provider details"), { name: "AuthRetryableFetchError", status: 503 }) : authError ? new Error("bad token") : null }; },
-  getSession: () => { throw new Error("Unverified session must not authorize a request"); },
-  signOut: async () => ({ error: null }),
-} }) };
-prisma.user.upsert = (async () => { writes++; return { id: identity }; }) as never;
 let identityDatabaseError = false;
-prisma.user.findUnique = (async () => {
-  if (identityDatabaseError) throw new Error("private database details must remain private");
-  return identity ? { id: identity } : null;
-}) as never;
+const serverPath = require.resolve("../src/lib/firebase/auth");
+require(serverPath);
+require.cache[serverPath]!.exports = { ...require(serverPath), getFirebaseAccount: async () => {
+  authCalls++;
+  if (temporaryAuthError || identityDatabaseError) throw new Error("private provider/database details");
+  return identity && !authError && !anonymousSession ? { id: identity } : null;
+} };
 const account = require("../src/lib/saju/account") as typeof import("../src/lib/saju/account");
 const { assertSameOrigin, readJsonBody, guardedMutation } = require("../src/lib/security/request") as typeof import("../src/lib/security/request");
 const { profileInputSchema } = require("../src/lib/saju/profile-input") as typeof import("../src/lib/saju/profile-input");
@@ -57,26 +52,28 @@ let generationCalls = 0;
 let reportCount = 0;
 let cancelBetweenReadAndWrite = false;
 const order = () => ({ id: "order-fixture", merchantUid: provider.id, userId: "A", amount: 3900, status: paymentStatus, paidAt: null, product: { id: "product-fixture", price: 3900, code: "yearly_2026", active: true }, sajuProfileId: "profile-fixture", sajuProfile: { userId: profileOwner } });
-prisma.$queryRaw = (async () => rateBlocked ? [] : [{ hits: 1 }]) as never;
-prisma.sajuProfile.findUnique = (async () => ({ id: "profile-fixture", userId: profileOwner })) as never;
-prisma.sajuProfile.findFirst = (async ({ where }: { where: { userId: string } }) => where.userId === profileOwner ? { id: "profile-fixture" } : null) as never;
-prisma.product.findUnique = (async () => order().product) as never;
-prisma.order.findFirst = (async ({ where }: { where: { userId?: string; merchantUid?: string } }) => {
-  const found = (!where.userId || where.userId === "A") && (!where.merchantUid || where.merchantUid === provider.id) ? order() : null;
+store.consumeRateLimit = async () => !rateBlocked;
+store.getProfile = (async () => ({ id: "profile-fixture", userId: profileOwner })) as never;
+store.getProduct = (async () => order().product) as never;
+store.getOrder = (async () => {
+  const found = { ...order(), productCode: "yearly_2026" };
   if (cancelBetweenReadAndWrite) paymentStatus = "CANCELLED";
   return found;
 }) as never;
-prisma.order.upsert = (async () => ({ ...order(), report: paymentStatus === "PAID" ? { id: "report-fixture" } : null })) as never;
-prisma.order.update = (async ({ data }: { data: { status: string } }) => { writes++; paymentStatus = data.status; return order(); }) as never;
-prisma.order.updateMany = (async ({ where, data }: { where?: { status?: { not: string } }; data: { status: string } }) => {
-  if (where?.status?.not === paymentStatus) return { count: 0 };
-  writes++; paymentStatus = data.status; return { count: 1 };
+store.prepareOrder = (async (userId: string) => {
+  if (userId !== profileOwner) throw new Error("PROFILE_NOT_FOUND");
+  return paymentStatus === "PAID" ? { existing: true, reportId: "report-fixture" } : { existing: false, orderId: provider.id, amount: 3900, orderName: "synthetic" };
 }) as never;
-prisma.report.upsert = (async () => { reportCount++; return { id: "report-fixture", status: reportStatus }; }) as never;
-prisma.report.findUnique = (async () => ({ id: "report-fixture", status: reportStatus, content: { paragraphs: ["synthetic-private-report"] }, sajuProfile: { userId: reportOwner }, order: { userId: "A", status: paymentStatus } })) as never;
-prisma.report.findFirst = (async () => null) as never;
-prisma.sajuProfile.update = (async () => { writes++; throw new Error("postgresql://hidden:secret@internal.example/private"); }) as never;
-prisma.$transaction = (async (fn: (tx: typeof prisma) => unknown) => fn(prisma)) as never;
+store.ensureReport = (async () => { reportCount++; return { id: "report-fixture", status: reportStatus }; }) as never;
+store.fulfillOrder = (async (_uid: string, _id: string, payment: Parameters<typeof verifySajuPayment>[1]) => {
+  if (paymentStatus === "CANCELLED") throw new Error("ORDER_CANCELLED");
+  verifySajuPayment(order(), payment);
+  writes++; paymentStatus = "PAID"; reportCount++;
+  return { id: "report-fixture" };
+}) as never;
+store.cancelOrder = async () => { writes++; paymentStatus = "CANCELLED"; };
+store.getReportWithAccess = (async () => ({ id: "report-fixture", status: reportStatus, content: { paragraphs: ["synthetic-private-report"] }, sajuProfile: { userId: reportOwner }, order: { userId: "A", status: paymentStatus } })) as never;
+store.saveProfile = (async () => { writes++; throw new Error("private database details internal.example"); }) as never;
 const portonePath = require.resolve("../src/lib/portone/server");
 require.cache[portonePath]!.exports = { ...require(portonePath), getPortOnePayment: async () => { paymentCalls++; return parsePortOnePayment(provider, provider.id, "store-test"); } };
 const generationPath = require.resolve("../src/lib/llm/report-generator");
@@ -117,7 +114,7 @@ async function main() {
   check("forged/expired token cannot create account", await account.getSajuAccount() === null && writes === initialWrites);
   authError = false;
   anonymousSession = true;
-  check("Supabase anonymous auth session is not a customer account", await account.getSajuAccount() === null && writes === initialWrites);
+  check("Anonymous auth session is not a customer account", await account.getSajuAccount() === null && writes === initialWrites);
   anonymousSession = false;
   const beforeIdentityWrites = writes;
   let identityResponse = await sessionAccount.GET();
@@ -206,8 +203,11 @@ async function main() {
   check("profile abuse limited before calculation/write", (await profiles.POST(request("/profiles", input))).status === 429);
   check("payment lookup abuse limited", (await confirm.POST(request("/confirm", { orderId: provider.id, paymentId: provider.id }))).status === 429);
   rateBlocked = false;
+  const savedRead = store.getReportWithAccess;
+  store.getReportWithAccess = async () => null;
   const failure = await profiles.POST(request("/profiles", input));
   check("database error never leaks connection/SQL details", failure.status === 503 && !/postgres|secret|internal\.example/u.test(await failure.text()));
+  store.getReportWithAccess = savedRead;
   check("cross-site profile write denied before auth", (await profiles.POST(request("/profiles", input, { origin: "https://evil.test" }))).status === 403);
 
   const event = { type: "Transaction.Cancelled", timestamp: new Date().toISOString(), data: { storeId: "store-test", paymentId: provider.id, transactionId: "synthetic-tx", cancellationId: "synthetic-cancellation" } };
@@ -237,4 +237,4 @@ async function main() {
   console.log(`\n${passed} PASS (synthetic accounts and mocked providers; no external requests)`);
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());
+main().catch(error => { console.error(error); process.exitCode = 1; });

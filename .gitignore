@@ -23,6 +23,9 @@
 # misc
 .DS_Store
 *.pem
+# Firebase Admin credentials must never be committed.
+/secrets/
+*-firebase-adminsdk-*.json
 
 # debug
 npm-debug.log*

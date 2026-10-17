@@ -8,10 +8,11 @@ import { announceAuthChange, clearProfileDraft } from "@/lib/auth-change";
 interface TopNavProps {
   userEmail?: string | null;
   loggedIn?: boolean;
+  showLibraryLink?: boolean;
   onLogout?: () => void;
 }
 
-export function TopNav({ userEmail, loggedIn = Boolean(userEmail) }: TopNavProps) {
+export function TopNav({ userEmail, loggedIn = Boolean(userEmail), showLibraryLink = true }: TopNavProps) {
   const queryClient = useQueryClient();
 
   const handleLogout = async () => {
@@ -30,9 +31,9 @@ export function TopNav({ userEmail, loggedIn = Boolean(userEmail) }: TopNavProps
         <div className="flex items-center gap-3">
           {loggedIn ? (
             <>
-              <Link href="/saju/library" className="text-sm text-zinc-700 hover:underline">
+              {showLibraryLink && <Link href="/saju/library" className="text-sm text-zinc-700 hover:underline">
                 내 운세함
-              </Link>
+              </Link>}
               {userEmail && <span className="text-sm text-zinc-600">{userEmail}</span>}
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 로그아웃

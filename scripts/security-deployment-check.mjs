@@ -58,17 +58,17 @@ try {
   }
   for(const path of ["/api/payments/prepare","/api/payments/confirm","/api/reports/create","/api/letters/create","/api/saju/test"]) check(path,410,{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
   check("/api/reports/00000000-0000-4000-8000-000000000000",410);
-  for(const path of ["/.env.local","/.git/config","/prisma/schema.prisma","/preview/report","/design/report-essay","/saju/preview/library","/gift/security-deployment-probe","/checkout/success"]) check(path,404);
+  for(const path of ["/.env.local","/.git/config","/secrets/firebase-admin.json","/prisma/schema.prisma","/preview/report","/design/report-essay","/saju/preview/library","/saju/preview/messages","/gift/security-deployment-probe","/checkout/success"]) check(path,404);
   check("/api/saju/payments/webhook",503,{method:"POST",headers:{"content-type":"application/json"},body:'{"type":"Transaction.Paid","data":{"paymentId":"forged","storeId":"forged"}}'});
   const callback=check("/api/auth/callback?next=%2F%2Fevil.invalid",307,{headers:{"x-forwarded-host":"evil.invalid","x-forwarded-proto":"https"}});
   verify("callback fixed to owned origin",new URL(callback.headers.get("location")).origin==="https://dabom-letter.com");
   const login=check("/api/auth/login?next=%2Fsaju%2Flibrary",307);
   const provider=new URL(login.headers.get("location"));
-  const redirect=new URL(provider.searchParams.get("redirect_to"));
-  verify("Kakao OAuth configured",provider.hostname.endsWith(".supabase.co") && provider.searchParams.get("provider")==="kakao");
+  const redirect=new URL(provider.searchParams.get("redirect_uri"));
+  verify("Kakao OAuth configured",provider.hostname==="kauth.kakao.com" && provider.pathname==="/oauth/authorize" && Boolean(provider.searchParams.get("state")));
   verify("OAuth return uses owned domain",redirect.origin==="https://dabom-letter.com" && redirect.pathname==="/api/auth/callback");
-  verify("PKCE cookie Secure",/;\s*Secure/i.test(login.headers.get("set-cookie") || ""));
-  verify("PKCE cookie SameSite=Lax",/;\s*SameSite=lax/i.test(login.headers.get("set-cookie") || ""));
+  verify("OAuth binding cookie Secure",/;\s*Secure/i.test(login.headers.get("set-cookie") || ""));
+  verify("OAuth binding cookie SameSite=Lax",/;\s*SameSite=lax/i.test(login.headers.get("set-cookie") || ""));
   console.log(`\n${passed} PASS; anonymous/synthetic requests only, no user login, customer rows, real payments or LLM calls`);
 } catch(error) {
   console.error(error instanceof assert.AssertionError ? error.message : "Deployment verification failed; sensitive details withheld");

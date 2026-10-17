@@ -1,8 +1,8 @@
 import { Webhook } from "@portone/server-sdk";
 import { env } from "@/lib/env";
-import { prisma } from "@/lib/db";
+import { firebaseStore } from "@/lib/firebase/store";
 import { getPortOnePayment } from "@/lib/portone/server";
-import { fulfillSajuOrder, PAYMENT_TRANSACTION_OPTIONS } from "@/lib/saju/library-service";
+import { fulfillSajuOrder } from "@/lib/saju/library-service";
 import { SAJU_PRODUCT_CODE } from "@/lib/saju/profile-input";
 import { privateJson, readRequestText, RequestSecurityError } from "@/lib/security/request";
 
@@ -21,14 +21,14 @@ export async function POST(request: Request) {
   const paymentId = webhook.data.paymentId;
   if (!paymentId || paymentId.length > 80) return privateJson({ error: "결제 번호를 확인해줘." }, 400);
   try {
-    const order = await prisma.order.findFirst({ where: { merchantUid: paymentId, product: { code: SAJU_PRODUCT_CODE } }, select: { userId: true } });
-    if (!order) return privateJson({ ok: true });
+    const order = await firebaseStore.getOrder(paymentId);
+    if (!order || order.productCode !== SAJU_PRODUCT_CODE) return privateJson({ ok: true });
     // Ignore event claims and re-read the provider's current state. Delayed/replayed
     // Paid events cannot restore a cancelled order.
     const payment = await getPortOnePayment(paymentId);
-    if (payment.status === "PAID") await prisma.$transaction(tx => fulfillSajuOrder(order.userId, paymentId, payment, tx), PAYMENT_TRANSACTION_OPTIONS);
+    if (payment.status === "PAID") await fulfillSajuOrder(order.userId, paymentId, payment);
     else if (["CANCELLED", "PARTIAL_CANCELLED"].includes(payment.status)) {
-      await prisma.order.updateMany({ where: { merchantUid: paymentId, userId: order.userId }, data: { status: "CANCELLED" } });
+      await firebaseStore.cancelOrder(order.userId, paymentId);
     }
     return privateJson({ ok: true });
   } catch {

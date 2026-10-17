@@ -1,14 +1,14 @@
 import { EssayReportView } from "@/components/EssayReportView";
 import { RetroPage, RetroWindow } from "@/components/RetroWindow";
 import { notFound, redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { firebaseStore } from "@/lib/firebase/store";
 import { requireSajuAccount, canReadSajuReport, canAccessSajuProfile } from "@/lib/saju/account";
 import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 
 export default async function SajuReportPage({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params;
   const account = await requireSajuAccount(`/saju/reports/${reportId}`);
-  const report = await prisma.report.findUnique({ where: { id: reportId }, select: { sajuProfileId: true, sajuProfile: { select: { userId: true } }, order: { select: { userId: true, status: true } } } });
+  const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || !canAccessSajuProfile(report.sajuProfile, account)) notFound();
   if (!canReadSajuReport(report, account)) redirect(`/saju/profiles/${report.sajuProfileId}/checkout`);
   return (
