@@ -3,8 +3,10 @@
  * 실행: npm run saju:compare
  */
 
-const { Lunar, Solar } = require("lunar-javascript");
-const fixture = require("./fixtures/sajuinfo-reference.json");
+import { readFileSync } from "node:fs";
+import lunarJavascript from "lunar-javascript";
+const { Lunar, Solar } = lunarJavascript;
+const fixture = JSON.parse(readFileSync(new URL("./fixtures/sajuinfo-reference.json", import.meta.url), "utf8"));
 
 function calculate(year, month, day, hour, minute, inputType) {
   const lunar = inputType === "lunar-leap"

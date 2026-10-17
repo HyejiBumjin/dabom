@@ -57,7 +57,7 @@ npm run build
 - 다음 구현 명세: `docs/dev-steps/step-3-톤-프롬프트.md`
 - Vercel·도메인·카카오의 현재 상태: `docs/deployment.md`
 - 비교 fixture: `scripts/fixtures/sajuinfo-reference.json`
-- 비교 스크립트: `scripts/saju-compare.cjs`
+- 비교 스크립트: `scripts/saju-compare.mjs`
 
 ## 최근 커밋
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CustomSelect } from "./custom-select";
 import { Label } from "./label";
 
@@ -20,6 +20,11 @@ function getDaysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
 }
 
+function selectionFromValue(value: string) {
+  const [year = 0, month = 0, day = 0] = value.split("-").map(part => Number(part) || 0);
+  return { value, year, month, day };
+}
+
 export function DateSelect({
   id,
   label,
@@ -29,20 +34,11 @@ export function DateSelect({
   yearFrom = 1930,
   yearTo = new Date().getFullYear(),
 }: DateSelectProps) {
-  const [selectedYear, setSelectedYear] = useState<number>(0);
-  const [selectedMonth, setSelectedMonth] = useState<number>(0);
-  const [selectedDay, setSelectedDay] = useState<number>(0);
-
-  useEffect(() => {
-    if (!value) return;
-    const [yearStr, monthStr, dayStr] = value.split("-");
-    const year = yearStr ? parseInt(yearStr, 10) : 0;
-    const month = monthStr ? parseInt(monthStr, 10) : 0;
-    const day = dayStr ? parseInt(dayStr, 10) : 0;
-    setSelectedYear(year);
-    setSelectedMonth(month);
-    setSelectedDay(day);
-  }, [value]);
+  const [draft, setDraft] = useState(() => selectionFromValue(value));
+  const selection = draft.value === value ? draft : selectionFromValue(value);
+  // Preserve partial choices, but immediately follow external edits/clears.
+  if (draft.value !== value) setDraft(selection);
+  const { year: selectedYear, month: selectedMonth, day: selectedDay } = selection;
 
   const yearOptions = useMemo(() => {
     const opts = [];
@@ -69,20 +65,13 @@ export function DateSelect({
     return opts;
   }, [selectedYear, selectedMonth]);
 
-  const update = (y: number, m: number, d: number) => {
-    setSelectedYear(y);
-    setSelectedMonth(m);
-    setSelectedDay(d);
-
-    if (!y || !m || !d) {
-      onChange("");
-      return;
-    }
-    const maxDay = getDaysInMonth(y, m);
-    const safeDay = Math.min(d, maxDay);
-    onChange(
-      `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`
-    );
+  const update = (year: number, month: number, day: number) => {
+    const safeDay = year && month ? Math.min(day, getDaysInMonth(year, month)) : day;
+    const nextValue = year && month && safeDay
+      ? `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`
+      : "";
+    setDraft({ value: nextValue, year, month, day: safeDay });
+    onChange(nextValue);
   };
 
   return (

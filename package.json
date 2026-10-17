@@ -7,8 +7,8 @@
     "build": "node --conditions=react-server --import tsx scripts/firebase-production-check.ts && next build",
     "start": "next start",
     "lint": "eslint",
-    "saju:spike": "node scripts/saju-spike.cjs",
-    "saju:compare": "node scripts/saju-compare.cjs",
+    "saju:spike": "node scripts/saju-spike.mjs",
+    "saju:compare": "node scripts/saju-compare.mjs",
     "report:check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/report-generation-check.ts",
     "library:check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/saju-library-check.ts",
     "auth:check": "node scripts/saju-auth-check.mjs",
@@ -27,7 +27,8 @@
     "legacy:security:db-regression": "tsx scripts/security-db-regression.ts",
     "legacy:security:tls": "tsx scripts/security-tls-check.ts",
     "firebase:seed": "node --conditions=react-server --import tsx scripts/firebase-seed.ts",
-    "firebase:preflight": "node --conditions=react-server --import tsx scripts/firebase-production-check.ts --check"
+    "firebase:preflight": "node --conditions=react-server --import tsx scripts/firebase-production-check.ts --check",
+    "security:secrets:check": "node --test scripts/security-secret-check.test.mjs"
   },
   "dependencies": {
     "@portone/browser-sdk": "^0.1.3",

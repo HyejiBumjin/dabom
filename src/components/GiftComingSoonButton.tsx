@@ -6,11 +6,6 @@ import { Button } from "@/components/ui/button";
 
 export function GiftComingSoonButton() {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -21,7 +16,8 @@ export function GiftComingSoonButton() {
     };
   }, [open]);
 
-  const modal = open && mounted && createPortal(
+  // open only becomes true after a browser click, so document exists here.
+  const modal = open && createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onClick={() => setOpen(false)}

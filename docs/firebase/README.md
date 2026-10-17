@@ -58,5 +58,7 @@ npm run saju:compare
 - HTTPS 운영 설정으로 빌드한 로컬 production HTTP 보안 검사: 79 PASS.
 - 실제 카카오 로그인 → 테스트 정보 저장 → 리포트 생성 → 운세함 보관 → 동일 정보 재조회 팝업 확인.
 - TypeScript/production build 통과; 명리 spike/compare 통과 (기존 입춘 정책 차이 1건 유지).
-- 전체 lint에는 기존 파일의 오류 6개/경고가 남아 있다. 이번 변경 파일은 별도로 검사한다.
-- 비밀 스캔: 현재 소스/브라우저 번들 노출 없음. Git 과거 기록의 기존 DB 연결문자열 경고는 별도 이력 정리 대상이며 이번 작업에서 기록을 재작성하지 않았다.
+- 전체 lint 오류 6개 수정 완료: 0 errors, 17 warnings. CommonJS 검증 도구의 ES module 전환, 불필요한 마운트 상태 제거, 날짜 선택 상태 동기화, 예전 편지 화면의 요청 상태 처리를 정리했다.
+- 비밀 스캔: 현재 소스/Git 기록/브라우저 번들 모두 통과.
+- 과거 DB 경고는 `c4a68b30f33e:.env.example`에 들어 있던 로컬 Docker 예시다. 동일 커밋의 `docker-compose.yml`에 명시된 사용자·비밀번호·DB명과 일치하며 현재 DB 비밀번호와는 다르다. `62d0bee3ab68`에서 삭제됐다. 해당 전체 URL의 SHA-256만 과거 기록 검사에서 예외 처리한다. 현재 소스 및 다른 localhost 접속 정보는 계속 검사한다. 운영 자격 증명 교체나 Git 이력 재작성은 하지 않았다.
+- `npm run security:secrets:check`: 이력 예외 범위/변형 URL/서비스 역할 토큰 회귀 검사 8개. 과거 fixture를 확인할 수 있는 Git 이력이 필요하다.

@@ -8,7 +8,8 @@
  * 별도로 구현할 항목을 확인하기 위한 일회성 검증 도구다.
  */
 
-const { Solar } = require("lunar-javascript");
+import lunarJavascript from "lunar-javascript";
+const { Solar } = lunarJavascript;
 
 const CASES = [
   {

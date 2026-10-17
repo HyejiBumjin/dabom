@@ -36,7 +36,7 @@ npm run saju:spike > /tmp/saju-spike.json
 npm run saju:compare
 ```
 
-`scripts/saju-spike.cjs`에는 PRD 예시 입력, 입춘 전후, 야자시·조자시, 1988년 서머타임 기간 케이스가 들어 있다. `scripts/saju-compare.cjs`는 `scripts/fixtures/sajuinfo-reference.json`의 30건과 라이브러리 결과를 비교한다.
+`scripts/saju-spike.mjs`에는 PRD 예시 입력, 입춘 전후, 야자시·조자시, 1988년 서머타임 기간 케이스가 들어 있다. `scripts/saju-compare.mjs`는 `scripts/fixtures/sajuinfo-reference.json`의 30건과 라이브러리 결과를 비교한다.
 
 ## 확인된 API 결과
 

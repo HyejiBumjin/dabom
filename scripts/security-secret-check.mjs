@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import nextEnv from "@next/env";
+import { legacySecretKinds } from "./security/legacy-secrets.mjs";
 
 nextEnv.loadEnvConfig(process.cwd());
 const files = execFileSync("git", ["ls-files", "-z", "-co", "--exclude-standard"], { encoding: "utf8" }).split("\0").filter(Boolean);
@@ -11,24 +12,7 @@ const patterns = [
   ["supabase-secret", /sb_secret_[A-Za-z0-9_-]{20,}/],
 ];
 const findings = [];
-function legacySecretKinds(source) {
-  const kinds = [];
-  for (const token of source.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g) ?? []) {
-    try { if (JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).role === "service_role") kinds.push("legacy-service-role-jwt"); } catch { /* Not a token. */ }
-  }
-  for (const uri of source.match(/postgres(?:ql)?:\/\/[^\s"'`]+/g) ?? []) {
-    try {
-      const parsed = new URL(uri);
-      if (/\.(?:invalid|example|test)$/.test(parsed.hostname)) continue;
-      if (/^(?:supabase[-_]db[-_]host|supabase[-_]pooler[-_]host|pooler[-_]host|db[-_]host|host|hostname)$/i.test(parsed.hostname)) continue;
-      // Historical .env.example uses an explicit USER + placeholder host pair.
-      if (parsed.username === "USER" && /host|project|region|example|placeholder/i.test(parsed.hostname)) continue;
-      const password = decodeURIComponent(parsed.password);
-      if (password && !/^(?:PASSWORD|YOUR_[A-Z_-]*PASSWORD|password|\[YOUR-PASSWORD\]|<[^>]+>)$/i.test(password)) kinds.push("database-credential");
-    } catch { /* Not a valid connection URI. */ }
-  }
-  return [...new Set(kinds)];
-}
+
 for (const file of files) {
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) continue;
   const data = fs.readFileSync(file);
@@ -40,7 +24,7 @@ for (const file of files) {
 // Scan tracked history for key material without printing matching lines/values.
 const history = execFileSync("git", ["log", "--all", "-p", "--format=commit %H"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const historyFindings = patterns.filter(([, pattern]) => pattern.test(history)).map(([kind]) => kind);
-historyFindings.push(...legacySecretKinds(history));
+historyFindings.push(...legacySecretKinds(history, { historical: true }));
 const secretNames = ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY", "PORTONE_API_SECRET", "PORTONE_WEBHOOK_SECRET", "DATABASE_URL", "ABLECITY_API_KEY", "FIREBASE_ADMIN_CREDENTIALS_JSON", "KAKAO_CLIENT_SECRET"];
 const secrets = secretNames.filter(name => (process.env[name]?.length ?? 0) >= 16).map(name => ({ name, value: process.env[name] }));
 // Credential files are intentionally ignored by Git, but their contents must also
