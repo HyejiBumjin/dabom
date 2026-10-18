@@ -3,7 +3,7 @@
     "backendId": "dabom",
     "rootDir": ".",
     "ignore": [
-      "node_modules", ".git", ".next", ".vercel", ".firebase", "secrets",
+      "node_modules", "**/node_modules", ".git", ".next", ".vercel", ".firebase", "secrets",
       "**/.env*", "**/firebase-admin.json", "**/*-firebase-adminsdk-*.json",
       "**/*.pem", "**/*.key", "**/*.p12", "**/*.pfx",
       "docs", "coverage", "**/*.tsbuildinfo", "**/.DS_Store",

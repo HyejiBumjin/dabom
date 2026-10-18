@@ -13,6 +13,7 @@
     "library:check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/saju-library-check.ts",
     "auth:check": "node scripts/saju-auth-check.mjs",
     "security:check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/security-check.ts",
+    "security:dependencies": "node --test scripts/security-dependencies-check.test.mjs",
     "payment:check": "node --import tsx scripts/payment-client-check.ts",
     "payment:mode-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/payment-mode-check.ts",
     "security:login-limit": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/security-login-rate-limit-check.ts",
@@ -40,7 +41,7 @@
     "@tanstack/react-query": "^5.90.21",
     "firebase-admin": "^14.5.0",
     "lunar-javascript": "^1.7.7",
-    "next": "^16.3.8",
+    "next": "16.4.2",
     "openai": "^6.29.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -50,6 +51,9 @@
   "overrides": {
     "postcss": "^8.5.29",
     "sharp": "^0.35.5",
+    "@next/eslint-plugin-next": {
+      "fast-glob": "$fast-glob"
+    },
     "@prisma/config": {
       "effect": "^3.22.2",
       "deepmerge-ts": "^8.0.2"
@@ -57,21 +61,22 @@
     "esbuild": "^0.28.2"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "^6.19.0",
+    "@prisma/client": "^6.19.0",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.47.10",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.8",
+    "eslint-config-next": "16.4.2",
+    "fast-glob": "file:tools/eslint-root-glob",
+    "pg": "^8.23.1",
     "prisma": "^6.19.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5",
-    "@prisma/client": "^6.19.0",
-    "@prisma/adapter-pg": "^6.19.0",
-    "pg": "^8.23.1",
-    "@supabase/ssr": "^0.5.2",
-    "@supabase/supabase-js": "^2.47.10"
+    "typescript": "^5"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
