@@ -4,15 +4,17 @@ import { KoreanPolicyAdapter } from "@/lib/saju/korean-policy-adapter";
 import { getReportPrompt } from "@/lib/prompts/v6";
 import { getConfiguredReportModel } from "@/lib/llm/report-config";
 import { SAJU_PRODUCT_CODE, type ProfileInput } from "@/lib/saju/profile-input";
+import { canReadSajuReport } from "@/lib/saju/account";
+import { allowsDevelopmentReports } from "@/lib/portone/payment-mode";
 
 const reportMetadata = () => ({ productCode: SAJU_PRODUCT_CODE, promptVersion: getReportPrompt().version, model: getConfiguredReportModel() });
 export function profileBirthKey(input: ProfileInput) {
   return createHash("sha256").update(JSON.stringify([input.gender, input.birthDate, input.birthTime, input.calendar, input.calendar === "lunar" && input.isLeapMonth])).digest("hex");
 }
-export async function findExistingSajuReport(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore, development = process.env.NODE_ENV === "development") {
+export async function findExistingSajuReport(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore, development = allowsDevelopmentReports()) {
   const profileId = db.profileId(userId, profileBirthKey(input));
   const report = await db.getReportWithAccess(db.reportId(profileId, SAJU_PRODUCT_CODE));
-  return report && report.sajuProfile.userId === userId && (development || report.order?.userId === userId && report.order.status === "PAID") ? { id: report.id, sajuProfileId: profileId } : null;
+  return report && canReadSajuReport(report, { id: userId }, development) ? { id: report.id, sajuProfileId: profileId } : null;
 }
 export async function saveSajuProfile(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore) {
   if (!userId) throw new Error("LOGIN_REQUIRED");
@@ -24,7 +26,9 @@ export async function saveSajuProfile(userId: string, input: ProfileInput, db: F
 export function ensureSajuReport(userId: string, profileId: string, orderId?: string, db: FirebaseStore = firebaseStore) {
   return db.ensureReport(userId, profileId, reportMetadata(), orderId);
 }
-export function prepareSajuOrder(userId: string, profileId: string, db: FirebaseStore = firebaseStore) {
+export async function prepareSajuOrder(userId: string, profileId: string, db: FirebaseStore = firebaseStore) {
+  const existing = await db.getReportWithAccess(db.reportId(profileId, SAJU_PRODUCT_CODE));
+  if (existing && canReadSajuReport(existing, { id: userId }, false)) return { existing: true as const, reportId: existing.id };
   return db.prepareOrder(userId, profileId, reportMetadata());
 }
 export function verifySajuPayment(order: { merchantUid: string; amount: number | null; product: { price: number } }, payment: { id: string; amount: number; status: string; currency: string }) {

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { firebaseStore } from "@/lib/firebase/store";
-import { getSajuAccount, canAccessSajuProfile } from "@/lib/saju/account";
+import { getSajuAccount, canAccessSajuProfile, canReadSajuReport } from "@/lib/saju/account";
 import { SAJU_PRODUCT_CODE } from "@/lib/saju/profile-input";
 import { ensureSajuReport } from "@/lib/saju/library-service";
 import { guardedMutation } from "@/lib/security/request";
 import { enforceAccountRateLimit } from "@/lib/security/rate-limit";
+import { allowsDevelopmentReports } from "@/lib/portone/payment-mode";
 
 export async function POST(request: Request, { params }: { params: Promise<{ profileId: string }> }) {
   return guardedMutation(request, async () => {
@@ -16,9 +17,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   await enforceAccountRateLimit(account.id, "report-create", 20, 3_600_000);
 
   const existing = await firebaseStore.getReportWithAccess(firebaseStore.reportId(profile.id, SAJU_PRODUCT_CODE));
-  if (existing && (process.env.NODE_ENV === "development" || existing.order?.status === "PAID" && existing.order.userId === account?.id)) return NextResponse.json({ reportId: existing.id, existing: true });
+  if (existing && canReadSajuReport(existing, account)) return NextResponse.json({ reportId: existing.id, existing: true });
 
-  if (process.env.NODE_ENV !== "development") return NextResponse.json({ error: "처음 받는 올해 운세는 결제가 필요해.", checkoutUrl: `/saju/profiles/${profileId}/checkout` }, { status: 402 });
+  if (!allowsDevelopmentReports()) return NextResponse.json({ error: "처음 받는 올해 운세는 결제가 필요해.", checkoutUrl: `/saju/profiles/${profileId}/checkout` }, { status: 402 });
   const report = await ensureSajuReport(account.id, profile.id);
   return NextResponse.json({ reportId: report.id, existing: false }, { status: 201 });
   });

@@ -1,4 +1,15 @@
 {
+  "apphosting": {
+    "backendId": "dabom",
+    "rootDir": ".",
+    "ignore": [
+      "node_modules", ".git", ".next", ".vercel", ".firebase", "secrets",
+      "**/.env*", "**/firebase-admin.json", "**/*-firebase-adminsdk-*.json",
+      "**/*.pem", "**/*.key", "**/*.p12", "**/*.pfx",
+      "docs", "coverage", "**/*.tsbuildinfo", "**/.DS_Store",
+      "**/*-debug.log*", "**/firebase-debug.*.log", "apphosting.local.yaml"
+    ]
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"

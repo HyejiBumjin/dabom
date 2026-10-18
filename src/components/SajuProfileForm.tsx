@@ -20,13 +20,24 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
   const [pending, setPending] = useState(false);
   const submissionInFlight = useRef(false);
   const activeRequest = useRef<AbortController | null>(null);
+  const navigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const duplicateDialog = useRef<HTMLDialogElement>(null);
   const libraryButton = useRef<HTMLButtonElement>(null);
   const libraryNavigationInFlight = useRef(false);
   const nameInput = useRef<HTMLInputElement>(null);
-  useEffect(() => () => { activeRequest.current?.abort(); }, []);
+  useEffect(() => () => {
+    activeRequest.current?.abort();
+    if (navigationTimer.current) clearTimeout(navigationTimer.current);
+  }, []);
+
+  function navigate(href: string) {
+    if (navigationTimer.current) clearTimeout(navigationTimer.current);
+    // Recover if a client-side transition stalls on a cached/prefetched route.
+    navigationTimer.current = setTimeout(() => window.location.assign(href), 10_000);
+    router.push(href);
+  }
 
   useEffect(() => {
     const dialog = duplicateDialog.current;
@@ -79,7 +90,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     if (libraryNavigationInFlight.current) return;
     libraryNavigationInFlight.current = true;
     setPending(true);
-    router.push("/saju/library");
+    navigate("/saju/library");
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -93,31 +104,34 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     submissionInFlight.current = true;
     const controller = new AbortController();
     activeRequest.current = controller;
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]);
     setPending(true);
     try {
       const input = { name, relationship, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth };
-      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal: controller.signal });
+      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal });
       const data = await response.json();
       if (controller.signal.aborted) return;
       if (response.status === 401) {
         try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ accountId, input })); } catch { /* Login still works without draft storage. */ }
-        router.push("/login?next=%2Fsaju"); return;
+        navigate("/login?next=%2Fsaju"); return;
       }
       if (!response.ok) throw new Error(data.error || "저장하지 못했습니다.");
       try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* Optional storage. */ }
       if (data.existingReport) { showExistingFortune(); return; }
-      const reportResponse = await fetch(`/api/saju/profiles/${data.profileId}/reports`, { method: "POST", signal: controller.signal });
+      const reportResponse = await fetch(`/api/saju/profiles/${data.profileId}/reports`, { method: "POST", signal });
       const reportData = await reportResponse.json();
       if (controller.signal.aborted) return;
-      if (reportResponse.status === 402) { router.push(reportData.checkoutUrl); return; }
+      if (reportResponse.status === 402) { navigate(`/saju/profiles/${encodeURIComponent(data.profileId)}/checkout`); return; }
       if (!reportResponse.ok) throw new Error(reportData.error || "리포트를 준비하지 못했습니다.");
       if (reportData.existing) { showExistingFortune(); return; }
-      router.push(`/saju/reports/${reportData.reportId}`);
+      navigate(`/saju/reports/${encodeURIComponent(reportData.reportId)}`);
     } catch (cause) {
       if (controller.signal.aborted) return;
-      setError(cause instanceof Error ? cause.message : "저장 중 오류가 발생했습니다.");
+      setError(signal.aborted ? "연결이 오래 걸리고 있어. 잠시 뒤 다시 눌러줘. 기존 운세는 운세함에서 확인할 수 있어." : cause instanceof Error ? cause.message : "저장 중 오류가 발생했습니다.");
       submissionInFlight.current = false;
       setPending(false);
+    } finally {
+      if (activeRequest.current === controller) activeRequest.current = null;
     }
   }
 

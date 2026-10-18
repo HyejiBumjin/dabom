@@ -1,0 +1,39 @@
+# Firebase App Hosting: dabom-10a35. Secrets are provisioned separately.
+# Validate the new backend before moving dabom-letter.com DNS.
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 20
+  cpu: 1
+  memoryMiB: 512
+env:
+  - variable: DABOM_HOSTING
+    value: firebase-app-hosting
+  # Verified App Hosting forwarding-rule IPs: default domain and custom domain.
+  # Recheck the proxy chain and Run IAM before changing these values.
+  - variable: DABOM_APPHOSTING_LB_IPS
+    value: 35.219.200.76,35.219.200.50
+  - variable: FIREBASE_PROJECT_ID
+    value: dabom-10a35
+  - variable: GOOGLE_CLOUD_PROJECT
+    value: dabom-10a35
+  - variable: FIREBASE_ADMIN_CREDENTIAL_MODE
+    value: application-default
+  - variable: FIREBASE_ADMIN_SERVICE_ACCOUNT_ID
+    value: firebase-app-hosting-compute@dabom-10a35.iam.gserviceaccount.com
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://dabom-letter.com
+  - variable: FIREBASE_WEB_API_KEY
+    secret: dabom-firebase-web-api-key
+  - variable: KAKAO_REST_API_KEY
+    secret: dabom-kakao-rest-api-key
+  - variable: KAKAO_CLIENT_SECRET
+    secret: dabom-kakao-client-secret
+  - variable: OPENAI_API_KEY
+    secret: dabom-openai-api-key
+    availability:
+      - RUNTIME
+  - variable: OPENAI_MODEL
+    value: gpt-6-luna
+    availability:
+      - RUNTIME

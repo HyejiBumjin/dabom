@@ -2,6 +2,7 @@ import { CORPUS_VERSION, selectCorpus } from "@/lib/saju/interpretation-corpus";
 import { extractReportFacts, type ReportFacts } from "@/lib/saju/report-facts";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import { MESSAGE_CLOSING_LENGTH, REPORT_PARAGRAPH_LENGTHS, type ParagraphLength } from "@/lib/llm/report-rules";
+import { REPORT_EMOTICON_INSTRUCTIONS } from "@/lib/report-emoticons";
 import { DEFAULT_REPORT_TONE } from "@/lib/llm/report-config";
 import { buildReportTerminology, type ReportTermMeaning } from "@/lib/saju/report-terminology";
 
@@ -159,8 +160,9 @@ export function buildReportRenderPayload(myeongsik: Myeongsik, tone: ReportTone 
           : fragment.guidance,
       })),
     })),
-    style: { tone, persona: tone === "genz" ? "짧은 메시지를 이어 보내며 사주를 알려 주는, 은근 킹받게 팩폭하는 젠지 찐친" : "사주를 풀어주는 친한 친구", speech: tone === "genz" ? "'~해·~거든·~네·~지·~잖아'로 말을 건네는 반말. '~다·~한다·~된다·~이다'로 끝내지 않는다. 해석에서 나온 웃긴 비유와 가벼운 팩폭을 섞되 유행어를 나열하지 않는다. 한 메시지에 1~2문장, 약 50~100자로 끊고 빈 줄로 다음 메시지를 이어 보낸다. 처음 나온 전문 용어 바로 옆에 짧은 풀이를 붙인다. 반응 이모티콘을 전체 4~6개 자연스럽게 섞는다. 마지막에는 올해 종합 운세를 한 문장으로 정리하고, 해석에 맞는 긍정의 메시지와 약 50~90자의 따뜻한 인사를 이어 보낸다. '~해보자'식 권유는 쓰지 않는다." : "따뜻하고 직설적인 반말. 운세를 설명하되 '~해보자'식 권유나 매 문단의 행동 지시로 마무리하지 않는다.", paragraph_length: tone === "genz" ? "도입 약 230자, 올해 운세 본문 각 약 330자, 마무리는 sections의 paragraph_length를 따른다. 올해 한 문장 요약과 응원, 마지막 인사도 마무리 분량에 포함한다." : "도입 약 230자, 올해 운세 본문 각 약 330자, 마무리는 sections의 paragraph_length를 따른다. 응원 뒤의 마지막 한마디도 분량에 포함한다." },
+    style: { tone, persona: tone === "genz" ? "짧은 메시지를 이어 보내며 사주를 알려 주는, 은근 킹받게 팩폭하는 젠지 찐친" : "사주를 풀어주는 친한 친구", speech: tone === "genz" ? "'~해·~거든·~네·~지·~잖아'로 말을 건네는 반말. '~다·~한다·~된다·~이다'로 끝내지 않는다. 해석에서 나온 웃긴 비유와 가벼운 팩폭을 섞되 유행어를 나열하지 않는다. 한 메시지에 1~2문장, 약 50~100자로 끊고 빈 줄로 다음 메시지를 이어 보낸다. 처음 나온 전문 용어 바로 옆에 짧은 풀이를 붙인다. 특수문자 표정·별·하트만 전체 3~5개 자연스럽게 섞는다. 컬러 이모지는 쓰지 않는다. 마지막 인사 끝에 고양이 표정 (ฅ•ω•ฅ)♡를 한 번 붙인다. 마지막에는 올해 종합 운세를 한 문장으로 정리하고, 해석에 맞는 긍정의 메시지와 약 50~90자의 따뜻한 인사를 이어 보낸다. '~해보자'식 권유는 쓰지 않는다." : "따뜻하고 직설적인 반말. 운세를 설명하되 '~해보자'식 권유나 매 문단의 행동 지시로 마무리하지 않는다.", paragraph_length: tone === "genz" ? "도입 약 230자, 올해 운세 본문 각 약 330자, 마무리는 sections의 paragraph_length를 따른다. 올해 한 문장 요약과 응원, 마지막 인사도 마무리 분량에 포함한다." : "도입 약 230자, 올해 운세 본문 각 약 330자, 마무리는 sections의 paragraph_length를 따른다. 응원 뒤의 마지막 한마디도 분량에 포함한다." },
     constraints: [
+      ...(tone === "genz" ? [REPORT_EMOTICON_INSTRUCTIONS] : []),
       "선택된 fragments와 facts에 없는 명리 판단·사건 예고·직업·건강·금전 결과를 추가하지 않는다.",
       "첫 문단은 나의 성향과 올해의 중심을 함께 소개한다. 두 번째 문단부터는 올해 운세의 서로 다른 측면을 설명한다.",
       "올해·이번 해·연도로 시작하는 문단은 전체에서 최대 하나다. 이후 문단은 배정된 주제의 의미로 시작하고, 연도가 필요하면 문장 중간에 연결한다. 비슷한 시간 표현으로 첫머리만 바꾸지 않는다.",

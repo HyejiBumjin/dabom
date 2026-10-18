@@ -2,10 +2,11 @@ import "server-only";
 
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { z } from "zod";
+import { firebaseCredentialConfig } from "./credential-config";
 
 const serviceAccountSchema = z.object({
   type: z.literal("service_account"),
@@ -54,17 +55,18 @@ function readServiceAccount(projectId: string) {
 
 /** Server-only access. Callers must still enforce account ownership and payment access. */
 export function getFirebaseAdminApp() {
-  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
-  if (!projectId) throw new Error("FIREBASE_PROJECT_ID is required.");
-  // This connector must never silently replace real authentication with an emulator.
-  if (process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.FIRESTORE_EMULATOR_HOST) {
-    throw new Error("Firebase emulators are not allowed for this server connection.");
-  }
+  const config = firebaseCredentialConfig();
+  const { projectId } = config;
 
   const name = `dabom-admin:${projectId}`;
   const existing = getApps().find((app) => app.name === name);
   if (existing) return existing;
 
+  if (config.mode === "application-default") {
+    // App Hosting supplies short-lived credentials. Custom Kakao tokens are
+    // signed through IAM; no private service-account key is uploaded.
+    return initializeApp({ projectId, credential: applicationDefault(), serviceAccountId: config.serviceAccountId }, name);
+  }
   const account = readServiceAccount(projectId);
   try {
     return initializeApp({

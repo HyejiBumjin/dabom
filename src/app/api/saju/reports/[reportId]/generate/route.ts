@@ -16,6 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rep
   if (!account) return NextResponse.json({ error: "로그인이 필요해." }, { status: 401 });
   const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || !canReadSajuReport(report, account)) return NextResponse.json({ error: "리포트를 찾을 수 없습니다." }, { status: 404 });
+  if (report.status === "COMPLETED" && report.content) return NextResponse.json({ ok: true, status: report.status });
   await enforceAccountRateLimit(account.id, "report-generate", 6, 3_600_000);
   await enforceAccountRateLimit(account.id, `report-generate:${reportId}`, 3, 900_000);
   try {

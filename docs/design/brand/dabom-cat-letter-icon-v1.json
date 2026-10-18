@@ -1,0 +1,41 @@
+{
+  "tool": "built-in image_gen",
+  "status": "approved",
+  "asset": "dabom-cat-letter-icon-v1.png",
+  "reference": "public/images/dabom-cat-c.png",
+  "intendedUses": [
+    "website favicon",
+    "Kakao login app icon"
+  ],
+  "kakaoSource": "https://developers.kakao.com/docs/ko/app-setting/app",
+  "kakaoConstraints": {
+    "recommendedMaximumDimensions": "128x128",
+    "maximumFileSize": "under 250 KB"
+  },
+  "prompt": "Use case: logo-brand / identity-preserve. Create ONE polished square 1:1 app icon for the Korean fortune-message service Dabom. The provided local PNG is the existing Dabom cat mascot and is the identity/style reference. Recompose it into a compact close-up of the cat's face and a cream envelope held gently IN ITS MOUTH, rather than a full walking body. Preserve the existing deep ink-purple fur, tall triangular ears with lavender interiors, simple little cream eyes, cream envelope with a small lavender heart seal, and cute slightly mischievous personality. Clearly show the mouth gripping the upper edge of the envelope. Style: clean chunky retro pixel art, deliberate square pixel steps, restrained palette, crisp silhouettes, no fuzzy texture, no 3D, no glossy illustration. Composition: face and envelope occupy about 76% of the square, centered, clear separation between head and letter, generous safe margins around ears so circular crops also work. Only a little neck/chest if useful, no paws covering the envelope, no long tail or extra props. Background: solid very pale lavender #E8E4FF filling the entire square, opaque. No embedded rounded border, no fake device frame, no text or letters, no stars, no clouds, no UI, no watermark. Optimize readability at 128px and 32px. Deliver the icon alone, not a presentation sheet.",
+  "exports": {
+    "public/images/dabom-app-icon.png": {
+      "width": 512,
+      "height": 512
+    },
+    "docs/design/brand/dabom-kakao-icon-128.png": {
+      "width": 128,
+      "height": 128
+    },
+    "src/app/icon.png": {
+      "width": 32,
+      "height": 32
+    },
+    "src/app/apple-icon.png": {
+      "width": 180,
+      "height": 180
+    },
+    "src/app/favicon.ico": {
+      "sizes": [
+        16,
+        32,
+        48
+      ]
+    }
+  }
+}

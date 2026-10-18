@@ -7,10 +7,11 @@ import { getFirebaseAdminApp, getFirebaseAdminAuth, getFirebaseAdminFirestore } 
 loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 const canonical = (value: string) => value.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "").replace(/\s+/g, "");
 async function main() {
-  if (process.env.VERCEL_ENV !== "production" && !process.argv.includes("--check")) return;
+  const productionDeployment = process.env.VERCEL_ENV === "production" || process.env.DABOM_HOSTING === "firebase-app-hosting";
+  if (!productionDeployment && !process.argv.includes("--check")) return;
   assert.equal(process.env.FIREBASE_PROJECT_ID, "dabom-10a35");
   assert.ok(["FIREBASE_WEB_API_KEY", "KAKAO_REST_API_KEY", "KAKAO_CLIENT_SECRET"].every(key => Boolean(process.env[key])), "Firebase/Kakao configuration missing");
-  if (process.env.VERCEL_ENV === "production") assert.equal(new URL(process.env.NEXT_PUBLIC_APP_URL!).origin, "https://dabom-letter.com");
+  if (productionDeployment) assert.equal(new URL(process.env.NEXT_PUBLIC_APP_URL!).origin, "https://dabom-letter.com");
   const app = getFirebaseAdminApp();
   const db = getFirebaseAdminFirestore();
   try {

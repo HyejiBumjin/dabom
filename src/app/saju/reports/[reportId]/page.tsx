@@ -13,7 +13,7 @@ export default async function SajuReportPage({ params }: { params: Promise<{ rep
   if (!canReadSajuReport(report, account)) redirect(`/saju/profiles/${report.sajuProfileId}/checkout`);
   return (
     <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath={`/saju/reports/${reportId}`}><RetroPage>
-      <RetroWindow title="다봄과의 대화" closeHref="/saju" closeLabel="새 운세 정보 입력하기">
+      <RetroWindow title="다봄" closeHref="/saju" closeLabel="새 운세 정보 입력하기">
         <h1 className="sr-only">너에게 온 올해 운세</h1>
         <EssayReportView key={reportId} reportId={reportId} />
       </RetroWindow>

@@ -1,4 +1,12 @@
 # Keep local credentials and security evidence out of deployment uploads.
+# Vercel CLI uploads need their own exclusions, even for Git-ignored files.
+secrets/
+firebase-admin.json
+*-firebase-adminsdk-*.json
+*.pem
+*.key
+*.p12
+*.pfx
 .env*
 .git/
 .vercel/

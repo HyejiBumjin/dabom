@@ -1,4 +1,5 @@
 import type { ReportDomain } from "@/lib/saju/report-facts";
+import { stripReportDecorations } from "@/lib/report-emoticons";
 
 export interface ParagraphLength { min: number; target: number; max: number }
 
@@ -70,8 +71,7 @@ export function normalizeReportParagraph(paragraph: string) {
 
 export function countReportCharacters(paragraph: string) {
   // Decorations and line breaks must not fill the minimum evidence length.
-  const prose = normalizeReportParagraph(paragraph)
-    .replace(/\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|\uFE0F|\u200D|\u20E3/gu, "")
+  const prose = stripReportDecorations(normalizeReportParagraph(paragraph))
     .replace(/\s+/gu, " ").trim();
   return [...prose].length;
 }

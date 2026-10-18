@@ -40,6 +40,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Firebase local deploy/cache files can contain environment values or upload URLs.
+/.firebase/
+firebase-debug.log*
+firebase-debug.*.log
+apphosting.local.yaml
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

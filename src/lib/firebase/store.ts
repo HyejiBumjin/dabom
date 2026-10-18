@@ -3,12 +3,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { Timestamp, type DocumentSnapshot, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { getFirebaseAdminFirestore } from "./admin";
 import type { Relationship } from "@/lib/saju/profile-input";
+import { canReadDevelopmentPreview, type DevelopmentPreviewAccess } from "@/lib/saju/report-preview-access";
+import { allowsDevelopmentReports, paymentCollectionPrefix } from "@/lib/portone/payment-mode";
 
 export type Account = { id: string; kakaoId: string; nickname: string; email: string | null; createdAt: Date };
 export type Profile = { id: string; userId: string; birthKey: string; name: string; relationship: Relationship; gender: "MALE" | "FEMALE"; birthDate: Date; birthTime: string | null; isLunar: boolean; isLeapMonth: boolean; myeongsik: unknown; createdAt: Date };
 export type Product = { id: string; code: string; name: string; price: number; active: boolean };
 export type Order = { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date };
-export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date };
+export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date; developmentPreviewAccess?: DevelopmentPreviewAccess };
 export type ReportWithAccess = Report & { sajuProfile: Profile; order: Order | null };
 export type ReportPatch = Partial<Pick<Report, "status" | "content" | "retryCount" | "lastError" | "completedAt" | "promptVersion" | "model">>;
 export type NewReport = Pick<Report, "promptVersion" | "model" | "productCode">;
@@ -38,8 +40,9 @@ function encode(data: object) {
 
 /** Explicit domain operations; Firestore rules deny all direct client requests. */
 export class FirebaseStore {
-  constructor(private readonly database: () => Firestore = getFirebaseAdminFirestore, private readonly prefix = "") {}
-  collection(name: string) { return this.database().collection(`${this.prefix}${name}`); }
+  constructor(private readonly database: () => Firestore = getFirebaseAdminFirestore, private readonly prefix: string | (() => string) = "") {}
+  private get collectionPrefix() { return typeof this.prefix === "function" ? this.prefix() : this.prefix; }
+  collection(name: string) { return this.database().collection(`${this.collectionPrefix}${name}`); }
   transaction<T>(action: (tx: Transaction) => Promise<T>) { return this.database().runTransaction(action, { maxAttempts: 8 }); }
   async read<T>(collection: string, id: string, tx?: Transaction): Promise<T | null> {
     if (!validId(id)) return null;
@@ -62,7 +65,13 @@ export class FirebaseStore {
   getReport(id: string) { return this.read<Report>("reports", id); }
   profileId(userId: string, birthKey: string) { return stableId(userId, birthKey); }
   reportId(profileId: string, productCode: string) { return stableId(profileId, productCode); }
-  orderId(userId: string, profileId: string, productCode: string) { return `saju_${stableId(userId, profileId, productCode).slice(0, 48)}`; }
+  orderId(userId: string, profileId: string, productCode: string) {
+    const parts = [userId, profileId, productCode];
+    // The provider also sees a distinct ID: a local test cannot reserve a live order ID.
+    if (this.collectionPrefix) parts.unshift(this.collectionPrefix);
+    // NHN KCP accepts at most 40 characters, including our five-character prefix.
+    return `saju_${stableId(...parts).slice(0, 35)}`;
+  }
   async getReportWithAccess(id: string): Promise<ReportWithAccess | null> {
     const report = await this.getReport(id);
     if (!report) return null;
@@ -84,7 +93,7 @@ export class FirebaseStore {
   private newReport(userId: string, profileId: string, metadata: NewReport, orderId?: string): Report {
     return { id: this.reportId(profileId, metadata.productCode), userId, sajuProfileId: profileId, orderId: orderId ?? null, ...metadata, status: "PENDING", content: null, retryCount: 0, lastError: null, createdAt: new Date(), completedAt: null };
   }
-  async ensureReport(userId: string, profileId: string, metadata: NewReport, orderId?: string, development = process.env.NODE_ENV === "development") {
+  async ensureReport(userId: string, profileId: string, metadata: NewReport, orderId?: string, development = allowsDevelopmentReports()) {
     return this.transaction(async tx => {
       const profile = await this.read<Profile>("profiles", profileId, tx);
       if (!profile || profile.userId !== userId) throw new Error("PROFILE_NOT_FOUND");
@@ -145,13 +154,13 @@ export class FirebaseStore {
       tx.update(this.collection("orders").doc(id), { status: "CANCELLED" });
     });
   }
-  async listLibrary(userId: string, development = process.env.NODE_ENV === "development") {
+  async listLibrary(userId: string, development = allowsDevelopmentReports()) {
     const [profiles, reports, orders] = await Promise.all(["profiles", "reports", "orders"].map(name => this.collection(name).where("userId", "==", userId).get()));
     const paidOrders = new Map(orders.docs.map(doc => { const order = decode<Order>(doc)!; return [order.id, order]; }));
     const allReports = reports.docs.map(doc => decode<Report>(doc)!).map(report => ({ ...report, order: report.orderId ? paidOrders.get(report.orderId) ?? null : null }));
-    return profiles.docs.map(doc => decode<Profile>(doc)!).sort((a,b) => b.createdAt.getTime()-a.createdAt.getTime()).map(profile => ({ ...profile, reports: allReports.filter(report => report.sajuProfileId === profile.id && (development || report.order?.status === "PAID" && report.order.sajuProfileId === profile.id && report.order.productCode === report.productCode)).sort((a,b) => b.createdAt.getTime()-a.createdAt.getTime()) }));
+    return profiles.docs.map(doc => decode<Profile>(doc)!).sort((a,b) => b.createdAt.getTime()-a.createdAt.getTime()).map(profile => ({ ...profile, reports: allReports.filter(report => report.sajuProfileId === profile.id && report.userId === profile.userId && (development || canReadDevelopmentPreview(report, userId) || report.order?.status === "PAID" && report.order.sajuProfileId === profile.id && report.order.productCode === report.productCode)).sort((a,b) => b.createdAt.getTime()-a.createdAt.getTime()) }));
   }
-  async claimReport(id: string, patch: ReportPatch, userId: string, development = process.env.NODE_ENV === "development") {
+  async claimReport(id: string, patch: ReportPatch, userId: string, development = allowsDevelopmentReports()) {
     return this.transaction(async tx => {
       const report = await this.read<Report>("reports", id, tx);
       if (!report || report.userId !== userId || report.status === "COMPLETED") return null;
@@ -185,4 +194,4 @@ export class FirebaseStore {
     });
   }
 }
-export const firebaseStore = new FirebaseStore();
+export const firebaseStore = new FirebaseStore(getFirebaseAdminFirestore, paymentCollectionPrefix);

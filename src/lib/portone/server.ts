@@ -1,5 +1,6 @@
 import { env } from "@/lib/env";
 import { z } from "zod";
+import { isPaymentTestMode } from "./payment-mode";
 
 export interface PortOnePayment {
   id: string;
@@ -13,7 +14,8 @@ export class PortOnePaymentLookupError extends Error {
   constructor(public readonly status: number) { super("PortOne payment lookup failed"); }
 }
 
-export function parsePortOnePayment(raw: unknown, expectedId: string, expectedStoreId: string, expectedChannelKey = env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY, development = process.env.NODE_ENV === "development"): PortOnePayment {
+export function parsePortOnePayment(raw: unknown, expectedId: string, expectedStoreId: string, expectedChannelKey = env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY): PortOnePayment {
+  const expectedChannelType = isPaymentTestMode() ? "TEST" : "LIVE";
   const parsed = z.object({
     id: z.string().min(1), storeId: z.string().min(1),
     status: z.string().min(1), currency: z.string().min(1),
@@ -22,7 +24,7 @@ export function parsePortOnePayment(raw: unknown, expectedId: string, expectedSt
   }).parse(raw);
   if (parsed.id !== expectedId || parsed.storeId !== expectedStoreId) throw new Error("PortOne payment identity mismatch");
   if (parsed.status === "PAID" && (parsed.amount.cancelled ?? 0) !== 0) throw new Error("PortOne payment has cancellations");
-  if (parsed.status === "PAID" && (!parsed.channel || parsed.channel.key !== expectedChannelKey || (!development && parsed.channel.type !== "LIVE"))) throw new Error("PortOne payment channel mismatch");
+  if (parsed.status === "PAID" && (!parsed.channel || parsed.channel.key !== expectedChannelKey || parsed.channel.type !== expectedChannelType)) throw new Error("PortOne payment channel mismatch");
   return { id: parsed.id, paymentId: parsed.id, amount: parsed.amount.total, status: parsed.status, currency: parsed.currency };
 }
 

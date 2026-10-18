@@ -66,6 +66,15 @@ async function main() {
   await rejects("delayed confirmation cannot revive cancelled payment", () => store.fulfillOrder("kakao_10001", orderId, payment, metadata));
   await rejects("cancelled payment cannot create/rebind report", () => store.ensureReport("kakao_10001", profileId, metadata, orderId, false));
   check("cancelled access and library entitlement removed", !canReadSajuReport((await store.getReportWithAccess(reportId))!, {id:"kakao_10001"}, false) && (await store.listLibrary("kakao_10001", false))[0].reports.length === 0);
+  const preview = await store.ensureReport("kakao_10002", other.profileId, metadata, undefined, true);
+  await store.collection("reports").doc(preview.id).update({ status: "COMPLETED", contentJson: JSON.stringify(content) });
+  check("completed development report remains private without an explicit grant", (await store.listLibrary("kakao_10002", false))[0].reports.length === 0);
+  await store.collection("reports").doc(preview.id).update({ developmentPreviewAccess: { userId: "kakao_10002", grantedAt: new Date().toISOString() } });
+  check("granted development preview appears only in its owner's library", (await store.listLibrary("kakao_10002", false))[0].reports[0]?.id === preview.id && (await store.listLibrary("kakao_10001", false))[0].reports.length === 0);
+  check("identical birth lookup reuses granted preview", (await findExistingSajuReport("kakao_10002", input, store, false))?.id === preview.id);
+  await store.collection("reports").doc(preview.id).update({ status: "FAILED" });
+  await rejects("preview grant never permits unpaid regeneration", () => store.claimReport(preview.id, {}, "kakao_10002", false));
+  check("incomplete preview is not offered as readable", (await store.listLibrary("kakao_10002", false))[0].reports.length === 0);
   const limits = await Promise.all(Array.from({length: 6}, () => store.consumeRateLimit("kakao_10001", "test", 3, 60_000)));
   check("concurrent rate limit allows exactly budget", limits.filter(Boolean).length === 3);
   check("other account has separate rate budget", await store.consumeRateLimit("kakao_10002", "test", 3, 60_000));

@@ -13,7 +13,7 @@ const content: ReportContent = { paragraphs, meta: { presentation: "message", ch
 
 export default function MessagesPreviewPage() {
   if (process.env.NODE_ENV !== "development") notFound();
-  return <RetroPage><RetroWindow title="다봄 · 메시지 미리보기" closeHref="/">
+  return <RetroPage><RetroWindow title="다봄" closeHref="/">
     <h1 className="sr-only">운세 메시지 디자인 미리보기</h1>
     <p className="retro-preview-note">디자인 확인용 예시 메시지야.</p>
     <MessageReport content={content} />

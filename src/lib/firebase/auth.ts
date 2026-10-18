@@ -6,6 +6,7 @@ import type { Auth } from "firebase-admin/auth";
 import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getFirebaseAdminAuth } from "./admin";
+import { firebaseCredentialConfig } from "./credential-config";
 import { firebaseStore, type FirebaseStore } from "./store";
 import { safeReturnPath } from "@/lib/auth-return-path";
 
@@ -16,7 +17,8 @@ export const oauthCookieName = () => isProduction() ? "__Host-dabom_oauth" : "da
 export const sessionCookieOptions = () => ({ httpOnly: true, secure: isProduction(), sameSite: "lax" as const, path: "/" });
 export const SESSION_SECONDS = 14 * 24 * 60 * 60;
 export function firebaseAuthConfigured() {
-  return Boolean(process.env.FIREBASE_PROJECT_ID && (process.env.FIREBASE_ADMIN_CREDENTIALS_FILE || process.env.FIREBASE_ADMIN_CREDENTIALS_JSON) && process.env.FIREBASE_WEB_API_KEY && process.env.KAKAO_REST_API_KEY && process.env.KAKAO_CLIENT_SECRET);
+  try { firebaseCredentialConfig(); } catch { return false; }
+  return Boolean(process.env.FIREBASE_WEB_API_KEY && process.env.KAKAO_REST_API_KEY && process.env.KAKAO_CLIENT_SECRET);
 }
 export function authOrigin() {
   const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");

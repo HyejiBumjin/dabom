@@ -2,7 +2,7 @@ import Link from "next/link";
 import { firebaseStore } from "@/lib/firebase/store";
 import { requireSajuAccount } from "@/lib/saju/account";
 import { SajuLibrary, type LibraryProfile } from "@/components/SajuLibrary";
-import { CloudCat, RetroFooter, RetroPage, RetroWindow } from "@/components/RetroWindow";
+import { RetroFooter, RetroPage, RetroWindow } from "@/components/RetroWindow";
 import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 
 export default async function SajuLibraryPage() {
@@ -13,7 +13,7 @@ export default async function SajuLibraryPage() {
     <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath="/saju/library"><RetroPage><RetroWindow title="다봄 · 내 운세함" closeHref="/">
       <div className="retro-library">
         <Link href="/" className="retro-back-link">← 처음으로</Link>
-        <header className="retro-input-heading"><div><h1 className="retro-heading">내 운세함</h1><p>너와 소중한 사람에게 온 메시지.</p></div><CloudCat /></header>
+        <header className="retro-input-heading"><div><h1 className="retro-heading">내 운세함</h1><p>너와 소중한 사람에게 온 메시지.</p></div></header>
         <SajuLibrary profiles={cards} />
         <RetroFooter />
       </div>

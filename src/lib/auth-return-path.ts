@@ -1,4 +1,4 @@
-export function safeReturnPath(value: string | null | undefined, fallback = "/saju/library") {
+export function safeReturnPath(value: string | null | undefined, fallback = "/") {
   if (!value?.startsWith("/") || /[\u0000-\u0020\u007f]/u.test(value)) return fallback;
   try {
     const parsed = new URL(value, "https://dabom.invalid");

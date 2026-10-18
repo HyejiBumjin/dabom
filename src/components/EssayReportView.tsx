@@ -19,7 +19,7 @@ export function EssayReportView({ reportId }: { reportId: string }) {
   const [loginRequired, setLoginRequired] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const requestReport = useCallback(async (url: string, options?: RequestInit) => {
-    const response = await fetch(url, options);
+    const response = await fetch(url, { ...options, signal: AbortSignal.timeout(options?.method === "POST" ? 65_000 : 15_000) });
     if (response.status === 401) {
       setLoginRequired(true);
       queryClient.removeQueries({ queryKey: ["saju-report", reportId] });
@@ -39,7 +39,7 @@ export function EssayReportView({ reportId }: { reportId: string }) {
       if (!response.ok) throw new ReportAccessError(response.status);
       return response.json();
     },
-    refetchInterval: (state) => state.state.data?.status === "COMPLETED" || state.state.data?.status === "FAILED" ? false : 1500,
+    refetchInterval: (state) => state.state.status === "error" || state.state.data?.status === "COMPLETED" || state.state.data?.status === "FAILED" ? false : 1500,
     retry: (count, error) => !(error instanceof ReportAccessError && [401, 403, 404].includes(error.status)) && count < 2,
   });
 

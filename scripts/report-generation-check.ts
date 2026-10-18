@@ -10,6 +10,7 @@ import { firebaseStore as store } from "../src/lib/firebase/store";
 import { generateReport } from "../src/lib/llm/report-generator";
 import { ANNUAL_OPENING, containsReaderName, countReportCharacters, FORMAL_REPORT_ENDING, hasInlineTermExplanation, normalizeReportParagraph, repairRepeatedAnnualOpenings } from "../src/lib/llm/report-rules";
 import { splitReportMessages } from "../src/lib/report-message-layout";
+import { formatReportEmoticons, REPORT_EMOTICONS, REPORT_EMOTICON_INSTRUCTIONS, splitReportEmoticons, stripReportDecorations } from "../src/lib/report-emoticons";
 import { DEFAULT_REPORT_MODEL, DEFAULT_REPORT_TONE, getConfiguredReportModel } from "../src/lib/llm/report-config";
 import { PUBLIC_REPORT_FAILURE_MESSAGE } from "../src/lib/llm/report-messages";
 import { KoreanPolicyAdapter } from "../src/lib/saju/korean-policy-adapter";
@@ -30,6 +31,7 @@ type RenderRequest = { model: string; reasoning?: { effort: string }; max_output
 
 const fixture = JSON.parse(fs.readFileSync("scripts/fixtures/report-style-draft.json", "utf8")) as { paragraphs: string[] };
 fixture.paragraphs[2] = fixture.paragraphs[2].replace("중요하단다", "중요하거든");
+fixture.paragraphs = formatReportEmoticons(fixture.paragraphs);
 const ids = ["essence", "yearly", "relation", "career", "mental", "summary"];
 const valid: Draft = { sections: fixture.paragraphs.map((paragraph, index) => ({ section_id: ids[index], paragraph })) };
 const myeongsik = new KoreanPolicyAdapter().calculate({ birthDate: "1995-05-20", birthTime: "20:20", gender: "female", calendar: "solar" });
@@ -240,12 +242,16 @@ async function main() {
     for (const sentence of ["중요해.", "영향을 주거든 🙂", "흐름이 바뀌네.", "다정하게 이어져.", "친구보다 먼저 눈치채지."]) assert(!FORMAL_REPORT_ENDING.test(sentence), sentence);
     tests += 1;
 
-    result = await scenario("message-preserves-emoji-and-breaks", { tone: "genz", change: draft => {
+    result = await scenario("message-converts-emoji-and-preserves-breaks", { tone: "genz", change: draft => {
       draft.sections[0].paragraph = draft.sections[0].paragraph.replace(". ", ". 🙂\n\n");
     } });
     assert.equal(result?.status, "COMPLETED");
     assert.equal(result.content?.meta.presentation, "message");
-    assert(result.content?.paragraphs[0].includes("🙂\n\n"));
+    assert(result.content?.paragraphs[0].includes(`${REPORT_EMOTICONS.smile}\n\n`));
+    assert(!result.content?.paragraphs.join("").includes("🙂"));
+    assert.equal(requests.length, 1, "Decoration changes must not trigger another paid request");
+    assert(requests[0].input[0].content.includes(REPORT_EMOTICON_INSTRUCTIONS));
+    assert(requests[0].input[1].content.includes("특수문자 표정·별·하트만 전체 3~5개"));
 
     result = await scenario("message-repairs-formal-ending", { tone: "genz", change: draft => { draft.sections[3].paragraph += " 기준이 중요하다."; } });
     assert.equal(result?.status, "COMPLETED");
@@ -253,8 +259,18 @@ async function main() {
     assert(requests[1].input.at(-1)?.content.includes("끝나는 서술체"));
     assert(!FORMAL_REPORT_ENDING.test(result.content!.paragraphs[3]));
 
+    result = await scenario("emoticon-cannot-hide-formal-ending", { tone: "genz", change: draft => { draft.sections[3].paragraph += ` 기준이 중요하다 ${REPORT_EMOTICONS.playful}`; } });
+    assert.equal(result?.status, "COMPLETED");
+    assert.equal(requests.length, 2);
+    assert(requests[1].input.at(-1)?.content.includes(REPORT_EMOTICON_INSTRUCTIONS));
+    assert(!FORMAL_REPORT_ENDING.test(stripReportDecorations(result.content!.paragraphs[3])));
+
     result = await scenario("emoji-cannot-replace-evidence", { tone: "genz", change: draft => { draft.sections[0].paragraph = "🫠".repeat(200); }, response: requested => ({ sections: source.sections.filter(section => requested.includes(section.section_id)) }) });
     assert.equal(result?.status, "FAILED");
+
+    result = await scenario("text-emoticons-cannot-replace-evidence", { tone: "genz", change: draft => { draft.sections[0].paragraph = REPORT_EMOTICONS.playful.repeat(200); }, response: repeatResponse });
+    assert.equal(result?.status, "FAILED");
+    assert.equal(countReportCharacters(Object.values(REPORT_EMOTICONS).join(" ").repeat(20)), 0);
 
     result = await scenario("genz-repair-keeps-voice", { tone: "genz", change: draft => { draft.sections[0].paragraph = draft.sections[0].paragraph.replace(/정관|병오/gu, "역할"); } });
     assert.equal(result?.status, "COMPLETED");
@@ -371,7 +387,7 @@ async function main() {
     assert.equal(creations[0].promptVersion, REPORT_PROMPT_VERSION);
     assert.equal(creations[0].model, getConfiguredReportModel());
     assert.equal(creations[0].productCode, "yearly_2026");
-    store.getReportWithAccess = (async () => ({ id: "issued-report", status: "COMPLETED" })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "issued-report", status: "COMPLETED", sajuProfile: { userId: "reader-account" }, order: null })) as unknown as typeof originals.find;
     const existingResponse = await createReport(new Request("http://localhost/api/saju/profiles/profile-fixture/reports", { method: "POST" }), { params: Promise.resolve({ profileId: "profile-fixture" }) });
     assert.equal(existingResponse.status, 200);
     assert.deepEqual(await existingResponse.json(), { reportId: "issued-report", existing: true });
@@ -432,11 +448,14 @@ async function main() {
     const messageHtml = renderToStaticMarkup(createElement(QueryClientProvider, { client: queryClient }, createElement(EssayReportView, { reportId: "message-report" })));
     assert(messageHtml.includes('data-report-presentation="message"'));
     assert(messageHtml.includes("다봄"));
-    assert(messageHtml.includes("🙂"));
+    assert(!messageHtml.includes("🙂"));
+    assert(messageHtml.includes(REPORT_EMOTICONS.smile));
+    assert(messageHtml.includes('class="retro-emoticon"'));
+    assert(messageParagraphs[0].includes("🙂"), "Display formatting rewrote the stored report");
     assert((messageHtml.match(/data-report-message/gu) ?? []).length > messageParagraphs.length, "Long stored paragraphs still render as single giant bubbles");
     const messages = messageParagraphs.flatMap(splitReportMessages);
     assert.equal(messages.join("").replace(/\s/gu, ""), messageParagraphs.join("").replace(/\s/gu, ""), "Message layout changed the report's words");
-    assert(messageHtml.includes(messages.at(-1)!), "The closing message was lost");
+    assert(messageHtml.includes(stripReportDecorations(messages.at(-1)!).trim()), "The closing message was lost");
     assert(!messageHtml.includes("section_id"));
     queryClient.clear();
     tests += 1;
@@ -447,6 +466,35 @@ async function main() {
     assert(shortMessages.some(message => message.includes("3.5만 원이야. 👩🏽‍💻")), "A decimal or reaction emoji was separated from its sentence");
     assert.equal(shortMessages.join("").replace(/\s/gu, ""), trickyMessage.replace(/\s/gu, ""));
     tests += 1;
+
+    const decoratedParagraphs = [
+      "세심하게 보는 눈이 있어. 😅\n\n익숙한 장면도 새로 보이네. 🙂",
+      "손실을 조심해야 하는 조건이야. ✨",
+      "차분하게 기준을 고르는 편이야. 😌\n\n검수팀도 퇴근은 필요하거든. 🫠",
+      "다음 선택에도 네 기준이 남아. 💜\n\n웃긴 부분은 이미 눈치챘지. 😅",
+      "올해는 역할을 선명하게 고르는 해네.\n\n네 마음을 응원할게. 💛",
+    ];
+    const decoratedOriginal = [...decoratedParagraphs];
+    const formatted = formatReportEmoticons(decoratedParagraphs);
+    const reactions = formatted.flatMap(splitReportEmoticons).filter(part => part.isEmoticon).map(part => part.text);
+    assert.equal(reactions.length, 5);
+    assert.equal(new Set(reactions).size, reactions.length);
+    assert.equal(formatted[1], "손실을 조심해야 하는 조건이야.");
+    assert(formatted.at(-1)!.endsWith(REPORT_EMOTICONS.closing));
+    assert.deepEqual(formatReportEmoticons(formatted), formatted, "Formatting changed after a second render");
+    assert.deepEqual(decoratedParagraphs, decoratedOriginal);
+    assert.equal(formatted.map(stripReportDecorations).join("").replace(/\s/gu, ""), decoratedOriginal.map(stripReportDecorations).join("").replace(/\s/gu, ""), "Decoration styling changed the interpretation");
+    assert.equal(stripReportDecorations("2026년 1️⃣월 3.5만 원 👩🏽‍💻 🇰🇷 ❤️"), "2026년 1월 3.5만 원   ");
+    assert(!/[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\uFE0F\u200D\u20E3]/u.test(formatReportEmoticons(["2026년 1️⃣월 3.5만 원 👩🏽‍💻 🇰🇷 ❤️"])[0]));
+    const longSentence = "익숙한 기준을 돌아보면서 내가 맡은 일과 다른 사람에게 맡길 일을 천천히 구분하는 쪽이야. ".repeat(3);
+    for (const reaction of Object.values(REPORT_EMOTICONS)) {
+      const withReaction = `${longSentence.trim()} ${reaction} 다음 말은 다른 의미로 이어지네.`;
+      const split = splitReportMessages(withReaction);
+      assert(split.some(message => message.includes(`쪽이야. ${reaction}`)), `Reaction detached from its preceding sentence: ${reaction}`);
+      assert(!split.some(message => message.startsWith(reaction)), `Reaction started the next message: ${reaction}`);
+      assert.equal(split.join("").replace(/\s/gu, ""), withReaction.replace(/\s/gu, ""));
+    }
+    tests += 4;
     console.log(`PASS: ${tests} report recovery checks; repeat openings repaired, style-only failures/timeouts publish a validated draft, missing evidence and private data stay blocked, internal errors hidden in API and UI.`);
   } finally {
     Responses.prototype.create = originals.create;

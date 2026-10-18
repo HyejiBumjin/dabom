@@ -3,7 +3,9 @@ import nextEnv from "@next/env";
 
 nextEnv.loadEnvConfig(process.cwd());
 const origin = new URL(process.env.SECURITY_CHECK_URL || "http://127.0.0.1:3100");
-assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname), "Only test a local server");
+const local = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
+const deployed = ["dabom-letter.com", "dabom--dabom-10a35.asia-east1.hosted.app"].includes(origin.hostname) && origin.protocol === "https:";
+assert.ok(local || deployed, "Only test localhost or the explicitly owned Dabom deployment");
 let passed = 0;
 async function check(path, { method = "GET", status, headers = {}, body } = {}) {
   const response = await fetch(new URL(path, origin), { method, headers, body, redirect: "manual", signal: AbortSignal.timeout(20000) });
@@ -59,8 +61,10 @@ async function main() {
   for (const path of ["/api/payments/prepare", "/api/payments/confirm", "/api/reports/create", "/api/letters/create", "/api/saju/test"]) await check(path, { method: "POST", status: 410, headers: { "content-type": "application/json" }, body: "{}" });
   await check("/api/reports/00000000-0000-4000-8000-000000000000", { status: 410 });
   for (const path of ["/.env", "/.env.local", "/.git/config", "/secrets/firebase-admin.json", "/prisma/schema.prisma", "/scripts/security-check.ts", "/preview/report", "/design/report-essay", "/saju/preview/library", "/saju/preview/checkout", "/saju/preview/loading", "/reports/00000000-0000-4000-8000-000000000000", "/gift/security-probe", "/checkout/success"]) await check(path, { status: 404 });
-  await check("/_next/image?url=http%3A%2F%2Fexample.invalid%2Fprobe.png&w=640&q=75", { status: 400 });
-  await check("/_next/image?url=http%3A%2F%2F127.0.0.1%3A3100%2F&w=640&q=75", { status: 400 });
+  // App Hosting's managed image endpoint rejects unapproved sources with 404.
+  const imageRejection = origin.hostname.endsWith(".hosted.app") || (deployed && process.env.SECURITY_HOSTING === "firebase") ? [400, 404] : 400;
+  await check("/_next/image?url=http%3A%2F%2Fexample.invalid%2Fprobe.png&w=640&q=75", { status: imageRejection });
+  await check("/_next/image?url=http%3A%2F%2F127.0.0.1%3A3100%2F&w=640&q=75", { status: imageRejection });
   for (const [method, path] of [["GET", "/api/saju/payments/confirm"], ["DELETE", "/api/saju/profiles"], ["PUT", "/api/saju/reports/security-probe"]]) await check(path, { method, status: 405 });
   await check("/api/saju/payments/webhook", { method: "POST", status: [400, 503], headers: { "content-type": "application/json" }, body: '{"type":"Transaction.Paid","data":{"paymentId":"forged","storeId":"forged"}}' });
   const callback = await check("/api/auth/callback?next=%2F%2Fevil.invalid", { status: 307, headers: { "x-forwarded-host": "evil.invalid", "x-forwarded-proto": "https" } });

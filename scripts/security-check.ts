@@ -135,8 +135,10 @@ async function main() {
   identityResponse = await sessionAccount.GET();
   check("temporary Auth failure hides content without treating it as logout", identityResponse.status === 503 && !JSON.stringify(await identityResponse.json()).includes("private provider"));
   temporaryAuthError = false;
-  for (const value of ["//evil.test", "/\\evil.test", "https://evil.test", "javascript:alert(1)", "//dabom.invalid@evil.test", "/\n/evil.test", "/..//evil.test", "/x/..//evil.test", "/%2e%2e//evil.test", "/.%2e//evil.test", "/x/%2E%2E//evil.test"]) check(`unsafe redirect rejected ${JSON.stringify(value)}`, safeReturnPath(value) === "/saju/library");
+  for (const value of ["//evil.test", "/\\evil.test", "https://evil.test", "javascript:alert(1)", "//dabom.invalid@evil.test", "/\n/evil.test", "/..//evil.test", "/x/..//evil.test", "/%2e%2e//evil.test", "/.%2e//evil.test", "/x/%2E%2E//evil.test"]) check(`unsafe redirect rejected ${JSON.stringify(value)}`, safeReturnPath(value) === "/");
+  check("ordinary login returns to the home page", safeReturnPath(null) === "/" && safeReturnPath("") === "/");
   check("internal return path preserved", safeReturnPath("/saju?x=1#top") === "/saju?x=1#top");
+  check("interrupted purchase can resume after login", safeReturnPath("/saju/checkout/return?orderId=fixture") === "/saju/checkout/return?orderId=fixture");
   const { createElement } = require("react") as typeof import("react");
   const { renderToStaticMarkup } = require("react-dom/server") as typeof import("react-dom/server");
   const { MessageReport } = require("../src/components/MessageReport") as typeof import("../src/components/MessageReport");
@@ -152,8 +154,8 @@ async function main() {
   assertSameOrigin(request("/x")); check("same-origin allowed", true);
   for (const birthDate of ["0000-01-01", "9999-01-01", "2025-02-29", "2026-02-31", "2026-13-01", "1995-05-20 OR 1=1"]) check(`invalid birth rejected ${birthDate}`, !profileInputSchema.safeParse({ ...input, birthDate }).success);
   for (const field of [{ name: "a".repeat(41) }, { name: "abc\u202Edef" }, { birthTime: "24:00" }, { gender: "admin" }, { relationship: "ADMIN" }]) check("invalid profile field rejected", !profileInputSchema.safeParse({ ...input, ...field }).success);
-  const massAssigned = profileInputSchema.parse({ ...input, userId: "B", status: "PAID", orderId: "stolen", role: "admin" });
-  check("owner/payment fields cannot be mass assigned", !("userId" in massAssigned) && !("status" in massAssigned));
+  const massAssigned = profileInputSchema.parse({ ...input, userId: "B", status: "PAID", orderId: "stolen", role: "admin", developmentPreviewAccess: { userId: "B", grantedAt: new Date().toISOString() } });
+  check("owner/payment/preview grant fields cannot be mass assigned", !("userId" in massAssigned) && !("status" in massAssigned) && !("developmentPreviewAccess" in massAssigned));
   await assert.rejects(() => readJsonBody(request("/x", {}, { "content-type": "text/plain" }))); check("simple cross-site form content type denied", true);
   await assert.rejects(() => readJsonBody(request("/x", { value: "x".repeat(9000) }))); check("oversized streamed body denied without Content-Length", true);
   await assert.rejects(() => readJsonBody(request("/x", {}, { "content-length": "9000" }))); check("oversized declared body denied", true);
@@ -186,6 +188,27 @@ async function main() {
   check("unpaid report denied in production", (await report.GET(new Request("https://dabom.test/report"), reportParams)).status === 404);
   check("production has no free-report endpoint", (await createReport.POST(request("/create"), profileParams)).status === 402);
   check("unpaid generation denied", (await generate.POST(request("/generate"), reportParams)).status === 404);
+  const ordinaryReportRead = store.getReportWithAccess;
+  const preview = { id: "report-fixture", userId: "A", orderId: null, sajuProfileId: "profile-fixture", productCode: "yearly_2026", status: "COMPLETED", content: { paragraphs: ["synthetic-preview"] }, sajuProfile: { userId: "A" }, order: null, developmentPreviewAccess: { userId: "A", grantedAt: new Date().toISOString() } };
+  store.getReportWithAccess = (async () => preview) as never;
+  check("explicit completed preview is readable by its owner", (await report.GET(new Request("https://dabom.test/report"), reportParams)).status === 200);
+  check("preview duplicate returns existing report without generation", (await createReport.POST(request("/create"), profileParams)).status === 200 && reportCount === 0);
+  check("preview purchase preparation returns existing without payment calls", (await prepare.POST(request("/prepare", { profileId: "profile-fixture" }))).status === 200 && paymentCalls === 0);
+  const CheckoutPage = require("../src/app/saju/profiles/[profileId]/checkout/page").default as typeof import("../src/app/saju/profiles/[profileId]/checkout/page").default;
+  await assert.rejects(() => CheckoutPage(profileParams), error => error instanceof Error && "digest" in error && String(error.digest).includes(";/saju/reports/report-fixture;"));
+  check("old checkout link reopens a granted report without a redirect loop", true);
+  check("completed preview generation endpoint is idempotent", (await generate.POST(request("/generate"), reportParams)).status === 200 && generationCalls === 0);
+  identity = "B";
+  check("another account cannot read granted preview", (await report.GET(new Request("https://dabom.test/report"), reportParams)).status === 404);
+  identity = "A";
+  for (const patch of [
+    { developmentPreviewAccess: undefined },
+    { developmentPreviewAccess: { userId: "B", grantedAt: new Date().toISOString() } },
+    { developmentPreviewAccess: { userId: "A", grantedAt: "invalid" } },
+    { userId: "B" }, { status: "PENDING" }, { status: "FAILED" }, { content: null },
+    { orderId: "cancelled-order", order: { userId: "A", status: "CANCELLED" } },
+  ]) check("preview grant cannot bypass ownership, payment revocation or generation", !account.canReadSajuReport({ ...preview, ...patch }, { id: "A" }, false));
+  store.getReportWithAccess = ordinaryReportRead;
   check("client paymentId swapping denied before provider lookup", (await confirm.POST(request("/confirm", { orderId: provider.id, paymentId: "stolen" }))).status === 400 && paymentCalls === 0);
   provider.amount.total = 1;
   check("server catches amount fraud", (await confirm.POST(request("/confirm", { orderId: provider.id, paymentId: provider.id, status: "PAID", amount: 3900 }))).status === 409 && paymentStatus === "READY");

@@ -1,7 +1,9 @@
+import { reportReactionPrefix } from "./report-emoticons";
+
 const closingQuotes = new Set(["’", "”", "'", '"']);
 const openingQuotes: Record<string, string> = { "‘": "’", "“": "”", "'": "'", '"': '"', "(": ")" };
 
-/** Keep quotes, decimal numbers and reaction emoji with their sentence. */
+/** Keep quotes, decimal numbers and reactions with their sentence. */
 function sentencesOf(block: string) {
   const sentences: string[] = [];
   const pending: string[] = [];
@@ -15,11 +17,9 @@ function sentencesOf(block: string) {
     let end = index + 1;
     while (/[.!?。！？]/u.test(block[end] ?? "") || closingQuotes.has(block[end])) end += 1;
     const next = end < block.length ? String.fromCodePoint(block.codePointAt(end)!) : "";
-    if (next && !/\s|\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(next)) continue;
-    // Emoji after punctuation belong to the preceding message, including ZWJ
-    // sequences and skin tones. Nothing is inserted into the stored prose.
-    const reaction = block.slice(end).match(/^\s*(?:[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\uFE0F\u200D\u20E3]+\s*)+/u);
-    if (reaction) end += reaction[0].length;
+    const reaction = reportReactionPrefix(block.slice(end));
+    if (next && !/\s|\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(next) && !reaction) continue;
+    end += reaction.length;
     sentences.push(block.slice(start, end).trim());
     start = end;
     index = end - 1;

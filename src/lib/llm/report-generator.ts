@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { formatReportEmoticons, REPORT_EMOTICON_INSTRUCTIONS, stripReportDecorations } from "@/lib/report-emoticons";
 import { z } from "zod";
 import { firebaseStore } from "@/lib/firebase/store";
 import { buildReportEvidencePrompt, getReportPrompt, getStoredReportTone } from "@/lib/prompts/v6";
@@ -110,7 +111,7 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
     if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(paragraph)) fail("내부 입력 라벨이 본문에 노출되었습니다.");
     if (genericCheerleading.test(paragraph)) style("근거 없는 치어리딩 문구가 포함되었습니다.");
     if (SUGGESTION_ENDING.test(paragraph)) style("'해보자·하자·해봐' 같은 권유형이 포함되었습니다. 행동 지시 대신 그 선택이 올해 어떤 의미인지 설명하세요.");
-    if (context.payload.style.tone === "genz" && FORMAL_REPORT_ENDING.test(paragraph)) style("'~한다·~된다·~이다·~다'로 끝나는 서술체가 있습니다. 친구에게 보내는 긴 메시지처럼 '~해·~거든·~네·~지·~잖아'로 바꾸고, 자연스러운 줄바꿈과 이모티콘을 유지하세요.");
+    if (context.payload.style.tone === "genz" && FORMAL_REPORT_ENDING.test(stripReportDecorations(paragraph))) style("'~한다·~된다·~이다·~다'로 끝나는 서술체가 있습니다. 친구에게 보내는 긴 메시지처럼 '~해·~거든·~네·~지·~잖아'로 바꾸고, 자연스러운 줄바꿈과 특수문자 이모티콘을 유지하세요.");
     const evasivePhrase = paragraph.match(/(?:일|였을|었을|느꼈을)\s*거야|것\s*같아|듯해|필요해\s*보여|뜻은 아니야|비춰 볼 수 있어|살펴볼 수 있어|할 수는 없어/u)?.[0];
     if (evasivePhrase) style(`말을 흐리는 표현 '${evasivePhrase}'이 있습니다. 조건과 시간 범위를 분명히 한 뒤 해당 해석을 따뜻한 서술형으로 쓰세요.`);
     const hanja = paragraph.match(/\p{Script=Han}/gu);
@@ -141,9 +142,10 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
     });
   }
   if (issues.length > 0) throw new ReportValidationError(issues);
-  const text = paragraphs.join("\n\n");
+  const formatted = context.payload.style.tone === "genz" ? formatReportEmoticons(paragraphs) : paragraphs;
+  const text = formatted.join("\n\n");
   return {
-    paragraphs,
+    paragraphs: formatted,
     meta: {
       presentation: context.payload.style.tone === "genz" ? "message" : "letter",
       charCount: [...text].length,
@@ -245,7 +247,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
           month_terms: section.required_timing_terms,
           role: section.editorial_focus,
         }));
-        const repairTone = prompt.tone === "genz" ? "\n수정 문단도 젠지 찐친의 말투를 유지하세요. '~다·~한다·~된다·~이다'로 끝내지 말고 '~해·~거든·~네·~지·~잖아'로 직접 말 건네세요. 한 메시지에 1~2문장, 약 50~100자로 끊고 빈 줄로 다음 메시지를 이어 주세요. 가벼운 이모티콘을 유지하세요. 전문 용어가 처음 나오면 terminology에 근거한 짧은 풀이를 용어 바로 뒤에 붙이세요. 다른 메시지로 풀이를 미루거나 이미 설명한 용어를 재정의하지 마세요. 해석에서 나온 장난스러운 비유·팩폭을 살리고, 분량을 채우려고 진지한 상담문이나 훈계로 바꾸지 마세요." : "";
+        const repairTone = prompt.tone === "genz" ? REPORT_EMOTICON_INSTRUCTIONS + "\n수정 문단도 젠지 찐친의 말투를 유지하세요. '~다·~한다·~된다·~이다'로 끝내지 말고 '~해·~거든·~네·~지·~잖아'로 직접 말 건네세요. 한 메시지에 1~2문장, 약 50~100자로 끊고 빈 줄로 다음 메시지를 이어 주세요. 특수문자 이모티콘만 쓰고 컬러 이모지는 빼세요. 전체 리포트의 3~5개 기준에는 이번에 수정하지 않는 메시지의 표정도 포함됩니다. 전문 용어가 처음 나오면 terminology에 근거한 짧은 풀이를 용어 바로 뒤에 붙이세요. 다른 메시지로 풀이를 미루거나 이미 설명한 용어를 재정의하지 마세요. 해석에서 나온 장난스러운 비유·팩폭을 살리고, 분량을 채우려고 진지한 상담문이나 훈계로 바꾸지 마세요." : "";
         const repairClosing = prompt.tone === "genz"
           ? "마무리는 summary의 editorial_focus에 맞춰 첫 메시지에 올해 종합 운세를 한 문장으로 요약하고, 해석에 맞는 긍정의 메시지와 약 50~90자의 따뜻한 인사로 마칩니다. 요약은 이미 본문에서 설명한 올해의 의미만 압축하며 새 판단을 만들지 않습니다."
           : "마무리는 짧은 응원입니다.";

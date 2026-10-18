@@ -6,7 +6,7 @@ export default function RetroLoadingPreviewPage() {
   if (process.env.NODE_ENV !== "development") notFound();
   return (
     <RetroPage>
-      <RetroWindow title="다봄과의 대화" closeHref="/saju">
+      <RetroWindow title="다봄" closeHref="/saju">
         <ReportPreparing />
       </RetroWindow>
     </RetroPage>
