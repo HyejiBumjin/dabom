@@ -26,10 +26,10 @@ export async function saveSajuProfile(userId: string, input: ProfileInput, db: F
 export function ensureSajuReport(userId: string, profileId: string, orderId?: string, db: FirebaseStore = firebaseStore) {
   return db.ensureReport(userId, profileId, reportMetadata(), orderId);
 }
-export async function prepareSajuOrder(userId: string, profileId: string, db: FirebaseStore = firebaseStore) {
+export async function prepareSajuOrder(userId: string, profileId: string, db: FirebaseStore = firebaseStore, consent?: unknown) {
   const existing = await db.getReportWithAccess(db.reportId(profileId, SAJU_PRODUCT_CODE));
   if (existing && canReadSajuReport(existing, { id: userId }, false)) return { existing: true as const, reportId: existing.id };
-  return db.prepareOrder(userId, profileId, reportMetadata());
+  return db.prepareOrder(userId, profileId, reportMetadata(), consent);
 }
 export function verifySajuPayment(order: { merchantUid: string; amount: number | null; product: { price: number } }, payment: { id: string; amount: number; status: string; currency: string }) {
   if (!Number.isSafeInteger(payment.amount) || payment.amount <= 0) throw new Error("PAYMENT_AMOUNT_MISMATCH");

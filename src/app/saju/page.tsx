@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SajuProfileForm } from "@/components/SajuProfileForm";
-import { PixelCat, RetroFooter, RetroPage, RetroWindow } from "@/components/RetroWindow";
+import { RetroFooter, RetroPage, RetroWindow } from "@/components/RetroWindow";
+import { ExpressiveCat } from "@/components/ExpressiveCat";
 import { requireSajuAccount } from "@/lib/saju/account";
 import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 
@@ -17,7 +18,7 @@ export default async function SajuInputPage() {
               <h1 className="retro-heading">너의 시작을 알려줘.</h1>
               <p>올해의 메시지를 준비할게.</p>
             </div>
-            <PixelCat />
+            <ExpressiveCat mood="curious" />
           </header>
           <SajuProfileForm accountId={account.id} />
           <RetroFooter />

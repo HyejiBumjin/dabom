@@ -40,6 +40,7 @@ const { restoreProfileDraft } = require("../src/lib/profile-draft") as typeof im
 const { safeReturnPath } = require("../src/lib/auth-return-path") as typeof import("../src/lib/auth-return-path");
 const { parsePortOnePayment } = require("../src/lib/portone/server") as typeof import("../src/lib/portone/server");
 const { verifySajuPayment } = require("../src/lib/saju/library-service") as typeof import("../src/lib/saju/library-service");
+const { POLICY_VERSION, recordCheckoutConsent } = require("../src/lib/commerce/policy") as typeof import("../src/lib/commerce/policy");
 const input = { name: "검사 인물", relationship: "SELF", gender: "female", birthDate: "1995-05-20", birthTime: "20:20", calendar: "solar", isLeapMonth: false };
 const provider = { id: "saju_test-payment", storeId: "store-test", channel: { key: "channel-test", type: "LIVE" }, amount: { total: 3900, cancelled: 0 }, currency: "KRW", status: "PAID" };
 let paymentStatus = "READY";
@@ -60,8 +61,9 @@ store.getOrder = (async () => {
   if (cancelBetweenReadAndWrite) paymentStatus = "CANCELLED";
   return found;
 }) as never;
-store.prepareOrder = (async (userId: string) => {
+store.prepareOrder = (async (userId: string, _profileId: string, _metadata: unknown, consent: unknown) => {
   if (userId !== profileOwner) throw new Error("PROFILE_NOT_FOUND");
+  if (paymentStatus !== "PAID") recordCheckoutConsent(consent, "synthetic", 3900);
   return paymentStatus === "PAID" ? { existing: true, reportId: "report-fixture" } : { existing: false, orderId: provider.id, amount: 3900, orderName: "synthetic" };
 }) as never;
 store.ensureReport = (async () => { reportCount++; return { id: "report-fixture", status: reportStatus }; }) as never;
@@ -84,6 +86,9 @@ const sessionAccount = require("../src/app/api/auth/account/route") as typeof im
 const prepare = require("../src/app/api/saju/payments/prepare/route") as typeof import("../src/app/api/saju/payments/prepare/route");
 const confirm = require("../src/app/api/saju/payments/confirm/route") as typeof import("../src/app/api/saju/payments/confirm/route");
 const report = require("../src/app/api/saju/reports/[reportId]/route") as typeof import("../src/app/api/saju/reports/[reportId]/route");
+const opened = require("../src/app/api/saju/reports/[reportId]/opened/route") as typeof import("../src/app/api/saju/reports/[reportId]/opened/route");
+let receiptCalls = 0;
+store.markReportReceipt = async (userId: string) => { receiptCalls++; return userId === reportOwner && paymentStatus === "PAID"; };
 const generate = require("../src/app/api/saju/reports/[reportId]/generate/route") as typeof import("../src/app/api/saju/reports/[reportId]/generate/route");
 const createReport = require("../src/app/api/saju/profiles/[profileId]/reports/route") as typeof import("../src/app/api/saju/profiles/[profileId]/reports/route");
 const webhook = require("../src/app/api/saju/payments/webhook/route") as typeof import("../src/app/api/saju/payments/webhook/route");
@@ -173,12 +178,14 @@ async function main() {
     ["prepare", () => prepare.POST(request("/api/saju/payments/prepare", { profileId: "profile-fixture" }))],
     ["confirm", () => confirm.POST(request("/api/saju/payments/confirm", { orderId: provider.id, paymentId: provider.id }))],
     ["report", () => report.GET(new Request("https://dabom.test/report"), reportParams)],
+    ["opened", () => opened.POST(request("/opened"), reportParams)],
     ["generate", () => generate.POST(request("/generate"), reportParams)],
     ["create report", () => createReport.POST(request("/create"), profileParams)],
   ] as const) check(`anonymous ${name} denied`, (await invoke()).status === 401);
   check("anonymous requests make no provider or LLM call", paymentCalls === 0 && generationCalls === 0);
   identity = "B";
   check("cross-account report read denied", (await report.GET(new Request("https://dabom.test/report"), reportParams)).status === 404);
+  check("cross-account opened receipt denied", (await opened.POST(request("/opened"), reportParams)).status === 404);
   check("cross-account generation denied", (await generate.POST(request("/generate"), reportParams)).status === 404);
   check("cross-account report creation denied", (await createReport.POST(request("/create"), profileParams)).status === 404);
   check("cross-account checkout denied", (await prepare.POST(request("/prepare", { profileId: "profile-fixture" }))).status === 404);
@@ -186,6 +193,16 @@ async function main() {
   check("IDOR makes no provider or LLM call", paymentCalls === 0 && generationCalls === 0);
   identity = "A";
   check("unpaid report denied in production", (await report.GET(new Request("https://dabom.test/report"), reportParams)).status === 404);
+  for (const consent of [undefined, { version: "outdated", terms: true, digitalContent: true }, { version: POLICY_VERSION, terms: true, digitalContent: false }]) {
+    check("payment API rejects missing/stale/incomplete consent before provider call", (await prepare.POST(request("/prepare", { profileId: "profile-fixture", consent }))).status === 400 && paymentCalls === 0);
+  }
+  provider.status = "READY";
+  check("draft policies block new live checkout even with valid consent", (await prepare.POST(request("/prepare", { profileId: "profile-fixture", consent: { version: POLICY_VERSION, terms: true, digitalContent: true } }))).status === 503 && paymentStatus === "READY");
+  provider.status = "PAID";
+  paymentCalls = 0;
+  check("unpaid opened receipt denied", (await opened.POST(request("/opened"), reportParams)).status === 404);
+  const receiptCallsBefore = receiptCalls;
+  check("cross-origin opening cannot write a receipt", (await opened.POST(request("/opened", undefined, { origin: "https://evil.test" }), reportParams)).status === 403 && receiptCalls === receiptCallsBefore);
   check("production has no free-report endpoint", (await createReport.POST(request("/create"), profileParams)).status === 402);
   check("unpaid generation denied", (await generate.POST(request("/generate"), reportParams)).status === 404);
   const ordinaryReportRead = store.getReportWithAccess;
@@ -215,6 +232,8 @@ async function main() {
   provider.amount.total = 3900;
   const paid = await confirm.POST(request("/confirm", { orderId: provider.id, paymentId: provider.id }));
   check("verified payment grants report", paid.status === 200 && paymentStatus === "PAID");
+  check("paid owner opening accepted without content response", (await opened.POST(request("/opened"), reportParams)).status === 204);
+  check("existing purchase opens while commerce policies remain draft", (await prepare.POST(request("/prepare", { profileId: "profile-fixture" }))).status === 200);
   const countBeforeRetry = reportCount;
   const replay = await confirm.POST(request("/confirm", { orderId: provider.id, paymentId: provider.id }));
   check("payment retry returns same report", replay.status === 200 && (await replay.json()).reportId === "report-fixture" && reportCount === countBeforeRetry + 1);

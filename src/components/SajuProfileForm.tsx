@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RetroTitleBar, SavedFortuneCat } from "@/components/RetroWindow";
-import { RELATIONSHIPS, SAJU_REPORT_YEAR, type Relationship } from "@/lib/saju/profile-input";
+import { RetroTitleBar } from "@/components/RetroWindow";
+import { RELATIONSHIPS, profileInputSchema, type Relationship } from "@/lib/saju/profile-input";
+import { ExistingFortuneNotice } from "@/components/ExistingFortuneNotice";
+import { BirthDateInput, BirthTimeInput } from "@/components/BirthDateTimeInput";
 import { PROFILE_DRAFT_KEY as DRAFT_KEY, restoreProfileDraft } from "@/lib/profile-draft";
 
 export function SajuProfileForm({ accountId }: { accountId: string }) {
@@ -27,6 +29,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
   const libraryButton = useRef<HTMLButtonElement>(null);
   const libraryNavigationInFlight = useRef(false);
   const nameInput = useRef<HTMLInputElement>(null);
+  const inputReady = profileInputSchema.safeParse({ name, relationship, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth }).success;
   useEffect(() => () => {
     activeRequest.current?.abort();
     if (navigationTimer.current) clearTimeout(navigationTimer.current);
@@ -97,7 +100,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     event.preventDefault();
     if (submissionInFlight.current) return;
     setError(null);
-    if (!name.trim() || !birthDate || !gender || (!timeUnknown && !birthTime)) {
+    if (!inputReady) {
       setError("이름, 성별, 생년월일과 태어난 시각을 입력해 주세요.");
       return;
     }
@@ -152,7 +155,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
           </fieldset>
           <div className="retro-field">
             <label htmlFor="name">이름</label>
-            <input ref={nameInput} className="retro-input" id="name" name="name" autoComplete="name" value={name} onChange={event => setName(event.target.value)} placeholder="예: 김다봄" required />
+            <input ref={nameInput} className="retro-input" id="name" name="name" autoComplete="name" maxLength={40} value={name} onChange={event => setName(event.target.value)} placeholder="예: 김다봄" required />
           </div>
           <fieldset className="retro-choice-field">
             <legend>성별</legend>
@@ -167,7 +170,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
           </fieldset>
           <div className="retro-field">
             <label htmlFor="birthDate">생년월일</label>
-            <input className="retro-input" id="birthDate" name="birthDate" type="date" value={birthDate} onChange={event => setBirthDate(event.target.value)} required />
+            <BirthDateInput value={birthDate} lunar={calendar === "lunar"} onChange={setBirthDate} />
           </div>
           <fieldset className="retro-choice-field">
             <legend>달력 기준</legend>
@@ -188,7 +191,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
           )}
           <div className="retro-field">
             <label htmlFor="birthTime">태어난 시각</label>
-            <input className="retro-input" id="birthTime" name="birthTime" type="time" value={birthTime} disabled={timeUnknown} onChange={event => setBirthTime(event.target.value)} required={!timeUnknown} />
+            <BirthTimeInput value={birthTime} disabled={timeUnknown} onChange={setBirthTime} />
             <div className="retro-time-options">
               <label className="retro-checkbox"><input type="checkbox" checked={timeUnknown} onChange={event => setTimeUnknown(event.target.checked)} />태어난 시각을 몰라</label>
               {timeUnknown && <p className="retro-form-help">시간은 모르는 상태로 운세를 읽어줄게.</p>}
@@ -196,8 +199,8 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
           </div>
         </fieldset>
         {error && <p id="profile-error" className="retro-error" role="alert">{error}</p>}
-        <button type="submit" className="retro-button" disabled={pending || duplicateOpen}>
-          {pending ? "메시지를 준비하는 중…" : <>운세 메시지 받기 <span aria-hidden="true">→</span></>}
+        <button type="submit" className="retro-button" disabled={pending || duplicateOpen || !inputReady}>
+          {pending ? "메시지를 준비하는 중…" : "운세 메시지 받기"}
         </button>
         <p className="retro-caption">이제 다봄이 올해의 흐름을 읽어줄게.</p>
       </form>
@@ -212,16 +215,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
         <RetroTitleBar title="다봄 · 알림">
           <button type="button" className="retro-window-close" aria-label="입력 내용 수정하기" disabled={pending} onClick={dismissDuplicate}>×</button>
         </RetroTitleBar>
-        <div className="retro-window-body retro-duplicate-body">
-          <SavedFortuneCat />
-          <h2 className="retro-heading" id="duplicate-fortune-title">이미 조회한 운세가 있어.</h2>
-          <p id="duplicate-fortune-description">같은 정보로 조회한 {SAJU_REPORT_YEAR}년 운세가<br />내 운세함에 보관돼 있어.</p>
-          <p className="retro-duplicate-note">다시 결제하지 않고 확인할 수 있어.</p>
-          <div className="retro-duplicate-actions">
-            <button ref={libraryButton} type="button" className="retro-button" disabled={pending} onClick={openLibrary}>{pending ? "운세함으로 이동 중…" : "내 운세함으로 이동"}</button>
-            <button type="button" className="retro-button retro-button--secondary" disabled={pending} onClick={startNewQuery}>새로운 정보 입력</button>
-          </div>
-        </div>
+        <ExistingFortuneNotice pending={pending} onLibrary={openLibrary} onNewQuery={startNewQuery} libraryButton={libraryButton} />
       </dialog>
     </>
   );

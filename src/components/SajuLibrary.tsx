@@ -48,7 +48,7 @@ export function SajuLibrary({ profiles, preview = false }: { profiles: LibraryPr
           ))}
         </div>
       )}
-      <Link href="/saju" className="retro-button">다른 사람 운세도 받기 <span aria-hidden="true">＋</span></Link>
+      <Link href="/saju" className="retro-button">다른 사람 운세도 받기</Link>
     </>
   );
 }

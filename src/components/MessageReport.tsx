@@ -36,7 +36,7 @@ export function MessageReport({ content }: { content: ReportContent }) {
         <SittingMessengerCat />
         <p>읽어줘서 고마워.</p>
         <Link href="/saju/library" className="retro-back-link">내 운세함에서 다시 읽기 →</Link>
-        <Link href="/" className="retro-button">처음으로 <span aria-hidden="true">→</span></Link>
+        <Link href="/" className="retro-button">처음으로</Link>
         <RetroFooter />
       </footer>
     </article>

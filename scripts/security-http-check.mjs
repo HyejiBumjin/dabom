@@ -19,10 +19,12 @@ const api = [
   ["GET", "/api/auth/account"],
   ["POST", "/api/saju/profiles"], ["POST", "/api/saju/profiles/security-probe/reports"],
   ["GET", "/api/saju/reports/security-probe"], ["POST", "/api/saju/reports/security-probe/generate"],
+  ["POST", "/api/saju/reports/security-probe/opened"],
   ["POST", "/api/saju/payments/prepare"], ["POST", "/api/saju/payments/confirm"],
 ];
 async function main() {
   const home = await check("/", { status: 200 });
+  for (const path of ["/yearly", "/terms", "/privacy", "/refund"]) await check(path, { status: 200 });
   for (const [name, expected] of [["x-content-type-options", "nosniff"], ["x-frame-options", "DENY"], ["referrer-policy", "no-referrer"]]) {
     assert.equal(home.headers.get(name), expected); passed++; console.log(`PASS security header ${name}`);
   }

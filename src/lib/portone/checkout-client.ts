@@ -13,7 +13,7 @@ export class CheckoutLoginRequired extends Error {}
  * this request never charges a card or creates a second payment ID. */
 export async function postCheckout<T>(
   endpoint: "prepare" | "confirm",
-  body: Record<string, string>,
+  body: Record<string, unknown>,
   schema: z.ZodType<T>,
   signal: AbortSignal,
   timeoutMs = 20_000,

@@ -131,7 +131,21 @@ gcloud projects remove-iam-policy-binding dabom-10a35 \
 - 결제 준비/확인 HTTP 요청과 본문 읽기에 20초 제한을 두고 실패하면 같은 주문 확인을 다시 제공한다. 결제 완료 화면으로 이동할 때 전체 페이지 이동으로 서버 상태를 새로 읽는다. 잘못된 응답 ID·가격을 브라우저에서도 거른다.
 - 검증: `payment:check` 17, `payment:mode-check` 18, `security:check` 134, 격리 Firestore 통합 48 PASS. TypeScript 및 변경 파일 lint 통과. 결제창 SDK는 임의로 시간 초과 처리하지 않아 카드사 인증 중 재결제를 유도하지 않는다.
 
-### 기존 Vercel 배포 참고
+### PG 심사 준비 페이지와 거래 증빙 (2026-10-17, 로컬 작업)
+
+- 로그인 없이 `/yearly`에서 2026년 리포트 1건 3,900원, 제공 방법·시점, 가상 예시 일부와 환불 요약을 확인한다. 예시는 생성 프롬프트/코퍼스에 들어가지 않는다.
+- `/terms`, `/privacy`, `/refund`를 추가하고 메인과 결제 화면에 사업자 정보를 표시한다. 공개 정보는 `src/lib/commerce/policy.ts` 한 곳에서 관리한다.
+- 현재 정책은 **초안**이다. 사용자 제공 주소의 도로명 뒤 건물번호가 빠져 있고, 통신판매업 신고번호와 휴대폰 고객센터 번호의 PG 수용 여부는 미확인이다. 개인정보 국외 이전 고지·위탁 조건·삭제/보존 운영 절차도 확정해야 한다. `businessDetailsVerified=false`, `POLICY_EFFECTIVE_DATE=null` 상태에서 신규 실결제는 서버와 화면에서 차단한다. 로컬 전용 결제 테스트 모드는 유지한다.
+- 정책이 최종 확정되면 시행일·버전을 갱신하고 해당 버전의 전문과 예시를 Git 이력에 보존한다. 정책을 바꾸면서 버전을 재사용하지 않는다. 설정 플래그만 바꾸어 미완료 고지를 활성화하지 않는다. 개인정보 방침은 한국법에 따른 국외 이전 항목, 실제 수탁자 계약·재위탁, 계정/로그/백업의 보관 및 삭제 절차를 운영자가 확인해야 한다.
+- 결제 준비 API/저장소는 현재 정책 버전과 `terms=true`, `digitalContent=true`를 검증한다. 선택 항목을 사전 체크하지 않는다. 서버가 확인한 계정·프로필·상품·금액과 동의 문구·버전·서버 시각·예시 버전을 `checkoutConsents`에 트랜잭션으로 저장한다. 동일 주문·버전은 재시도해도 최초 증빙이 바뀌지 않는다. 주문의 `checkoutConsent`에도 해당 스냅샷을 연결한다. IP나 카드번호를 추가 수집하지 않는다.
+- 이미 구매했거나 명시적으로 허용된 개발 리포트는 새 약관 동의나 판매 개시 설정과 무관하게 기존 권한으로 재열람한다. 취소된 주문과 다른 계정은 계속 차단한다.
+- `completedAt`는 생성 완료, `firstDeliveredAt`는 권한을 확인한 완료 본문 API 응답 준비 시각, `firstOpenedAt`는 보이는 브라우저에서 완료 본문 렌더 후 보낸 확인 요청의 서버 수신 시각이다. ‘생성 시작’이나 기록 하나만으로 실제 이용/청약철회 제한을 단정하지 않는다. 기록 장애로 구매 콘텐츠를 숨기지 않는다. 환불 판단에는 결제·제공 여부·하자·계약 이행을 함께 확인한다.
+- `POST /api/saju/reports/:id/opened`는 인증·동일 출처·요청 제한과 트랜잭션 내 계정/프로필/결제/완료 상태를 확인한다. 서버의 제공 기록이 있어야 열람 기록을 남기며 최초 시각은 덮어쓰지 않는다. 미리보기·미결제·취소·다른 계정에는 남기지 않는다.
+- 환불 접수는 공개 고객센터로 받는다. 자동 카드 취소 기능을 새로 만든 것은 아니다. 주문의 실제 결제 상태를 확인하여 PortOne에서 취소하고 기존 서명 검증 웹훅으로 권한 회수를 확인해야 한다. 법정 기산일부터 환급 기한을 관리하고 결과를 고객에게 안내한다. 기존 계정/리포트 삭제 및 법정보존 자료의 분리·만료 삭제 절차는 출시 전 검증 대상이다.
+- 참고 근거: [PortOne 서비스 요건](https://help.portone.io/content/requirements), [전자상거래법 제17조](https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1024961473), [Firebase 개인정보 처리](https://firebase.google.com/support/privacy), [OpenAI 데이터 보관](https://developers.openai.com/api/docs/guides/your-data). `store:false`를 무보관 승인으로 해석하지 않는다.
+- 검증: API 보안 144, 격리 Firestore 66, 로컬 production HTTP 86, 결제 클라이언트 17, 리포트 61 PASS. Node 22 production build와 TypeScript 통과; lint 오류 0, 기존 경고 17. 브라우저에서 상품 공개 접근·메인 링크와 결제 동의 0/1/2개 상태 및 해제 시 차단을 확인했다. 실제 결제·LLM 호출·운영 배포는 하지 않았다.
+
+### 기존 Vercel 배포 참고 (이전 구성)
 
 1. Vercel에 Firebase 프로젝트 ID, web API key, Kakao REST API key/client secret을 서버 환경 변수로 설정한다.
 2. `FIREBASE_ADMIN_CREDENTIALS_JSON`을 비밀 환경 변수로 넣고 `FIREBASE_ADMIN_CREDENTIALS_FILE`은 비운다. 두 소스를 동시에 설정하지 않는다. 개인키를 저장소/클라이언트에 넣지 않는다.

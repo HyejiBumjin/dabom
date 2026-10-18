@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReportContent } from "@/lib/llm/types";
-import { PUBLIC_REPORT_FAILURE_MESSAGE } from "@/lib/llm/report-messages";
 import { MessageReport } from "@/components/MessageReport";
-import { PixelCat, ReportPreparing } from "@/components/RetroWindow";
+import { ReportPreparing } from "@/components/RetroWindow";
+import { ReportErrorState } from "@/components/ReportErrorState";
 import { ReportAccessError } from "@/lib/report-access-error";
 
-interface ReportResponse { id: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: ReportContent | null; lastError: string | null }
+interface ReportResponse { id: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: ReportContent | null; lastError: string | null; recordOpening?: boolean }
 
 export function EssayReportView({ reportId }: { reportId: string }) {
   const router = useRouter();
@@ -18,6 +18,7 @@ export function EssayReportView({ reportId }: { reportId: string }) {
   const [generationRequestFailed, setGenerationRequestFailed] = useState(false);
   const [loginRequired, setLoginRequired] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
+  const openedReceiptSent = useRef(false);
   const requestReport = useCallback(async (url: string, options?: RequestInit) => {
     const response = await fetch(url, { ...options, signal: AbortSignal.timeout(options?.method === "POST" ? 65_000 : 15_000) });
     if (response.status === 401) {
@@ -42,6 +43,23 @@ export function EssayReportView({ reportId }: { reportId: string }) {
     refetchInterval: (state) => state.state.status === "error" || state.state.data?.status === "COMPLETED" || state.state.data?.status === "FAILED" ? false : 1500,
     retry: (count, error) => !(error instanceof ReportAccessError && [401, 403, 404].includes(error.status)) && count < 2,
   });
+
+  useEffect(() => {
+    if (loginRequired || accessDenied || query.data?.status !== "COMPLETED" || !query.data.content || !query.data.recordOpening) return;
+    const controller = new AbortController();
+    let inFlight = false;
+    const record = () => {
+      if (document.visibilityState !== "visible" || openedReceiptSent.current || inFlight || controller.signal.aborted) return;
+      inFlight = true;
+      void fetch(`/api/saju/reports/${reportId}/opened`, { method: "POST", cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]) })
+        .then(response => { if (!controller.signal.aborted && (response.ok || response.status === 404)) openedReceiptSent.current = true; })
+        .catch(() => { /* Receipt collection never interrupts the purchased report. */ })
+        .finally(() => { inFlight = false; });
+    };
+    record();
+    document.addEventListener("visibilitychange", record);
+    return () => { controller.abort(); document.removeEventListener("visibilitychange", record); };
+  }, [query.data?.status, query.data?.content, query.data?.recordOpening, reportId, loginRequired, accessDenied]);
 
   useEffect(() => {
     if (loginRequired || generationRequestInFlight.current || generationRequestFailed || query.data?.status !== "PENDING") return;
@@ -74,8 +92,8 @@ export function EssayReportView({ reportId }: { reportId: string }) {
     }
   }
 
-  if (loginRequired || query.error instanceof ReportAccessError && query.error.status === 401) return <section className="retro-status" role="status"><PixelCat className="retro-cat-large" /><h2 className="retro-heading">로그인 화면으로 이동할게.</h2><p className="retro-status-copy">카카오로 로그인하면<br />보던 운세로 돌아올 수 있어.</p></section>;
-  if (accessDenied || query.error instanceof ReportAccessError && [403, 404].includes(query.error.status)) return <section className="retro-status" role="alert"><PixelCat className="retro-cat-large" /><h2 className="retro-heading">리포트를 열 수 없어.</h2><p className="retro-status-copy">내 운세함에서 구매한 운세를 확인해줘.</p></section>;
+  if (loginRequired || query.error instanceof ReportAccessError && query.error.status === 401) return <ReportErrorState kind="login" />;
+  if (accessDenied || query.error instanceof ReportAccessError && [403, 404].includes(query.error.status)) return <ReportErrorState kind="access" />;
 
   // An already issued letter remains readable during a background fetch error.
   if (query.data?.status === "COMPLETED" && query.data.content) {
@@ -83,7 +101,7 @@ export function EssayReportView({ reportId }: { reportId: string }) {
     return <article className="retro-letter">{query.data.content.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</article>;
   }
   if (query.isError || query.data?.status === "FAILED" || generationRequestFailed || query.data?.status === "COMPLETED") {
-    return <section className="retro-status retro-status--error" role="alert"><PixelCat className="retro-cat-large" /><h2 className="retro-heading">리포트를 준비하지 못했어요.</h2><p className="retro-status-copy">{PUBLIC_REPORT_FAILURE_MESSAGE}</p><button type="button" onClick={() => void retry()} className="retro-button">다시 시도하기</button></section>;
+    return <ReportErrorState kind="failed" onRetry={() => void retry()} />;
   }
   return <ReportPreparing />;
 }

@@ -47,47 +47,59 @@ export function TypewrittenText({ text }: { text: string }) {
   );
 }
 
-/** Reveal once on entry; all messages retain their space in the single page scroll. */
+/** Queue visible messages, including the initial viewport, in reading order. */
 export function ScrollRevealMessages({ children }: { children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (!container || motion.matches || !("IntersectionObserver" in window)) return;
-
+    if (!container) return;
+    if (motion.matches || !("IntersectionObserver" in window)) {
+      delete container.dataset.revealMotion;
+      return;
+    }
     const messages = Array.from(container.querySelectorAll<HTMLElement>("[data-report-message]"));
-    // Keep the initial view readable; reveal the rest just before it scrolls into view.
-    messages.forEach(message => {
-      if (message.getBoundingClientRect().top < window.innerHeight + 96) {
-        message.dataset.revealed = "true";
-      }
-    });
+    const queue = new Set<HTMLElement>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function revealNext() {
+      const message = messages.find(item => queue.has(item));
+      if (!message) { timer = undefined; return; }
+      queue.delete(message);
+      message.dataset.revealed = "true";
+      timer = setTimeout(revealNext, 420);
+    }
     container.dataset.revealMotion = "enabled";
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
         const message = entry.target as HTMLElement;
         if (entry.isIntersecting) {
-          message.dataset.revealed = "true";
+          queue.add(message);
           observer.unobserve(message);
         }
       }
+      if (queue.size && timer === undefined) timer = setTimeout(revealNext, 140);
     }, { threshold: 0, rootMargin: "0px 0px 96px 0px" });
     messages.filter(message => !message.dataset.revealed).forEach(message => observer.observe(message));
 
     function showAll() {
       if (motion.matches && container) {
         delete container.dataset.revealMotion;
+        clearTimeout(timer);
+        queue.clear();
         observer.disconnect();
       }
     }
     motion.addEventListener("change", showAll);
     return () => {
       observer.disconnect();
+      clearTimeout(timer);
       delete container.dataset.revealMotion;
       motion.removeEventListener("change", showAll);
     };
   }, []);
 
-  return <div ref={containerRef} className="retro-messages">{children}</div>;
+  // Pending CSS prevents a full-content flash before hydration. Its timed fallback
+  // and noscript override keep the report readable even if JavaScript fails.
+  return <><noscript><style>{`.retro-messages[data-reveal-motion] [data-report-message]{opacity:1;transform:none;animation:none}`}</style></noscript><div ref={containerRef} className="retro-messages" data-reveal-motion="pending">{children}</div></>;
 }

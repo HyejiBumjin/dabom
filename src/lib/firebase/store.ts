@@ -5,12 +5,13 @@ import { getFirebaseAdminFirestore } from "./admin";
 import type { Relationship } from "@/lib/saju/profile-input";
 import { canReadDevelopmentPreview, type DevelopmentPreviewAccess } from "@/lib/saju/report-preview-access";
 import { allowsDevelopmentReports, paymentCollectionPrefix } from "@/lib/portone/payment-mode";
+import { recordCheckoutConsent, type CheckoutConsentRecord } from "@/lib/commerce/policy";
 
 export type Account = { id: string; kakaoId: string; nickname: string; email: string | null; createdAt: Date };
 export type Profile = { id: string; userId: string; birthKey: string; name: string; relationship: Relationship; gender: "MALE" | "FEMALE"; birthDate: Date; birthTime: string | null; isLunar: boolean; isLeapMonth: boolean; myeongsik: unknown; createdAt: Date };
 export type Product = { id: string; code: string; name: string; price: number; active: boolean };
-export type Order = { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date };
-export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date; developmentPreviewAccess?: DevelopmentPreviewAccess };
+export type Order = { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date; checkoutConsent?: CheckoutConsentRecord };
+export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date; developmentPreviewAccess?: DevelopmentPreviewAccess; firstDeliveredAt?: Date; firstOpenedAt?: Date };
 export type ReportWithAccess = Report & { sajuProfile: Profile; order: Order | null };
 export type ReportPatch = Partial<Pick<Report, "status" | "content" | "retryCount" | "lastError" | "completedAt" | "promptVersion" | "model">>;
 export type NewReport = Pick<Report, "promptVersion" | "model" | "productCode">;
@@ -109,7 +110,7 @@ export class FirebaseStore {
       return { ...report, orderId: orderId ?? report.orderId };
     });
   }
-  async prepareOrder(userId: string, profileId: string, metadata: NewReport) {
+  async prepareOrder(userId: string, profileId: string, metadata: NewReport, consent?: unknown) {
     const result = await this.transaction(async tx => {
       const profile = await this.read<Profile>("profiles", profileId, tx);
       if (!profile || profile.userId !== userId) throw new Error("PROFILE_NOT_FOUND");
@@ -120,6 +121,16 @@ export class FirebaseStore {
       if (existing && (existing.userId !== userId || existing.sajuProfileId !== profileId || existing.productCode !== product.code)) throw new Error("ORDER_NOT_FOUND");
       if (existing?.status === "CANCELLED") throw new Error("ORDER_CANCELLED");
       const order: Order = existing ?? { id, userId, productId: product.id, productCode: product.code, sajuProfileId: profileId, merchantUid: id, status: "READY", amount: product.price, paidAmount: null, paidAt: null, pgTxId: null, createdAt: new Date() };
+      if (order.status !== "PAID") {
+        const record = recordCheckoutConsent(consent, product.name, order.amount);
+        // Each policy revision has one immutable record. Payment retries cannot
+        // replace its original timestamp, wording, account or server price.
+        const consentId = stableId(id, record.version);
+        const previous = await this.read<CheckoutConsentRecord>("checkoutConsents", consentId, tx);
+        order.checkoutConsent = previous ?? record;
+        if (!previous) tx.create(this.collection("checkoutConsents").doc(consentId), { ...record, orderId: id, userId, profileId, productCode: product.code });
+        if (existing) tx.update(this.collection("orders").doc(id), { checkoutConsent: order.checkoutConsent });
+      }
       if (!existing) tx.create(this.collection("orders").doc(id), order);
       return { order, product };
     });
@@ -179,6 +190,21 @@ export class FirebaseStore {
       const report = await this.read<Report>("reports", id, tx);
       if (!report || report.generationId !== generationId) throw new Error("REPORT_LEASE_LOST");
       tx.update(this.collection("reports").doc(id), encode(patch));
+    });
+  }
+  /** Delivery is an API response; opened is a visible client render acknowledgement.
+   * Neither proves human reading nor automatically rules out a refund. */
+  async markReportReceipt(userId: string, id: string, event: "delivered" | "opened") {
+    return this.transaction(async tx => {
+      const report = await this.read<Report>("reports", id, tx);
+      if (!report || report.userId !== userId || report.status !== "COMPLETED" || !report.content || !report.orderId) return false;
+      const profile = await this.read<Profile>("profiles", report.sajuProfileId, tx);
+      const order = await this.read<Order>("orders", report.orderId, tx);
+      if (!profile || profile.userId !== userId || !order || order.userId !== userId || order.status !== "PAID" || order.sajuProfileId !== profile.id || order.productCode !== report.productCode) return false;
+      if (event === "opened" && !report.firstDeliveredAt) return false;
+      const field = event === "delivered" ? "firstDeliveredAt" : "firstOpenedAt";
+      if (!report[field]) tx.update(this.collection("reports").doc(id), { [field]: new Date() });
+      return true;
     });
   }
   async consumeRateLimit(accountId: string, scope: string, limit: number, windowMs: number) {

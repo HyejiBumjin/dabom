@@ -88,6 +88,40 @@
 .retro-footer { margin-top: 24px; text-align: center; font-size: 13px; color: #655c8a; }
 .retro-home + .retro-footer { margin-top: 0; padding: 12px; border-radius: 0 0 5px 5px; background: #e7eaff; }
 
+/* Commerce disclosures keep the message design, with readable policy text. */
+.commerce-home-link { display: block; margin: 16px 0 20px; font-size: 15px; line-height: 1.7; text-underline-offset: 4px; }
+.commerce-home-link span { text-decoration: underline; }
+.commerce-footer { padding: 24px; border-top: 1px solid #d8d3ed; color: #625b7d; background: #f1f0fb; font: 12px/1.9 system-ui, sans-serif; text-align: center; border-radius: 0 0 5px 5px; overflow-wrap: anywhere; }
+.commerce-footer nav, .commerce-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin-bottom: 16px; }
+.commerce-links { margin: 8px 12px 0; font: 12px/1.8 system-ui, sans-serif; }
+.commerce-footer a, .commerce-links a, .commerce-page a:not(.retro-button), .commerce-checkout-notice a, .commerce-consents a { text-decoration: underline; text-underline-offset: 3px; }
+.commerce-footer nav a, .commerce-links a { display: inline-flex; align-items: center; min-height: 36px; }
+.commerce-footer p { margin: 3px 0; }
+.commerce-page { padding: 28px 24px 36px; font-size: 15px; line-height: 1.9; word-break: keep-all; overflow-wrap: anywhere; }
+.commerce-page h1 { margin: 24px 0 18px; }
+.commerce-page h2 { margin: 32px 0 12px; font-size: 19px; font-weight: 650; }
+.commerce-page p { margin-bottom: 16px; }
+.commerce-page ul { padding-left: 22px; list-style: disc; }
+.commerce-page li { margin: 12px 0; }
+.commerce-page .retro-button { margin-top: 24px; }
+.commerce-notice, .commerce-checkout-notice { padding: 16px; background: #f0effb; border: 1px solid #d5cee9; border-radius: 5px; font-size: 13px; line-height: 1.8; }
+.commerce-page .commerce-price { margin: 24px 0; font-family: "NeoDunggeunmo", monospace; font-size: 32px; }
+.commerce-price span { display: block; font: 13px/1.7 system-ui, sans-serif; color: #635b7e; }
+.commerce-details > div { margin-bottom: 22px; }
+.commerce-details dt { margin-bottom: 5px; font-weight: 650; }
+.commerce-muted { font-size: 13px; color: #635b7e; line-height: 1.8; }
+.commerce-sample .retro-bubble { margin: 20px 0; padding: 18px; white-space: pre-line; font-size: 15px; line-height: 1.9; }
+.commerce-order-total { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 24px 0; font-size: 16px; }
+.commerce-consents { margin: 24px 0; text-align: left; }
+.commerce-consents legend { margin-bottom: 12px; font-weight: 600; }
+.commerce-consents label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; font-size: 14px; line-height: 1.8; cursor: pointer; }
+.commerce-consents input { width: 20px; height: 20px; margin-top: 3px; flex: 0 0 20px; accent-color: #7760b7; }
+.commerce-checkout-notice { text-align: left; }
+.commerce-checkout-notice p + p { margin-top: 12px; }
+.retro-checkout-action > .commerce-muted { margin-bottom: 12px; }
+.retro-checkout-action .retro-button:disabled { cursor: not-allowed; }
+@media (max-width: 359px) { .commerce-page, .commerce-footer { padding-left: 18px; padding-right: 18px; } }
+
 .retro-button {
   display: inline-flex;
   align-items: center;
@@ -386,3 +420,57 @@
 }
 
 .retro-preview-note { margin: 0; padding: 10px 16px; background: #f2f0fb; text-align: center; font-size: 12px; color: #69627f; }
+
+/* Review round 2: clear prices, themed pickers and distinct mascot reactions. */
+.commerce-home-link .commerce-home-product { display: block; text-decoration: none; }
+.commerce-home-price { display: block; margin: 3px 0 8px; font-size: 22px; font-weight: 750; }
+.retro-form[aria-busy="false"] > .retro-button:disabled { cursor: not-allowed; }
+.retro-date-time-input { display: flex; min-width: 0; position: relative; }
+.retro-date-time-input > .retro-input { padding-right: 42px; min-width: 0; font-size: 15px; }
+.retro-picker-trigger { position: absolute; right: 2px; top: 2px; bottom: 2px; width: 38px; display: grid; place-items: center; color: var(--retro-ink); background: #efedfc; border-left: 1px solid #c5bfdf; border-radius: 0 2px 2px 0; cursor: pointer; }
+.retro-picker-trigger svg { width: 21px; height: 21px; }
+.retro-picker-trigger:disabled { opacity: .4; cursor: not-allowed; }
+.retro-picker-dialog { position: fixed; width: min(400px, calc(100% - 24px)); max-height: calc(100svh - 24px); margin: auto; padding: 0; overflow-y: auto; color: var(--retro-ink); }
+.retro-picker-dialog, .retro-duplicate-dialog { text-align: left; }
+.retro-picker-dialog::backdrop { background: #30274c77; backdrop-filter: blur(3px); }
+.retro-picker-body { padding: 24px 16px 20px; }
+.retro-picker-body h2 { text-align: center; font-family: "NeoDunggeunmo", monospace; font-size: 23px; line-height: 1.5; }
+.retro-picker-hint { margin: 12px 0 16px; font-size: 13px; text-align: center; color: #6e6486; }
+.retro-calendar-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.retro-calendar-controls label { display: flex; align-items: center; gap: 4px; font-size: 14px; }
+.retro-calendar-controls input { width: 66px; min-height: 44px; border: 1px solid var(--retro-line); border-radius: 3px; text-align: center; background: white; font-size: 17px; }
+.retro-calendar-controls label:nth-of-type(2) input { width: 38px; }
+.retro-picker-step { width: 36px; min-height: 44px; border: 1px solid var(--retro-line); background: #e9e6fa; border-radius: 3px; font-size: 25px; cursor: pointer; }
+.retro-picker-step:disabled { opacity: .3; cursor: not-allowed; }
+.retro-calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.retro-calendar-weekday { text-align: center; font-size: 13px; padding: 0 0 8px; color: #7b708e; }
+.retro-calendar-days button, .retro-time-period button, .retro-time-hours button { min-height: 44px; border: 1px solid #d5cee8; border-radius: 4px; background: #fffefa; font-size: 16px; cursor: pointer; }
+.retro-calendar-days button:hover, .retro-time-hours button:hover { background: #efebff; }
+.retro-calendar-days button[aria-pressed="true"], .retro-time-period button[aria-pressed="true"], .retro-time-hours button[aria-pressed="true"] { background: #ded7fc; border: 2px solid #7871b0; font-weight: 700; }
+.retro-picker-dialog .retro-button { margin-top: 20px; min-height: 48px; }
+.retro-time-period { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+.retro-time-hours { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.retro-time-minute { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 20px; font-size: 14px; }
+.retro-time-minute .retro-input { width: 72px; text-align: center; }
+.retro-time-preview { text-align: center; margin: 18px 0 0; font-size: 19px; font-weight: 600; }
+.retro-expression-cat { overflow: visible; }
+.retro-expression-tail { transform-origin: 54px 66px; animation: retro-expression-tail 3.5s ease-in-out infinite; }
+.retro-expression-cat--curious .retro-expression-head { transform-origin: 36px 48px; animation: retro-expression-look 5s ease-in-out infinite; }
+.retro-expression-paw { transform-origin: 24px 60px; animation: retro-expression-paw 5s ease-in-out infinite; }
+.retro-expression-eyes { transform-origin: 36px 36px; animation: retro-empty-cat-blink 5s steps(1, end) infinite; }
+.retro-expression-cat--surprised .retro-expression-head { transform-origin: 36px 48px; animation: retro-expression-surprise 4s ease-in-out infinite; }
+.retro-expression-notice { transform-origin: 68px 28px; animation: retro-expression-notice 4s ease-in-out infinite; }
+.retro-expression-sweat { animation: retro-expression-sweat 3s ease-in-out infinite; }
+@keyframes retro-expression-tail { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(7deg); } }
+@keyframes retro-expression-look { 0%, 20%, 80%, 100% { transform: rotate(0deg); } 40%, 60% { transform: rotate(-9deg); } }
+@keyframes retro-expression-paw { 0%, 20%, 80%, 100% { transform: rotate(0deg); } 40%, 60% { transform: rotate(18deg); } }
+@keyframes retro-expression-surprise { 0%, 12%, 100% { transform: rotate(0); } 5% { transform: rotate(-6deg); } }
+@keyframes retro-expression-notice { 0%, 65%, 100% { opacity: .55; transform: scale(.8); } 8%, 50% { opacity: 1; transform: scale(1); } }
+@keyframes retro-expression-sweat { 0%, 100% { opacity: .6; transform: translateY(-2px); } 35%, 55% { opacity: 1; } 80% { opacity: .6; transform: translateY(7px); } }
+.retro-messages[data-reveal-motion="pending"] [data-report-message] { opacity: 0; animation: retro-message-fallback 0s 2s forwards; }
+@keyframes retro-message-fallback { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .retro-expression-cat * { animation: none; }
+  .retro-expression-notice, .retro-expression-sweat { opacity: 1; }
+  .retro-messages[data-reveal-motion] [data-report-message] { opacity: 1; transform: none; animation: none; transition: none; }
+}

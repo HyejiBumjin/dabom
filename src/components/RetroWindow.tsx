@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AnimatedMessengerCat } from "@/components/AnimatedMessengerCat";
+import { ExpressiveCat } from "@/components/ExpressiveCat";
 
 /** A fluid mobile page with a fixed maximum reading width on larger screens. */
 export function RetroPage({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -46,16 +47,12 @@ export function SkyMessenger() {
 }
 
 export function RetroFooter() {
-  return <p className="retro-footer">다봄 · 2026</p>;
+  return <div className="retro-footer"><p>다봄 · 2026</p><nav className="commerce-links" aria-label="다봄 안내"><Link href="/yearly">상품 안내</Link><Link href="/terms">이용약관</Link><Link href="/privacy">개인정보처리방침</Link><Link href="/refund">환불 안내</Link></nav></div>;
 }
 
-/** A little delivery nod distinguishes the saved-fortune notice. */
+/** A small "oh!" pose distinguishes the saved-fortune notice. */
 export function SavedFortuneCat() {
-  return <svg className="retro-saved-fortune-cat" viewBox="0 0 96 80" fill="none" aria-hidden="true">
-    <path d="M12 73H84V75H12Z" fill="#d9dcf7" />
-    <g transform="translate(12 0) scale(1.15)"><g className="retro-saved-delivery"><CatSprite /></g></g>
-    <path className="retro-saved-cat-taps" d="M84 39V43M88 47H92M84 51V55" stroke="#a291cb" strokeWidth="2" strokeLinecap="round" />
-  </svg>;
+  return <ExpressiveCat mood="surprised" className="retro-saved-fortune-cat" />;
 }
 
 export function EmptyMailboxCat() {
