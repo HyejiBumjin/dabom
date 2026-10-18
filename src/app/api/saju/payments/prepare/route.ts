@@ -4,7 +4,7 @@ import { getSajuAccount } from "@/lib/saju/account";
 import { prepareSajuOrder, fulfillSajuOrder } from "@/lib/saju/library-service";
 import { env } from "@/lib/env";
 import { getPortOnePayment, PortOnePaymentLookupError } from "@/lib/portone/server";
-import { guardedMutation, readJsonBody } from "@/lib/security/request";
+import { guardedMutation, readJsonBody, RequestSecurityError } from "@/lib/security/request";
 import { enforceAccountRateLimit } from "@/lib/security/rate-limit";
 import { isCommerceReady, YEARLY_PRICE } from "@/lib/commerce/policy";
 import { isPaymentTestMode } from "@/lib/portone/payment-mode";
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     if (result.amount !== YEARLY_PRICE) return NextResponse.json({ error: "상품 금액을 확인 중이야. 잠시 뒤 다시 확인해줘." }, { status: 409 });
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof RequestSecurityError) throw error;
     if (error instanceof Error && error.message === "PROFILE_NOT_FOUND") return NextResponse.json({ error: "사주 정보를 찾지 못했어." }, { status: 404 });
     if (error instanceof Error && error.message === "CHECKOUT_CONSENT_REQUIRED") return NextResponse.json({ error: "결제 전 약관과 디지털콘텐츠 안내를 다시 확인하고 동의해줘." }, { status: 400 });
     return NextResponse.json({ error: "결제를 준비하지 못했어. 다시 시도해줘." }, { status: 503 });

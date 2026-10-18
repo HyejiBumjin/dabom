@@ -39,6 +39,8 @@ const { profileInputSchema } = require("../src/lib/saju/profile-input") as typeo
 const { restoreProfileDraft } = require("../src/lib/profile-draft") as typeof import("../src/lib/profile-draft");
 const { safeReturnPath } = require("../src/lib/auth-return-path") as typeof import("../src/lib/auth-return-path");
 const { parsePortOnePayment } = require("../src/lib/portone/server") as typeof import("../src/lib/portone/server");
+const portonePath = require.resolve("../src/lib/portone/server");
+require.cache[portonePath]!.exports = { ...require(portonePath), getPortOnePayment: async () => { paymentCalls++; return parsePortOnePayment(provider, provider.id, "store-test"); } };
 const { verifySajuPayment } = require("../src/lib/saju/library-service") as typeof import("../src/lib/saju/library-service");
 const { POLICY_VERSION, recordCheckoutConsent } = require("../src/lib/commerce/policy") as typeof import("../src/lib/commerce/policy");
 const input = { name: "검사 인물", relationship: "SELF", gender: "female", birthDate: "1995-05-20", birthTime: "20:20", calendar: "solar", isLeapMonth: false };
@@ -74,10 +76,15 @@ store.fulfillOrder = (async (_uid: string, _id: string, payment: Parameters<type
   return { id: "report-fixture" };
 }) as never;
 store.cancelOrder = async () => { writes++; paymentStatus = "CANCELLED"; };
+// This suite stubs persistence; real reconciliation leases/races are covered by
+// payment:reconciliation-check against isolated Firestore documents.
+store.beginPaymentCheck = (async (_uid: string, _id: string, force: boolean) => ({ kind: paymentStatus !== "PAID" ? "denied" : force ? "claimed" : "cached", checkId: "fixture-check", order: order() })) as never;
+store.finishPaymentCheck = (async (_uid: string, _id: string, _check: string, outcome: string) => {
+  if (outcome === "cancelled") { writes++; paymentStatus = "CANCELLED"; }
+  return { applied: true, order: order() };
+}) as never;
 store.getReportWithAccess = (async () => ({ id: "report-fixture", status: reportStatus, content: { paragraphs: ["synthetic-private-report"] }, sajuProfile: { userId: reportOwner }, order: { userId: "A", status: paymentStatus } })) as never;
 store.saveProfile = (async () => { writes++; throw new Error("private database details internal.example"); }) as never;
-const portonePath = require.resolve("../src/lib/portone/server");
-require.cache[portonePath]!.exports = { ...require(portonePath), getPortOnePayment: async () => { paymentCalls++; return parsePortOnePayment(provider, provider.id, "store-test"); } };
 const generationPath = require.resolve("../src/lib/llm/report-generator");
 require(generationPath);
 require.cache[generationPath]!.exports = { ...require(generationPath), generateReport: async () => { generationCalls++; } };
@@ -267,7 +274,7 @@ async function main() {
   check("cancelled report generation denied", (await generate.POST(request("/generate"), reportParams)).status === 404);
   before = writes;
   provider.status = "PAID";
-  check("delayed Paid event cannot reactivate cancellation", (await webhook.POST(signedWebhook({ ...event, type: "Transaction.Paid" }))).status === 503 && paymentStatus === "CANCELLED" && writes === before);
+  check("delayed Paid event acknowledged without reactivating cancellation", (await webhook.POST(signedWebhook({ ...event, type: "Transaction.Paid" }))).status === 200 && paymentStatus === "CANCELLED" && writes === before);
   check("payment replay cannot reactivate cancelled order", (await confirm.POST(request("/confirm", { orderId: provider.id, paymentId: provider.id }))).status === 409 && paymentStatus === "CANCELLED");
   paymentStatus = "READY"; cancelBetweenReadAndWrite = true;
   check("cancellation between read and update cannot be overwritten", (await confirm.POST(request("/confirm", { orderId: provider.id, paymentId: provider.id }))).status === 409 && paymentStatus === "CANCELLED");

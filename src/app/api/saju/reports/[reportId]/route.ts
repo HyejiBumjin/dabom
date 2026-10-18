@@ -5,6 +5,7 @@ import { PUBLIC_REPORT_FAILURE_MESSAGE } from "@/lib/llm/report-messages";
 import { getSajuAccount, canReadSajuReport } from "@/lib/saju/account";
 
 import { securityErrorResponse } from "@/lib/security/request";
+import { requireReportEntitlement } from "@/lib/portone/entitlement";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ reportId: string }> }) {
   try {
@@ -13,7 +14,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rep
   if (!account) return NextResponse.json({ error: "로그인이 필요해." }, { status: 401 });
   const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || !canReadSajuReport(report, account)) return NextResponse.json({ error: "리포트를 찾을 수 없습니다." }, { status: 404 });
-  if (report.status === "COMPLETED" && report.content && report.order?.status === "PAID") {
+  await requireReportEntitlement(report, account.id, "read");
+  if (report.status === "COMPLETED" && report.content && report.order?.status === "PAID" && !report.firstDeliveredAt) {
     // A receipt outage must not withhold already purchased content.
     await firebaseStore.markReportReceipt(account.id, reportId, "delivered").catch(() => console.error("[report-receipt] delivery record unavailable"));
   }

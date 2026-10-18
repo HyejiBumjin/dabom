@@ -15,7 +15,7 @@ function loginProxy(): LoginProxy {
  * Verified against both spoofed headers and the IAM-protected Run origin.
  * Pin the managed load balancers: a topology change fails closed to one bucket.
  * Never trust the first XFF entry, X-Real-IP, or Fastly-Client-IP. */
-export function loginClientAddress(request: Request, proxy: LoginProxy = loginProxy(), loadBalancerIps = process.env.DABOM_APPHOSTING_LB_IPS) {
+export function loginClientAddress(request: Pick<Request, "headers">, proxy: LoginProxy = loginProxy(), loadBalancerIps = process.env.DABOM_APPHOSTING_LB_IPS) {
   if (proxy === "direct") return "untrusted-client";
   const forwarded = request.headers.get("x-forwarded-for");
   if (!forwarded || forwarded.length > 4096) return "untrusted-client";

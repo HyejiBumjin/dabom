@@ -17,6 +17,7 @@
     "payment:check": "node --import tsx scripts/payment-client-check.ts",
     "payment:mode-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/payment-mode-check.ts",
     "security:login-limit": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/security-login-rate-limit-check.ts",
+    "security:read-limit": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/security-read-rate-limit-check.ts",
     "security:http": "node scripts/security-http-check.mjs",
     "security:concurrency": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/security-concurrency-check.ts",
     "security:secrets": "node scripts/security-secret-check.mjs",
@@ -33,7 +34,8 @@
     "firebase:seed": "node --conditions=react-server --import tsx scripts/firebase-seed.ts",
     "firebase:preflight": "node --conditions=react-server --import tsx scripts/firebase-production-check.ts --check",
     "security:secrets:check": "node --test scripts/security-secret-check.test.mjs",
-    "firebase:hosting-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/firebase-hosting-check.ts"
+    "firebase:hosting-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/firebase-hosting-check.ts",
+    "payment:reconciliation-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/payment-reconciliation-check.ts"
   },
   "dependencies": {
     "@portone/browser-sdk": "^0.1.3",

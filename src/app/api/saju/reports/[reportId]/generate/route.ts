@@ -3,7 +3,8 @@ import { generateReport } from "@/lib/llm/report-generator";
 import { firebaseStore } from "@/lib/firebase/store";
 import { PUBLIC_REPORT_FAILURE_MESSAGE } from "@/lib/llm/report-messages";
 import { getSajuAccount, canReadSajuReport } from "@/lib/saju/account";
-import { guardedMutation } from "@/lib/security/request";
+import { guardedMutation, RequestSecurityError } from "@/lib/security/request";
+import { requireReportEntitlement } from "@/lib/portone/entitlement";
 import { enforceAccountRateLimit } from "@/lib/security/rate-limit";
 
 // Generation and editorial repair share a bounded request budget.
@@ -16,7 +17,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ rep
   if (!account) return NextResponse.json({ error: "로그인이 필요해." }, { status: 401 });
   const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || !canReadSajuReport(report, account)) return NextResponse.json({ error: "리포트를 찾을 수 없습니다." }, { status: 404 });
-  if (report.status === "COMPLETED" && report.content) return NextResponse.json({ ok: true, status: report.status });
+  if (report.status === "COMPLETED" && report.content) {
+    await requireReportEntitlement(report, account.id, "read");
+    return NextResponse.json({ ok: true, status: report.status });
+  }
   await enforceAccountRateLimit(account.id, "report-generate", 6, 3_600_000);
   await enforceAccountRateLimit(account.id, `report-generate:${reportId}`, 3, 900_000);
   try {
@@ -24,7 +28,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ rep
     const result = await firebaseStore.getReportWithAccess(reportId);
     if (!result || result.status === "FAILED") return NextResponse.json({ ok: false, error: PUBLIC_REPORT_FAILURE_MESSAGE }, { status: 503 });
     return NextResponse.json({ ok: true, status: result.status });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestSecurityError) throw error;
     console.error("[Report] Generation request failed", { reportId });
     return NextResponse.json({ ok: false, error: PUBLIC_REPORT_FAILURE_MESSAGE }, { status: 503 });
   }

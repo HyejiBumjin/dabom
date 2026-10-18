@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { RELATIONSHIPS, relationshipLabel, type Relationship } from "@/lib/saju/profile-input";
 import { EmptyMailboxCat, PixelEnvelope } from "@/components/RetroWindow";
+import { libraryPageHref, type LibraryFilter } from "@/lib/saju/library-page";
 
 export type LibraryProfile = {
   id: string; name: string; relationship: Relationship; birthDate: string;
   birthTime: string | null; isLunar: boolean;
+  historyHref?: string;
   reports: { id: string; year: string; status: string; paid: boolean }[];
 };
 
@@ -17,18 +19,21 @@ function ReportLink({ href, preview, children }: { href: string; preview: boolea
     : <Link className="retro-library-report" href={href}>{children}</Link>;
 }
 
-export function SajuLibrary({ profiles, preview = false }: { profiles: LibraryProfile[]; preview?: boolean }) {
-  const [filter, setFilter] = useState<Relationship | "ALL">("ALL");
+export function SajuLibrary({ profiles, preview = false, pageFilter }: { profiles: LibraryProfile[]; preview?: boolean; pageFilter?: LibraryFilter }) {
+  const [localFilter, setFilter] = useState<Relationship | "ALL">("ALL");
+  const filter = pageFilter ?? localFilter;
   const visible = profiles.filter(profile => filter === "ALL" || profile.relationship === filter);
   return (
     <>
       <div className="retro-library-filters" aria-label="관계별 운세 보기">
         {[{ value: "ALL" as const, label: "전체" }, ...RELATIONSHIPS].map(item => (
-          <button key={item.value} type="button" aria-pressed={filter === item.value} onClick={() => setFilter(item.value)}>{item.label}</button>
+          pageFilter !== undefined
+            ? <Link key={item.value} href={libraryPageHref(item.value)} prefetch={false} role="button" aria-pressed={filter === item.value}>{item.label}</Link>
+            : <button key={item.value} type="button" aria-pressed={filter === item.value} onClick={() => setFilter(item.value)}>{item.label}</button>
         ))}
       </div>
       {visible.length === 0 ? (
-        <div className="retro-library-empty"><EmptyMailboxCat /><p>{profiles.length ? "아직 이 관계로 보관한 운세는 없어." : "아직 도착한 메시지가 없어.\n너와 소중한 사람의 올해를 받아봐."}</p></div>
+        <div className="retro-library-empty"><EmptyMailboxCat /><p>{filter !== "ALL" ? "아직 이 관계로 보관한 운세는 없어." : "아직 도착한 메시지가 없어.\n너와 소중한 사람의 올해를 받아봐."}</p></div>
       ) : (
         <div className="retro-library-list">
           {visible.map(profile => (
@@ -43,6 +48,7 @@ export function SajuLibrary({ profiles, preview = false }: { profiles: LibraryPr
                   <span aria-hidden="true">→</span>
                 </ReportLink>
               )) : <ReportLink preview={preview} href={`/saju/profiles/${profile.id}/checkout`}><span><strong>올해 운세 받기</strong><small>등록한 정보로 메시지를 준비할게.</small></span><span aria-hidden="true">→</span></ReportLink>}
+              {profile.historyHref && <Link href={profile.historyHref} prefetch={false} className="retro-back-link">이전 메시지 더 보기 →</Link>}
               </div>
             </section>
           ))}

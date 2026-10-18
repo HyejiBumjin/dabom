@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 
 export class RequestSecurityError extends Error {
-  constructor(public readonly status: number, message: string) { super(message); }
+  constructor(public readonly status: number, message: string, public readonly retryAfter?: number, public readonly code?: "PAYMENT_VERIFICATION_REQUIRED") { super(message); }
 }
 
 /** Cookie-authenticated mutations must not be triggered by another website. */
@@ -59,7 +59,7 @@ export function privateJson(body: unknown, status = 200, headers?: HeadersInit) 
 
 export function securityErrorResponse(error: unknown) {
   return error instanceof RequestSecurityError
-    ? privateJson({ error: error.message }, error.status)
+    ? privateJson({ error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status, error.retryAfter ? { "Retry-After": String(error.retryAfter) } : undefined)
     : privateJson({ error: "요청을 처리하지 못했어. 잠시 뒤 다시 시도해줘." }, 503);
 }
 

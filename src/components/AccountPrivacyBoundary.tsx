@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { flushSync } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_CHANGE_EVENT, AUTH_CHANGE_KEY, clearProfileDraft } from "@/lib/auth-change";
+import { retryAfterSeconds } from "@/lib/report-access-error";
 
 /** Server authorization is still required. This guard revokes already rendered UI. */
 export function AccountPrivacyBoundary({ accountId, returnPath, children, compact = false }: { accountId: string; returnPath: string; children: ReactNode; compact?: boolean }) {
@@ -13,6 +14,8 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
   const revoked = useRef(false);
   const generation = useRef(0);
   const request = useRef<AbortController | null>(null);
+  const retryAt = useRef(0);
+  const [rateLimited, setRateLimited] = useState(false);
   const loginUrl = `/login?next=${encodeURIComponent(returnPath)}`;
   const abortVerification = useCallback(() => {
     generation.current++;
@@ -34,7 +37,7 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
 
   const verify = useCallback(async () => {
     // Focus and visibility events often arrive together. Share the pending check.
-    if (revoked.current || document.visibilityState === "hidden" || request.current) return;
+    if (revoked.current || document.visibilityState === "hidden" || request.current || Date.now() < retryAt.current) return;
     const current = ++generation.current;
     const controller = new AbortController();
     request.current = controller;
@@ -46,11 +49,18 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
       const response = await fetch("/api/auth/account", { cache: "no-store", signal: controller.signal });
       if (current !== generation.current || revoked.current) return;
       if (response.status === 401) { revoke(); return; }
+      if (response.status === 429) {
+        retryAt.current = Date.now() + retryAfterSeconds(response.headers.get("retry-after")) * 1000;
+        setRateLimited(true);
+        setState("unavailable");
+        return;
+      }
       if (!response.ok) throw new Error("Session unavailable");
       const identity = await response.json() as { accountId?: unknown };
       if (current !== generation.current || revoked.current) return;
       if (identity.accountId !== accountId) { revoke(); return; }
       setMounted(true);
+      setRateLimited(false);
       setState("verified");
     } catch {
       if (current === generation.current && !revoked.current) setState("unavailable");
@@ -108,7 +118,7 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
       </div>}
     </div>}
     {state === "unavailable" && <section className={compact ? "text-sm" : "retro-status"} role="status">
-      <p>연결이 잠깐 끊겼어. 다시 연결해줘.</p>
+      <p>{rateLimited ? "요청이 잠깐 몰렸어. 조금 기다리면 자동으로 다시 연결할게." : "연결이 잠깐 끊겼어. 다시 연결해줘."}</p>
       <button type="button" className="retro-button" onClick={() => void verify()}>다시 연결하기</button>
     </section>}
     {/* Keep an in-progress form mounted during a same-account foreground check. */}

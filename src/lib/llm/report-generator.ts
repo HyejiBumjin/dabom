@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { formatReportEmoticons, REPORT_EMOTICON_INSTRUCTIONS, stripReportDecorations } from "@/lib/report-emoticons";
 import { z } from "zod";
 import { firebaseStore } from "@/lib/firebase/store";
+import { requireReportEntitlement } from "@/lib/portone/entitlement";
 import { buildReportEvidencePrompt, getReportPrompt, getStoredReportTone } from "@/lib/prompts/v6";
 import { buildReportRenderPayload, type ReportTone } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
@@ -160,6 +161,8 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
   const deadline = Date.now() + MAX_RENDER_TIME_MS;
   const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || report.status === "COMPLETED") return;
+  // Check the provider immediately before claiming work, including non-HTTP callers.
+  await requireReportEntitlement(report, report.userId, "generate");
   const storedTone = getStoredReportTone(report.promptVersion);
   const prompt = getReportPrompt(options.tone ?? DEFAULT_REPORT_TONE);
   // Resume a current-version report with its chosen model. Older unfinished

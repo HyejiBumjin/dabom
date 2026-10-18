@@ -31,6 +31,8 @@ function describeMonthlyBranchRelations(myeongsik: Myeongsik, monthlyGanZhi: str
 }
 
 export default async function SajuProfilePage({ params }: { params: Promise<{ profileId: string }> }) {
+  // Developer diagnostics include corpus and prompt inputs, never customer UI.
+  if (process.env.NODE_ENV !== "development") notFound();
   const { profileId } = await params;
   const account = await requireSajuAccount(`/saju/profiles/${profileId}`);
   const profile = await firebaseStore.getProfile(profileId);

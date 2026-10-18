@@ -56,13 +56,13 @@ async function main() {
   }
   for (const [method, path] of api.filter(([method]) => method === "POST")) await check(path, { method, status: 403, headers: { origin: "https://evil.invalid", "content-type": "application/json" }, body: "{}" });
   await check("/api/auth/logout", { method: "POST", status: 403, headers: { origin: "https://evil.invalid" } });
-  for (const path of ["/saju", "/saju/library", "/saju/profiles/security-probe", "/saju/profiles/security-probe/checkout", "/saju/reports/security-probe", "/saju/checkout/return?orderId=probe"]) {
+  for (const path of ["/saju", "/saju/library", "/saju/profiles/security-probe/checkout", "/saju/reports/security-probe", "/saju/checkout/return?orderId=probe"]) {
     const response = await check(path, { status: 307 });
     assert.equal(new URL(response.headers.get("location"), origin).pathname, "/login"); passed++;
   }
   for (const path of ["/api/payments/prepare", "/api/payments/confirm", "/api/reports/create", "/api/letters/create", "/api/saju/test"]) await check(path, { method: "POST", status: 410, headers: { "content-type": "application/json" }, body: "{}" });
   await check("/api/reports/00000000-0000-4000-8000-000000000000", { status: 410 });
-  for (const path of ["/.env", "/.env.local", "/.git/config", "/secrets/firebase-admin.json", "/prisma/schema.prisma", "/scripts/security-check.ts", "/preview/report", "/design/report-essay", "/saju/preview/library", "/saju/preview/checkout", "/saju/preview/loading", "/reports/00000000-0000-4000-8000-000000000000", "/gift/security-probe", "/checkout/success"]) await check(path, { status: 404 });
+  for (const path of ["/saju/profiles/security-probe", "/.env", "/.env.local", "/.git/config", "/secrets/firebase-admin.json", "/prisma/schema.prisma", "/scripts/security-check.ts", "/preview/report", "/design/report-essay", "/saju/preview/library", "/saju/preview/checkout", "/saju/preview/loading", "/reports/00000000-0000-4000-8000-000000000000", "/gift/security-probe", "/checkout/success"]) await check(path, { status: 404 });
   // App Hosting's managed image endpoint rejects unapproved sources with 404.
   const imageRejection = origin.hostname.endsWith(".hosted.app") || (deployed && process.env.SECURITY_HOSTING === "firebase") ? [400, 404] : 400;
   await check("/_next/image?url=http%3A%2F%2Fexample.invalid%2Fprobe.png&w=640&q=75", { status: imageRejection });

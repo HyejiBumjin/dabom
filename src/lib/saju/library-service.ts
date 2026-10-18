@@ -6,6 +6,7 @@ import { getConfiguredReportModel } from "@/lib/llm/report-config";
 import { SAJU_PRODUCT_CODE, type ProfileInput } from "@/lib/saju/profile-input";
 import { canReadSajuReport } from "@/lib/saju/account";
 import { allowsDevelopmentReports } from "@/lib/portone/payment-mode";
+import { requireVerifiedPayment } from "@/lib/portone/entitlement";
 
 const reportMetadata = () => ({ productCode: SAJU_PRODUCT_CODE, promptVersion: getReportPrompt().version, model: getConfiguredReportModel() });
 export function profileBirthKey(input: ProfileInput) {
@@ -28,8 +29,13 @@ export function ensureSajuReport(userId: string, profileId: string, orderId?: st
 }
 export async function prepareSajuOrder(userId: string, profileId: string, db: FirebaseStore = firebaseStore, consent?: unknown) {
   const existing = await db.getReportWithAccess(db.reportId(profileId, SAJU_PRODUCT_CODE));
-  if (existing && canReadSajuReport(existing, { id: userId }, false)) return { existing: true as const, reportId: existing.id };
-  return db.prepareOrder(userId, profileId, reportMetadata(), consent);
+  if (existing && canReadSajuReport(existing, { id: userId }, false)) {
+    if (existing.order) await requireVerifiedPayment(userId, existing.order.id, { completedRead: existing.status === "COMPLETED" }, db);
+    return { existing: true as const, reportId: existing.id };
+  }
+  const result = await db.prepareOrder(userId, profileId, reportMetadata(), consent);
+  if (result.existing) await requireVerifiedPayment(userId, db.orderId(userId, profileId, SAJU_PRODUCT_CODE), {}, db);
+  return result;
 }
 export function verifySajuPayment(order: { merchantUid: string; amount: number | null; product: { price: number } }, payment: { id: string; amount: number; status: string; currency: string }) {
   if (!Number.isSafeInteger(payment.amount) || payment.amount <= 0) throw new Error("PAYMENT_AMOUNT_MISMATCH");

@@ -5,6 +5,7 @@ import { getPortOnePayment } from "@/lib/portone/server";
 import { fulfillSajuOrder } from "@/lib/saju/library-service";
 import { SAJU_PRODUCT_CODE } from "@/lib/saju/profile-input";
 import { privateJson, readRequestText, RequestSecurityError } from "@/lib/security/request";
+import { requireVerifiedPayment } from "@/lib/portone/entitlement";
 
 /** Provider webhook is signed instead of using browser-cookie authentication. */
 export async function POST(request: Request) {
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
   try {
     const order = await firebaseStore.getOrder(paymentId);
     if (!order || order.productCode !== SAJU_PRODUCT_CODE) return privateJson({ ok: true });
+    if (order.status === "CANCELLED") return privateJson({ ok: true });
+    if (order.status === "PAID") {
+      try { await requireVerifiedPayment(order.userId, order.id, { force: true }); }
+      catch (error) {
+        if (!(error instanceof RequestSecurityError && error.status === 404)) throw error;
+      }
+      return privateJson({ ok: true });
+    }
     // Ignore event claims and re-read the provider's current state. Delayed/replayed
     // Paid events cannot restore a cancelled order.
     const payment = await getPortOnePayment(paymentId);

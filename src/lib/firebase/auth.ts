@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import type { Auth } from "firebase-admin/auth";
 import { Timestamp } from "firebase-admin/firestore";
@@ -9,6 +9,7 @@ import { getFirebaseAdminAuth } from "./admin";
 import { firebaseCredentialConfig } from "./credential-config";
 import { firebaseStore, type FirebaseStore } from "./store";
 import { safeReturnPath } from "@/lib/auth-return-path";
+import { admitSessionRead, createAccountReadLimiter } from "@/lib/security/read-rate-limit";
 
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 const isProduction = () => process.env.NODE_ENV === "production";
@@ -123,7 +124,15 @@ export async function verifyFirebaseSession(session: string | undefined, store: 
     throw new Error("AUTH_TEMPORARILY_UNAVAILABLE");
   }
 }
-export const getFirebaseAccount = cache(async () => verifyFirebaseSession((await cookies()).get(sessionCookieName())?.value));
+const limitAccountReads = createAccountReadLimiter(accountId => firebaseStore.reserveAccountReads(accountId));
+export const getFirebaseAccount = cache(async () => {
+  const session = (await cookies()).get(sessionCookieName())?.value;
+  if (!session || session.length > 20_000) return null;
+  admitSessionRead(session, { headers: await headers() });
+  const account = await verifyFirebaseSession(session);
+  if (account) await limitAccountReads(account.id);
+  return account;
+});
 
 export async function revokeCurrentSession(session: string | undefined, store: FirebaseStore = firebaseStore) {
   // Removing the allowlist entry invalidates copied cookies immediately, including

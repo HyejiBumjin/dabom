@@ -9,11 +9,17 @@ import { consumeOAuthAttempt, verifyFirebaseSession, revokeCurrentSession } from
 import { saveSajuProfile, findExistingSajuReport, profileBirthKey } from "../src/lib/saju/library-service";
 import { canReadSajuReport } from "../src/lib/saju/account";
 import { POLICY_VERSION, checkoutNotices } from "../src/lib/commerce/policy";
+import { READ_ACCOUNT_LIMIT, READ_WINDOW_MS } from "../src/lib/security/read-rate-limit";
+import { LIBRARY_PAGE_SIZE, LIBRARY_REPORT_LIMIT } from "../src/lib/saju/library-page";
 
 loadEnvConfig(process.cwd(), true);
 const prefix = `test_${randomUUID().replaceAll("-", "")}_`;
 const db = getFirebaseAdminFirestore();
-const store = new FirebaseStore(() => db, prefix);
+// Isolated nested collections reuse the same collection-group indexes as production.
+class IsolatedStore extends FirebaseStore {
+  collection(name: string) { return db.collection(prefix).doc("sandbox").collection(name); }
+}
+const store = new IsolatedStore(() => db, prefix);
 const collections = ["users", "profiles", "products", "orders", "reports", "rateLimits", "oauthAttempts", "sessions", "checkoutConsents"];
 const consent = { version: POLICY_VERSION, terms: true, digitalContent: true };
 const input = { name: "합성 검사", relationship: "SELF" as const, gender: "female" as const, birthDate: "1995-05-20", birthTime: "20:20", calendar: "solar" as const, isLeapMonth: false };
@@ -98,6 +104,42 @@ async function main() {
   const limits = await Promise.all(Array.from({length: 6}, () => store.consumeRateLimit("kakao_10001", "test", 3, 60_000)));
   check("concurrent rate limit allows exactly budget", limits.filter(Boolean).length === 3);
   check("other account has separate rate budget", await store.consumeRateLimit("kakao_10002", "test", 3, 60_000));
+  const reservations: { credits: number; resetAt: number }[] = [];
+  await Promise.all(Array.from({ length: 2 }, async () => {
+    for (let i = 0; i < 12; i++) reservations.push(await store.reserveAccountReads("kakao_10001"));
+  }));
+  const windows = new Map<number, number>();
+  for (const reservation of reservations) windows.set(reservation.resetAt, (windows.get(reservation.resetAt) ?? 0) + reservation.credits);
+  check("shared read leases never overallocate under transaction races", [...windows.values()].every(credits => credits <= READ_ACCOUNT_LIMIT));
+  check("shared read windows use bounded fixed expiries", reservations.every(value => value.resetAt % READ_WINDOW_MS === 0));
+  check("another account receives an independent read lease", (await store.reserveAccountReads("kakao_10002")).credits === 10);
+  const accountQuota = await store.collection("rateLimits").get();
+  check("read quota uses one stable document per account, not per request/window", accountQuota.size === 4);
+
+  // Same timestamps exercise the document-ID tie breaker, with many foreign rows.
+  const catalogueOwner = "kakao_30001";
+  for (let i = 0; i < LIBRARY_PAGE_SIZE + 2; i++) {
+    await store.collection("profiles").doc(`page-${i.toString().padStart(2, "0")}`).create({ userId: catalogueOwner, name: "합성 목록", relationship: i === 0 ? "FAMILY" : "SELF", birthDate: Timestamp.fromMillis(0), birthTime: null, isLunar: false, createdAt: Timestamp.fromMillis(1_000), myeongsikJson: "THIS_MUST_NOT_BE_PARSED" });
+  }
+  const page1 = await store.listLibraryPage(catalogueOwner, {}, false);
+  const page2 = await store.listLibraryPage(catalogueOwner, { after: page1.nextCursor! }, false);
+  check("library first page is bounded with a next cursor", page1.profiles.length === LIBRARY_PAGE_SIZE && Boolean(page1.nextCursor));
+  check("same-date cursor pages do not skip or duplicate profiles", page2.profiles.length === 2 && new Set([...page1.profiles, ...page2.profiles].map(item => item.id)).size === LIBRARY_PAGE_SIZE + 2 && page2.nextCursor === null);
+  check("library never decodes or returns birth-chart payloads", page1.profiles.every(item => !("myeongsik" in item) && !("myeongsikJson" in item)));
+  const family = await store.listLibraryPage(catalogueOwner, { relationship: "FAMILY" }, false);
+  check("relationship filtering searches the full collection, not just the current page", family.profiles.length === 1 && family.profiles[0].id === "page-00");
+  check("foreign cursor cannot cross ownership boundaries", (await store.listLibraryPage("kakao_10001", { after: page1.nextCursor! }, false)).profiles.every(item => item.userId === "kakao_10001"));
+  check("foreign history profile cannot leak a card", (await store.listLibraryPage("kakao_10001", { profile: "page-00" }, false)).profiles.length === 0);
+  check("unsafe history IDs stop before a document lookup", (await store.listLibraryPage(catalogueOwner, { profile: "../foreign" }, false)).profiles.length === 0);
+  for (let i = 0; i < LIBRARY_REPORT_LIMIT + 1; i++) {
+    const id = `history-${i.toString().padStart(2, "0")}`;
+    await store.collection("orders").doc(id).create({ userId: catalogueOwner, sajuProfileId: "page-00", productCode: id, status: "PAID" });
+    await store.collection("reports").doc(id).create({ userId: catalogueOwner, sajuProfileId: "page-00", productCode: id, orderId: id, status: "COMPLETED", createdAt: Timestamp.fromMillis(1_000), contentJson: "THIS_MUST_NOT_BE_PARSED" });
+  }
+  const history1 = (await store.listLibraryPage(catalogueOwner, { profile: "page-00" }, false)).profiles[0];
+  const history2 = (await store.listLibraryPage(catalogueOwner, { profile: "page-00", historyAfter: history1.nextReportCursor! }, false)).profiles[0];
+  check("report history is bounded and older purchases remain reachable", history1.reports.length === LIBRARY_REPORT_LIMIT && history2.reports.length === 1 && new Set([...history1.reports, ...history2.reports].map(item => item.id)).size === LIBRARY_REPORT_LIMIT + 1);
+  check("paid library metadata excludes report bodies", history1.reports.every(item => !("content" in item) && !("contentJson" in item)));
   const state = randomBytes(32).toString("base64url"), binding = randomBytes(32).toString("base64url");
   const attempt = store.collection("oauthAttempts").doc(sha(state));
   await attempt.create({binding:sha(binding), next:"/saju/library", expiresAt:Timestamp.fromMillis(Date.now()+60_000)});
@@ -121,7 +163,7 @@ async function main() {
   check("Firebase revocation is enforced", await verifyFirebaseSession(cookie,store,auth) === null); revoked=false;
   await revokeCurrentSession(cookie,store);
   check("logout immediately invalidates copied session", await verifyFirebaseSession(cookie,store,auth) === null);
-  const url = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/${prefix}profiles/${profileId}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents/${prefix}/sandbox/profiles/${profileId}`;
   for (const method of ["GET","PATCH"]) {
     const response = await fetch(url, {method, ...(method === "PATCH" ? {headers:{"Content-Type":"application/json"},body:JSON.stringify({fields:{userId:{stringValue:"attacker"}}})} : {})});
     check(`deployed Firestore rules deny unauthenticated ${method}`, response.status === 403);

@@ -1,0 +1,111 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { Timestamp } from "firebase-admin/firestore";
+import { createAccountReadLimiter, createReadAdmission, READ_ACCOUNT_LIMIT, READ_LEASE_SIZE } from "../src/lib/security/read-rate-limit";
+import { RequestSecurityError, securityErrorResponse } from "../src/lib/security/request";
+import { retryAfterSeconds } from "../src/lib/report-access-error";
+import { parseLibraryCursor, libraryFilter, libraryPageHref } from "../src/lib/saju/library-page";
+
+const require = createRequire(import.meta.url);
+const testEnv = process.env as Record<string, string | undefined>;
+testEnv.NODE_ENV = "production";
+delete testEnv.VERCEL;
+delete testEnv.K_SERVICE;
+globalThis.fetch = async () => { throw new Error("Unexpected network request"); };
+let passed = 0;
+function check(name: string, value: unknown) { assert.ok(value, name); passed++; console.log(`PASS ${name}`); }
+const isLimited = (error: unknown) => error instanceof RequestSecurityError && error.status === 429 && Boolean(error.retryAfter);
+async function main() {
+  let time = 0;
+  const request = { headers: new Headers({ "x-forwarded-for": "forged" }) };
+  const burst = createReadAdmission(() => time);
+  const admissions = await Promise.allSettled(Array.from({ length: 100 }, async () => burst("one-cookie", request)));
+  check("100 concurrent requests admit 60 and reject 40 before authentication", admissions.filter(item => item.status === "fulfilled").length === 60 && admissions.filter(item => item.status === "rejected" && isLimited(item.reason)).length === 40);
+  time = 10_000;
+  check("burst budget recovers", burst("one-cookie", request) === undefined);
+  const normal = createReadAdmission(() => time);
+  for (let i = 0; i < 40; i++) {
+    time = i * 1500;
+    for (let tab = 0; tab < 3; tab++) normal("normal-cookie", request);
+    if (i % 20 === 0) for (let tab = 0; tab < 3; tab++) normal("normal-cookie", request);
+  }
+  check("three simultaneous generating tabs and 30-second identity checks fit", true);
+  time = 0;
+  const rotating = createReadAdmission(() => time);
+  const rotated = await Promise.allSettled(Array.from({ length: 250 }, async (_, i) => rotating(`cookie-${i}`, { headers: new Headers({ "x-forwarded-for": `192.0.2.${i}` }) })));
+  check("rotating cookies and spoofed IP headers cannot bypass the IP burst", rotated.filter(item => item.status === "fulfilled").length === 180);
+
+  time = 0;
+  let spent = 0, reservations = 0;
+  const reserve = async () => { reservations++; const credits = Math.min(READ_LEASE_SIZE, READ_ACCOUNT_LIMIT - spent); spent += credits; await Promise.resolve(); return { credits, resetAt: 60_000 }; };
+  const first = createAccountReadLimiter(reserve, () => time);
+  const second = createAccountReadLimiter(reserve, () => time);
+  const shared = await Promise.allSettled(Array.from({ length: 220 }, (_, i) => (i % 2 ? first : second)("kakao_1")));
+  check("two instances together admit at most the shared account quota", shared.filter(item => item.status === "fulfilled").length === READ_ACCOUNT_LIMIT && shared.filter(item => item.status === "rejected" && isLimited(item.reason)).length === 40);
+  check("quota transactions are batched rather than one write per GET", reservations <= 20);
+  const before = reservations;
+  await assert.rejects(() => first("kakao_1"), isLimited);
+  check("exhausted local lease does not query the database repeatedly", reservations === before);
+  time = 60_000;
+  const reset = createAccountReadLimiter(async () => ({ credits: 10, resetAt: 120_000 }), () => time);
+  await reset("kakao_1");
+  check("expired window can reserve again", true);
+  let failures = 0;
+  const unavailable = createAccountReadLimiter(async () => { failures++; throw new Error("private DB error"); }, () => time);
+  await assert.rejects(() => unavailable("kakao_1"), isLimited);
+  await assert.rejects(() => unavailable("kakao_1"), isLimited);
+  check("quota outage fails closed with a short cooldown", failures === 1);
+  const bounded = createAccountReadLimiter(async () => ({ credits: 10, resetAt: 120_000 }), () => time, 1);
+  await bounded("kakao_1");
+  await assert.rejects(() => bounded("kakao_2"), isLimited);
+  check("full quota cache rejects new entries instead of evicting active limits", true);
+  const response = securityErrorResponse(new RequestSecurityError(429, "잠시 뒤", 10));
+  check("429 includes Retry-After and no-store", response.status === 429 && response.headers.get("retry-after") === "10" && response.headers.get("cache-control") === "private, no-store");
+  check("client retry delay rejects invalid values and stays bounded", retryAfterSeconds("10") === 10 && retryAfterSeconds("NaN") === 5 && retryAfterSeconds("-5") === 5 && retryAfterSeconds("9999") === 60);
+  check("library cursors reject malformed and unbounded input", ["bad", "x".repeat(513), Buffer.from('{"time":-1,"id":"../other"}').toString("base64url")].every(cursor => parseLibraryCursor(cursor) === null));
+  check("relationship filter and navigation remain scoped", libraryFilter("SELF") === "SELF" && libraryFilter(["SELF"]) === "ALL" && libraryPageHref("FAMILY").includes("relationship=FAMILY"));
+
+  // Exercise the actual auth DAL and report/identity handlers, mocking only I/O.
+  let cookie: string | undefined = "route-cookie";
+  let revoked = false, verifyCalls = 0, sessionReads = 0, accountReads = 0, reportReads = 0, receiptWrites = 0, quotaCalls = 0;
+  const headersPath = require.resolve("next/headers"); require(headersPath);
+  require.cache[headersPath]!.exports = { cookies: async () => ({ get: () => cookie ? { value: cookie } : undefined }), headers: async () => new Headers() };
+  const adminPath = require.resolve("../src/lib/firebase/admin"); const admin = require(adminPath);
+  require.cache[adminPath]!.exports = { ...admin, getFirebaseAdminAuth: () => ({ verifySessionCookie: async (_token: string, checkRevoked: boolean) => {
+    verifyCalls++; assert.equal(checkRevoked, true);
+    if (revoked) throw Object.assign(new Error("revoked"), { code: "auth/session-cookie-revoked" });
+    return { uid: "kakao_1", loginProvider: "kakao", firebase: { sign_in_provider: "custom" } };
+  } }) };
+  const { firebaseStore: store } = require("../src/lib/firebase/store") as typeof import("../src/lib/firebase/store");
+  store.collection = (() => ({ doc: () => ({ get: async () => { sessionReads++; return { data: () => ({ uid: "kakao_1", expiresAt: Timestamp.fromMillis(Date.now() + 60_000) }) }; } }) })) as never;
+  store.getAccount = (async () => { accountReads++; return { id: "kakao_1", kakaoId: "1" }; }) as never;
+  store.reserveAccountReads = async () => { quotaCalls++; return { credits: 10, resetAt: Date.now() + 60_000 }; };
+  store.getReportWithAccess = (async () => { reportReads++; return { id: "own-report", userId: "kakao_1", status: "COMPLETED", content: { paragraphs: ["synthetic"] }, firstDeliveredAt: new Date(), sajuProfile: { userId: "kakao_1" }, order: { userId: "kakao_1", status: "PAID" } }; }) as never;
+  store.markReportReceipt = async () => { receiptWrites++; return true; };
+  store.beginPaymentCheck = (async () => ({ kind: "cached", order: { userId: "kakao_1", status: "PAID", paymentCheckState: "VERIFIED", paymentVerifiedAt: new Date() } })) as never;
+  const reportRoute = require("../src/app/api/saju/reports/[reportId]/route") as typeof import("../src/app/api/saju/reports/[reportId]/route");
+  const accountRoute = require("../src/app/api/auth/account/route") as typeof import("../src/app/api/auth/account/route");
+  const responses = await Promise.all(Array.from({ length: 100 }, () => reportRoute.GET(new Request("https://dabom.test/api/saju/reports/own-report"), { params: Promise.resolve({ reportId: "own-report" }) })));
+  check("actual report route emits 60 successes and 40 quota responses", responses.filter(item => item.status === 200).length === 60 && responses.filter(item => item.status === 429).length === 40);
+  check("rejected route burst adds no Auth/session/account/report work", verifyCalls === 60 && sessionReads === 60 && accountReads === 60 && reportReads === 60);
+  check("completed deliveries do not repeat receipt transactions", receiptWrites === 0);
+  check("actual DAL reserves quota in batches", quotaCalls === 6);
+  check("identity endpoint shares the same early gate", (await accountRoute.GET()).status === 429 && verifyCalls === 60);
+  cookie = "second-device";
+  check("valid second device is authenticated", (await accountRoute.GET()).status === 200);
+  revoked = true;
+  check("quota cache never caches authorization or skips revocation", (await accountRoute.GET()).status === 401 && verifyCalls === 62);
+  cookie = undefined;
+  check("anonymous requests avoid Auth and quota stores", (await accountRoute.GET()).status === 401 && verifyCalls === 62);
+  cookie = "x".repeat(20_001);
+  check("oversized sessions are rejected before hashing/authentication", (await accountRoute.GET()).status === 401 && verifyCalls === 62);
+  const diagnostic = require("../src/app/saju/profiles/[profileId]/page").default;
+  const beforeDiagnostic = verifyCalls;
+  await assert.rejects(() => diagnostic({ params: Promise.resolve({ profileId: "any" }) }), (error: unknown) => (error as { digest?: string }).digest === "NEXT_HTTP_ERROR_FALLBACK;404");
+  check("production diagnostics stop with 404 before authentication/data lookup", verifyCalls === beforeDiagnostic);
+  const page = readFileSync(new URL("../src/app/saju/library/page.tsx", import.meta.url), "utf8");
+  check("server library uses bounded pagination and a separate refresh quota", page.includes("listLibraryPage(") && page.includes('"library-read", 12, 60_000'));
+  console.log(`\n${passed} PASS; mocked I/O only; no live auth, DB, payment or model calls.`);
+}
+main().catch(error => { console.error(error instanceof assert.AssertionError ? error.message : "Read-limit regression failed", error instanceof assert.AssertionError ? "" : error); process.exitCode = 1; });

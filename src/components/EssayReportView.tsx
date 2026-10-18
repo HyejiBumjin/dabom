@@ -7,7 +7,7 @@ import type { ReportContent } from "@/lib/llm/types";
 import { MessageReport } from "@/components/MessageReport";
 import { ReportPreparing } from "@/components/RetroWindow";
 import { ReportErrorState } from "@/components/ReportErrorState";
-import { ReportAccessError } from "@/lib/report-access-error";
+import { ReportAccessError, retryAfterSeconds } from "@/lib/report-access-error";
 
 interface ReportResponse { id: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: ReportContent | null; lastError: string | null; recordOpening?: boolean }
 
@@ -37,11 +37,15 @@ export function EssayReportView({ reportId }: { reportId: string }) {
     enabled: !loginRequired && !accessDenied,
     queryFn: async (): Promise<ReportResponse> => {
       const response = await requestReport(`/api/saju/reports/${reportId}`, { cache: "no-store" });
-      if (!response.ok) throw new ReportAccessError(response.status);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new ReportAccessError(response.status, retryAfterSeconds(response.headers.get("retry-after")), body?.code === "PAYMENT_VERIFICATION_REQUIRED" ? body.code : undefined);
+      }
       return response.json();
     },
     refetchInterval: (state) => state.state.status === "error" || state.state.data?.status === "COMPLETED" || state.state.data?.status === "FAILED" ? false : 1500,
-    retry: (count, error) => !(error instanceof ReportAccessError && [401, 403, 404].includes(error.status)) && count < 2,
+    retry: (count, error) => !(error instanceof ReportAccessError && ([401, 403, 404].includes(error.status) || error.code === "PAYMENT_VERIFICATION_REQUIRED")) && count < 2,
+    retryDelay: (attempt, error) => error instanceof ReportAccessError && [429, 503].includes(error.status) ? error.retryAfter * 1000 : Math.min(1000 * 2 ** attempt, 5000),
   });
 
   useEffect(() => {
@@ -94,6 +98,7 @@ export function EssayReportView({ reportId }: { reportId: string }) {
 
   if (loginRequired || query.error instanceof ReportAccessError && query.error.status === 401) return <ReportErrorState kind="login" />;
   if (accessDenied || query.error instanceof ReportAccessError && [403, 404].includes(query.error.status)) return <ReportErrorState kind="access" />;
+  if (query.error instanceof ReportAccessError && query.error.code === "PAYMENT_VERIFICATION_REQUIRED") return <ReportErrorState kind="payment" onRetry={() => void retry()} />;
 
   // An already issued letter remains readable during a background fetch error.
   if (query.data?.status === "COMPLETED" && query.data.content) {

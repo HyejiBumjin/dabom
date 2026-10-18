@@ -13,6 +13,9 @@ export interface PortOnePayment {
 export class PortOnePaymentLookupError extends Error {
   constructor(public readonly status: number) { super("PortOne payment lookup failed"); }
 }
+export class PortOnePaymentNetworkError extends Error {
+  constructor() { super("PortOne payment service unavailable"); }
+}
 
 export function parsePortOnePayment(raw: unknown, expectedId: string, expectedStoreId: string, expectedChannelKey = env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY): PortOnePayment {
   const expectedChannelType = isPaymentTestMode() ? "TEST" : "LIVE";
@@ -46,7 +49,7 @@ export async function getPortOnePayment(paymentId: string): Promise<PortOnePayme
     cache: "no-store",
     redirect: "error",
     signal: AbortSignal.timeout(10000),
-  });
+  }).catch(() => { throw new PortOnePaymentNetworkError(); });
 
   if (!res.ok) {
     throw new PortOnePaymentLookupError(res.status);

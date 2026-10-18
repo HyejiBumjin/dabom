@@ -11,6 +11,7 @@ import { CommerceFooter } from "@/components/CommerceFooter";
 import { isCommerceReady, YEARLY_PRICE } from "@/lib/commerce/policy";
 import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 import { isPaymentTestMode } from "@/lib/portone/payment-mode";
+import { requireReportEntitlement, requireVerifiedPayment } from "@/lib/portone/entitlement";
 
 export default async function SajuCheckoutPage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = await params;
@@ -18,9 +19,16 @@ export default async function SajuCheckoutPage({ params }: { params: Promise<{ p
   const profile = await firebaseStore.getProfile(profileId);
   if (!profile || profile.userId !== account.id) notFound();
   const existing = await firebaseStore.getReportWithAccess(firebaseStore.reportId(profile.id, SAJU_PRODUCT_CODE));
-  if (existing && canReadSajuReport(existing, account)) redirect(`/saju/reports/${existing.id}`);
+  if (existing && canReadSajuReport(existing, account)) {
+    await requireReportEntitlement(existing, account.id, "read");
+    redirect(`/saju/reports/${existing.id}`);
+  }
   const paid = await firebaseStore.getOrder(firebaseStore.orderId(account.id, profile.id, SAJU_PRODUCT_CODE));
-  if (paid?.status === "PAID" && paid.userId === account.id) { const report = await ensureSajuReport(account.id, profile.id, paid.id); redirect(`/saju/reports/${report.id}`); }
+  if (paid?.status === "PAID" && paid.userId === account.id) {
+    await requireVerifiedPayment(account.id, paid.id);
+    const report = await ensureSajuReport(account.id, profile.id, paid.id);
+    redirect(`/saju/reports/${report.id}`);
+  }
   const product = await firebaseStore.getProduct(SAJU_PRODUCT_CODE);
   const testMode = isPaymentTestMode();
   const available = Boolean(product?.active && product.price === YEARLY_PRICE && (testMode || isCommerceReady()) && env.NEXT_PUBLIC_PORTONE_STORE_ID && env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY && env.PORTONE_API_SECRET && env.PORTONE_WEBHOOK_SECRET);

@@ -88,7 +88,7 @@ async function main() {
   try {
     Date.now = () => originals.now() + timeOffset;
     console.warn = (...args: unknown[]) => { warnings.push(args); };
-    store.getReportWithAccess = (async () => ({ id: "fixture", status: completedAtStart ? "COMPLETED" : stored ? "FAILED" : "PENDING", content: stored, promptVersion: storedPromptVersion, model: storedModel, sajuProfile: { name: readerName, myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "fixture-owner", order: null, status: completedAtStart ? "COMPLETED" : stored ? "FAILED" : "PENDING", content: stored, promptVersion: storedPromptVersion, model: storedModel, sajuProfile: { userId: "fixture-owner", name: readerName, myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
     store.claimReport = (async (_id: string, data: { promptVersion: string; model: string }) => { claims.push(data); return claimCount ? "fixture-lease" : null; }) as unknown as typeof originals.claim;
     store.updateReport = (async (_id: string, _lease: string, data: Update) => { updates.push(structuredClone(data)); }) as unknown as typeof originals.update;
     Responses.prototype.create = (async (raw: unknown) => {
@@ -409,7 +409,7 @@ async function main() {
     let generationResponse = await POST(new Request("http://localhost/api/saju/reports/fixture/generate", { method: "POST" }), { params: Promise.resolve({ reportId: "fixture" }) });
     assert.equal(generationResponse.status, 200);
     assert.equal((await generationResponse.json()).status, "COMPLETED");
-    store.getReportWithAccess = (async () => ({ id: "fixture", status: "FAILED", content: null, sajuProfile: { userId: "reader-account", name: readerName, myeongsik: {} }, order: null })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "reader-account", status: "FAILED", content: null, sajuProfile: { userId: "reader-account", name: readerName, myeongsik: {} }, order: null })) as unknown as typeof originals.find;
     generationResponse = await POST(new Request("http://localhost/api/saju/reports/fixture/generate", { method: "POST" }), { params: Promise.resolve({ reportId: "fixture" }) });
     assert.equal(generationResponse.status, 503);
     assert.equal((await generationResponse.json()).error, PUBLIC_REPORT_FAILURE_MESSAGE);
@@ -432,6 +432,11 @@ async function main() {
     const cachedHtml = renderToStaticMarkup(createElement(QueryClientProvider, { client: queryClient }, createElement(EssayReportView, { reportId: "cached-report" })));
     assert(cachedHtml.includes("너는 예리하게 디테일을 감지해"), "Published content disappeared on a background fetch failure");
     assert(!cachedHtml.includes(PUBLIC_REPORT_FAILURE_MESSAGE));
+    queryClient.getQueryCache().find({ queryKey: ["saju-report", "cached-report"] })!.setState({ status: "error", error: new ReportAccessError(503, 30, "PAYMENT_VERIFICATION_REQUIRED"), fetchStatus: "idle" });
+    const heldHtml = renderToStaticMarkup(createElement(QueryClientProvider, { client: queryClient }, createElement(EssayReportView, { reportId: "cached-report" })));
+    assert(!heldHtml.includes("너는 예리하게 디테일을 감지해"), "Payment hold exposed cached report");
+    assert(heldHtml.includes("다시 결제할 필요는 없어"));
+    tests += 1;
     queryClient.clear();
     for (const status of [401, 403, 404]) {
       queryClient.setQueryData(["saju-report", "revoked-report"], { id: "revoked-report", status: "COMPLETED", content: { paragraphs: ["private-revoked-content"] }, lastError: null });

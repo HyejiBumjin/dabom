@@ -5,7 +5,8 @@ import { getSajuAccount } from "@/lib/saju/account";
 import { ensureSajuReport, fulfillSajuOrder } from "@/lib/saju/library-service";
 import { getPortOnePayment } from "@/lib/portone/server";
 import { SAJU_PRODUCT_CODE } from "@/lib/saju/profile-input";
-import { guardedMutation, readJsonBody } from "@/lib/security/request";
+import { guardedMutation, readJsonBody, RequestSecurityError } from "@/lib/security/request";
+import { requireVerifiedPayment } from "@/lib/portone/entitlement";
 import { enforceAccountRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   if (!order || order.userId !== account.id || order.productCode !== SAJU_PRODUCT_CODE || (await firebaseStore.getProfile(order.sajuProfileId))?.userId !== account.id) return NextResponse.json({ error: "주문을 찾지 못했어." }, { status: 404 });
   try {
     if (order.status === "PAID") {
+      await requireVerifiedPayment(account.id, order.id, { force: true });
       const report = await ensureSajuReport(account.id, order.sajuProfileId, order.id);
       return NextResponse.json({ reportId: report.id, existing: true });
     }
@@ -26,7 +28,8 @@ export async function POST(request: Request) {
     const payment = await getPortOnePayment(order.merchantUid);
     const report = await fulfillSajuOrder(account.id, order.merchantUid, payment);
     return NextResponse.json({ reportId: report.id });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestSecurityError) throw error;
     return NextResponse.json({ error: "결제 완료를 아직 확인하지 못했어. 결제 확인을 다시 눌러줘." }, { status: 409 });
   }
   });

@@ -1,0 +1,766 @@
+{
+  "commit": "c318da2d38e9699a65fc050f5d29b92cb5e0aaeb",
+  "checkedAt": "2026-10-18T03:19:17.701Z",
+  "adversarial": {
+    "checkedAt": "2026-10-18T03:20:02.654Z",
+    "scope": "synthetic route execution, no real database/provider/LLM requests",
+    "observations": [
+      {
+        "id": "payment-reconciliation",
+        "scenario": "Provider is CANCELLED while local cached order remains PAID (missed cancellation webhook)",
+        "confirmStatus": 200,
+        "readStatus": 200,
+        "providerLookupCount": 0,
+        "readablePrivateMarker": true,
+        "generationStatus": 200,
+        "generationCallCount": 1
+      },
+      {
+        "id": "report-read-admission",
+        "scenario": "100 sequential same-account report reads in-process",
+        "successes": 100,
+        "reportStoreCalls": 100,
+        "rateLimitCalls": 0
+      }
+    ],
+    "controls": [
+      {
+        "name": "cross-account-report-read",
+        "status": 404
+      },
+      {
+        "name": "cross-account-payment-confirm",
+        "status": 404
+      },
+      {
+        "name": "cross-account-generate",
+        "status": 404
+      },
+      {
+        "name": "mass-assignment-removed-and-user-text-escaped",
+        "passed": true
+      },
+      {
+        "name": "redirect-normalization",
+        "cases": 8,
+        "passed": true
+      }
+    ]
+  },
+  "realIdentity": {
+    "scope": "Real Firebase Auth signatures and isolated Firestore; Next cookie adapter only is simulated",
+    "checks": [
+      "real signed session A accepted",
+      "real signed session B accepted",
+      "actual signed owner reads its isolated report",
+      "actual signed second account cannot read first report",
+      "actual signed second account cannot confirm first order",
+      "actual signed second account cannot generate first report",
+      "unpaid actual signed owner cannot read report",
+      "unpaid actual signed owner cannot generate report",
+      "production creation requires payment with real signed owner",
+      "deployed rules deny authenticated direct GET",
+      "deployed rules deny authenticated direct PATCH",
+      "failed direct write leaves fixture unchanged",
+      "valid signed cookie with expired allowlist denied",
+      "logout invalidates real copied session immediately",
+      "other device/account session survives logout",
+      "revoked real session cannot call report API",
+      "Firebase disabled account rejects otherwise valid session",
+      "disabled actual account cannot call report API",
+      "forged cookie rejected by real Firebase verifier"
+    ],
+    "cleanup": {
+      "isolatedCollections": 6,
+      "syntheticAccounts": 2,
+      "errors": []
+    }
+  },
+  "cloud": {
+    "checkedAt": "2026-10-18T03:19:17.701Z",
+    "auth": {
+      "authorizedDomains": [
+        "localhost",
+        "dabom-10a35.firebaseapp.com",
+        "dabom-10a35.web.app"
+      ],
+      "defaultConfig": {},
+      "userActions": {},
+      "blockingFunctions": {}
+    },
+    "ttl": {
+      "fields": [],
+      "more": false
+    },
+    "database": {
+      "location": "asia-northeast3",
+      "type": "FIRESTORE_NATIVE",
+      "pitr": "POINT_IN_TIME_RECOVERY_DISABLED",
+      "deleteProtection": "DELETE_PROTECTION_DISABLED",
+      "earliestVersionTime": "2026-10-18T02:19:18.859507Z"
+    },
+    "run": {
+      "ingress": "INGRESS_TRAFFIC_ALL",
+      "serviceAccount": "firebase-app-hosting-compute@dabom-10a35.iam.gserviceaccount.com",
+      "timeout": "300s",
+      "scaling": {
+        "maxInstanceCount": 2
+      },
+      "environmentVariableNames": [
+        "DABOM_HOSTING",
+        "DABOM_APPHOSTING_LB_IPS",
+        "FIREBASE_PROJECT_ID",
+        "GOOGLE_CLOUD_PROJECT",
+        "FIREBASE_ADMIN_CREDENTIAL_MODE",
+        "FIREBASE_ADMIN_SERVICE_ACCOUNT_ID",
+        "NEXT_PUBLIC_APP_URL",
+        "FIREBASE_WEB_API_KEY",
+        "KAKAO_REST_API_KEY",
+        "KAKAO_CLIENT_SECRET",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL",
+        "FIREBASE_CONFIG",
+        "NG_TRUST_PROXY_HEADERS",
+        "NG_ALLOWED_HOSTS"
+      ],
+      "revision": "projects/dabom-10a35/locations/asia-east1/services/dabom/revisions/dabom-build-2026-10-18-001"
+    },
+    "backupSchedules": {
+      "schedules": []
+    },
+    "userManagedKeys": {
+      "count": 1,
+      "privateMaterialCollected": false
+    }
+  },
+  "hosting": {
+    "checkedAt": "2026-10-18T03:18:31.612Z",
+    "runtimeRoles": [
+      "projects/dabom-10a35/roles/dabomAuthServer",
+      "roles/datastore.user",
+      "roles/developerconnect.readTokenAccessor",
+      "roles/firebaseapphosting.computeRunner",
+      "roles/firebaserules.viewer",
+      "roles/storage.objectViewer"
+    ],
+    "build": {
+      "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/builds/build-2026-10-18-001",
+      "state": "READY",
+      "buildLogsUri": "https://console.cloud.google.com/cloud-build/builds;region=asia-east1/b4770a31-a735-416d-bf90-371632b2713d?project=601736046806"
+    },
+    "rollout": [
+      {
+        "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-18-001",
+        "state": "SUCCEEDED"
+      }
+    ],
+    "traffic": {
+      "splits": [
+        {
+          "build": "projects/601736046806/locations/asia-east1/backends/dabom/builds/build-2026-10-18-001",
+          "percent": 100
+        }
+      ]
+    },
+    "run": {
+      "uri": "https://dabom-zvefan3z3a-de.a.run.app",
+      "urls": [
+        "https://dabom-601736046806.asia-east1.run.app",
+        "https://dabom-zvefan3z3a-de.a.run.app"
+      ],
+      "readyRevision": "projects/dabom-10a35/locations/asia-east1/services/dabom/revisions/dabom-build-2026-10-18-001",
+      "traffic": [
+        {
+          "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+          "revision": "dabom-build-2026-10-17-001",
+          "tag": "t-152225411",
+          "uri": "https://t-152225411---dabom-zvefan3z3a-de.a.run.app"
+        },
+        {
+          "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+          "revision": "dabom-build-2026-10-17-002",
+          "tag": "t-152225408",
+          "uri": "https://t-152225408---dabom-zvefan3z3a-de.a.run.app"
+        },
+        {
+          "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+          "revision": "dabom-build-2026-10-17-003",
+          "tag": "t-152225409",
+          "uri": "https://t-152225409---dabom-zvefan3z3a-de.a.run.app"
+        },
+        {
+          "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+          "revision": "dabom-build-2026-10-18-001",
+          "percent": 100,
+          "tag": "t-1254812052",
+          "uri": "https://t-1254812052---dabom-zvefan3z3a-de.a.run.app"
+        }
+      ],
+      "publicInvoker": false
+    }
+  },
+  "additionalHttp": {
+    "checkedAt": "2026-10-18T03:21:53.958Z",
+    "scope": "sequential low-volume production probes; no valid login or charge",
+    "checks": [
+      {
+        "label": "Cloud Run origin or revision blocked",
+        "status": 403,
+        "cache": null
+      },
+      {
+        "label": "Cloud Run origin or revision blocked",
+        "status": 403,
+        "cache": null
+      },
+      {
+        "label": "Cloud Run origin or revision blocked",
+        "status": 403,
+        "cache": null
+      },
+      {
+        "label": "Cloud Run origin or revision blocked",
+        "status": 403,
+        "cache": null
+      },
+      {
+        "label": "Cloud Run origin or revision blocked",
+        "status": 403,
+        "cache": null
+      },
+      {
+        "label": "Cloud Run origin or revision blocked",
+        "status": 403,
+        "cache": null
+      },
+      {
+        "label": "/saju/preview/feedback",
+        "status": 404,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "/saju/preview/messages",
+        "status": 404,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "/apphosting.yaml",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "/firebase-debug.log",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "/.env.production",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "/.env.local.bak",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "/.env%2elocal",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "/package-lock.json",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "/api/saju/reports/security-probe.json",
+        "status": 401,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "/api/saju/reports/security-probe?__nextDataReq=1",
+        "status": 401,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "auth header manipulation",
+        "status": 307,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "auth header manipulation",
+        "status": 401,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "auth header manipulation",
+        "status": 401,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "auth header manipulation",
+        "status": 401,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "cross-origin mutation",
+        "status": 403,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "cross-origin mutation",
+        "status": 403,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "cross-origin mutation",
+        "status": 403,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "cross-origin mutation",
+        "status": 403,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "cross-origin preflight",
+        "status": 204,
+        "cache": "private, no-store"
+      },
+      {
+        "label": "image fetch boundary",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "image fetch boundary",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "image fetch boundary",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "image fetch boundary",
+        "status": 404,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      },
+      {
+        "label": "root response security policy",
+        "status": 200,
+        "cache": "private, no-cache, no-store, max-age=0, must-revalidate"
+      }
+    ],
+    "csp": {
+      "value": "base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+      "hasScriptSrc": false,
+      "hasDefaultSrc": false
+    },
+    "publicScripts": {
+      "count": 10,
+      "sourceMapsExposed": [],
+      "patternFindings": []
+    }
+  },
+  "productionDiagnosticPage": {
+    "checkedAt": "2026-10-18T03:24:54.114Z",
+    "origin": "https://dabom-letter.com",
+    "route": "/saju/profiles/[profileId]",
+    "scope": "Existing owner session, read-only browser check",
+    "diagnosticHeadingVisible": true,
+    "disclosedJsonKeys": [
+      "myeongsik",
+      "report_facts",
+      "selected_sentence_fragments",
+      "report_render_payload"
+    ],
+    "selectedSections": 6,
+    "payloadPresent": true
+  },
+  "baselineCounts": {
+    "security": 144,
+    "loginLimit": 42,
+    "hosting": 20,
+    "report": 61,
+    "paymentClient": 17,
+    "paymentMode": 18,
+    "dependencies": 9,
+    "secretDetector": 8,
+    "firestore": 66,
+    "productionHttp": 86
+  },
+  "remediation": {
+    "completedAt": "2026-10-18T03:49:16.402060+00:00",
+    "resolved": [
+      "F2",
+      "F3"
+    ],
+    "pending": [
+      "F1",
+      "F4",
+      "F5"
+    ],
+    "source": {
+      "baseCommit": "c318da2d38e9699a65fc050f5d29b92cb5e0aaeb",
+      "workingTreeSha256": "6e7d7aeaaad681c3a3972349c0238796a2037c38d9d33a4fc0255049096f43d5",
+      "sourceFiles": 222
+    },
+    "tests": {
+      "readLimiter": 25,
+      "firebaseStore": 79,
+      "security": 144,
+      "loginLimit": 42,
+      "report": 61,
+      "hosting": 20,
+      "localProductionHttp": 85,
+      "productionHttp": 85,
+      "productionExtra": 11,
+      "realSignedIdentities": 19
+    },
+    "realIdentityCleanup": {
+      "isolatedCollections": 6,
+      "syntheticAccounts": 2,
+      "errors": []
+    },
+    "production": {
+      "checkedAt": "2026-10-18T03:46:03.284Z",
+      "runtimeRoles": [
+        "projects/dabom-10a35/roles/dabomAuthServer",
+        "roles/datastore.user",
+        "roles/developerconnect.readTokenAccessor",
+        "roles/firebaseapphosting.computeRunner",
+        "roles/firebaserules.viewer",
+        "roles/storage.objectViewer"
+      ],
+      "build": {
+        "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/builds/build-2026-10-18-002",
+        "state": "READY",
+        "buildLogsUri": "https://console.cloud.google.com/cloud-build/builds;region=asia-east1/b7f5eb5c-71af-4d1d-ae14-9e06f947502a?project=601736046806"
+      },
+      "rollout": [
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-18-001",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-18-002",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-17-002",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-17-003",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-17-001",
+          "state": "SUCCEEDED"
+        }
+      ],
+      "traffic": {
+        "splits": [
+          {
+            "build": "projects/601736046806/locations/asia-east1/backends/dabom/builds/build-2026-10-18-002",
+            "percent": 100
+          }
+        ]
+      },
+      "run": {
+        "uri": "https://dabom-zvefan3z3a-de.a.run.app",
+        "urls": [
+          "https://dabom-601736046806.asia-east1.run.app",
+          "https://dabom-zvefan3z3a-de.a.run.app"
+        ],
+        "readyRevision": "projects/dabom-10a35/locations/asia-east1/services/dabom/revisions/dabom-build-2026-10-18-002",
+        "traffic": [
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-17-001",
+            "tag": "t-152225411",
+            "uri": "https://t-152225411---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-17-002",
+            "tag": "t-152225408",
+            "uri": "https://t-152225408---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-17-003",
+            "tag": "t-152225409",
+            "uri": "https://t-152225409---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-18-001",
+            "tag": "t-1254812052",
+            "uri": "https://t-1254812052---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-18-002",
+            "percent": 100,
+            "tag": "t-1254812055",
+            "uri": "https://t-1254812055---dabom-zvefan3z3a-de.a.run.app"
+          }
+        ],
+        "publicInvoker": false
+      }
+    },
+    "browserChecks": [
+      "existing session library visible",
+      "existing report fully readable",
+      "diagnostics unavailable to owner",
+      "existing checkout redirects to existing readable report"
+    ],
+    "limits": {
+      "preAuthPerProcessIp": {
+        "burst": 180,
+        "burstWindowSeconds": 10,
+        "minute": 600
+      },
+      "preAuthPerProcessSession": {
+        "burst": 60,
+        "burstWindowSeconds": 10,
+        "minute": 180
+      },
+      "sharedAccountPerMinute": 180,
+      "leaseSize": 10,
+      "libraryRefreshesPerMinute": 12,
+      "profilesPerPage": 12,
+      "reportsPerProfilePage": 32
+    },
+    "productionDiagnosticResponses": {
+      "html": 404,
+      "rsc": "200 with not-found 404 digest; no diagnostic payload",
+      "prefetch": "200 route skeleton only; no diagnostic payload"
+    },
+    "secretsFound": 0,
+    "modelOrPaymentCalls": 0,
+    "artifactDirectory": "/Users/hyeji/.codex/visualizations/2026/10/07/01a117c9-e203-7400-bc6e-9f2d1a60fba3/security-fixes-2026-10-18"
+  },
+  "paymentReconciliation": {
+    "checkedAt": "2026-10-18T16:41:21.891467+00:00",
+    "status": "on-access F1 fix deployed; live PG rehearsal pending",
+    "finding": "F1",
+    "scope": "on-access entitlement reconciliation, not scheduled full-ledger reconciliation",
+    "source": {
+      "baseCommit": "c318da2d38e9699a65fc050f5d29b92cb5e0aaeb",
+      "workingTreeSha256": "af10679b8fc70d67240e66c8f0259e346c181bc1ff0662c5b1904f0e6f897600",
+      "sourceFiles": 225
+    },
+    "tests": {
+      "reconciliationActualFirestore": 43,
+      "security": 144,
+      "firebaseStore": 79,
+      "report": 62,
+      "readLimiter": 25,
+      "paymentClient": 17,
+      "paymentMode": 18,
+      "hosting": 20,
+      "localProductionHttp": 85,
+      "productionHttp": 85,
+      "productionExtra": 12
+    },
+    "policy": {
+      "readFreshSeconds": 300,
+      "completedReadGraceFromLastSuccessSeconds": 900,
+      "generationMustCallProvider": true,
+      "claimFreshSeconds": 30,
+      "sharedLeaseSeconds": 20,
+      "failureCooldownSeconds": 30,
+      "terminalFullAndPartialCancellation": true,
+      "scheduledSweepInstalled": false,
+      "separateAlertInstalled": false
+    },
+    "syntheticCleanupVerifiedEmpty": true,
+    "secretsFound": 0,
+    "realPaymentOrModelCalls": 0,
+    "limitations": [
+      "Real PG card cancellation/partial cancellation and webhook interruption require a later integration rehearsal.",
+      "Already delivered content cannot be remotely recalled.",
+      "No payment is enabled by this change."
+    ],
+    "artifactDirectory": "/Users/hyeji/.codex/visualizations/2026/10/07/01a117c9-e203-7400-bc6e-9f2d1a60fba3/security-payment-fix-2026-10-18",
+    "completedAt": "2026-10-18T16:44:00.632864+00:00",
+    "production": {
+      "checkedAt": "2026-10-18T16:43:01.089Z",
+      "runtimeRoles": [
+        "projects/dabom-10a35/roles/dabomAuthServer",
+        "roles/datastore.user",
+        "roles/developerconnect.readTokenAccessor",
+        "roles/firebaseapphosting.computeRunner",
+        "roles/firebaserules.viewer",
+        "roles/storage.objectViewer"
+      ],
+      "build": {
+        "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/builds/build-2026-10-18-003",
+        "state": "READY",
+        "buildLogsUri": "https://console.cloud.google.com/cloud-build/builds;region=asia-east1/f71b5a5f-b4df-468f-a243-5471111a32a0?project=601736046806"
+      },
+      "rollout": [
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-18-003",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-18-002",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-17-002",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-17-003",
+          "state": "SUCCEEDED"
+        },
+        {
+          "name": "projects/dabom-10a35/locations/asia-east1/backends/dabom/rollouts/build-2026-10-17-001",
+          "state": "SUCCEEDED"
+        }
+      ],
+      "traffic": {
+        "splits": [
+          {
+            "build": "projects/601736046806/locations/asia-east1/backends/dabom/builds/build-2026-10-18-003",
+            "percent": 100
+          }
+        ]
+      },
+      "run": {
+        "uri": "https://dabom-zvefan3z3a-de.a.run.app",
+        "urls": [
+          "https://dabom-601736046806.asia-east1.run.app",
+          "https://dabom-zvefan3z3a-de.a.run.app"
+        ],
+        "readyRevision": "projects/dabom-10a35/locations/asia-east1/services/dabom/revisions/dabom-build-2026-10-18-003",
+        "traffic": [
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-17-001",
+            "tag": "t-152225411",
+            "uri": "https://t-152225411---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-17-002",
+            "tag": "t-152225408",
+            "uri": "https://t-152225408---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-17-003",
+            "tag": "t-152225409",
+            "uri": "https://t-152225409---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-18-001",
+            "tag": "t-1254812052",
+            "uri": "https://t-1254812052---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-18-002",
+            "tag": "t-1254812055",
+            "uri": "https://t-1254812055---dabom-zvefan3z3a-de.a.run.app"
+          },
+          {
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",
+            "revision": "dabom-build-2026-10-18-003",
+            "percent": 100,
+            "tag": "t-1254812054",
+            "uri": "https://t-1254812054---dabom-zvefan3z3a-de.a.run.app"
+          }
+        ],
+        "publicInvoker": false
+      }
+    },
+    "browserChecks": [
+      "Existing signed-in library is visible.",
+      "Operator-granted completed preview displays 21 messages.",
+      "Existing preview checkout redirects to that report without payment prompt."
+    ],
+    "committed": false,
+    "pushed": false,
+    "productionExtra": {
+      "checks": [
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://dabom-601736046806.asia-east1.run.app",
+          "status": 403
+        },
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://dabom-zvefan3z3a-de.a.run.app",
+          "status": 403
+        },
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://t-152225411---dabom-zvefan3z3a-de.a.run.app",
+          "status": 403
+        },
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://t-152225408---dabom-zvefan3z3a-de.a.run.app",
+          "status": 403
+        },
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://t-152225409---dabom-zvefan3z3a-de.a.run.app",
+          "status": 403
+        },
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://t-1254812052---dabom-zvefan3z3a-de.a.run.app",
+          "status": 403
+        },
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://t-1254812055---dabom-zvefan3z3a-de.a.run.app",
+          "status": 403
+        },
+        {
+          "check": "Cloud Run origin denied",
+          "url": "https://t-1254812054---dabom-zvefan3z3a-de.a.run.app",
+          "status": 403
+        },
+        {
+          "check": "Diagnostics hidden in HTML/RSC",
+          "rsc": false,
+          "status": 404
+        },
+        {
+          "check": "Diagnostics hidden in HTML/RSC",
+          "rsc": true,
+          "status": 200
+        },
+        {
+          "check": "Diagnostics hidden in HTML/RSC",
+          "rsc": true,
+          "status": 200
+        },
+        {
+          "check": "Diagnostics hidden in HTML/RSC",
+          "rsc": false,
+          "status": 404
+        }
+      ],
+      "checkedAt": "2026-10-18T16:43:40.388Z"
+    }
+  },
+  "currentFindingsStatus": {
+    "F1": "on-access entitlement protection deployed; real PG rehearsal pending",
+    "F2": "deployed",
+    "F3": "deployed",
+    "F4": "pending",
+    "F5": "pending"
+  }
+}

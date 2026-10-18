@@ -297,8 +297,8 @@
 .retro-letter p + p { margin-top: 24px; }
 .retro-library { padding: 22px 22px 28px; }
 .retro-library-filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 0 0 22px; }
-.retro-library-filters button { border: 2px solid var(--retro-line); background: var(--retro-cream); min-height: 44px; padding: 8px 3px; font-size: 15px; border-radius: 3px; font-family: "NeoDunggeunmo", monospace; cursor: pointer; }
-.retro-library-filters button[aria-pressed="true"] { background: var(--retro-lavender); box-shadow: inset 1px 1px 0 #f7f4ff, 1px 1px 0 #aba0d2; }
+.retro-library-filters :is(button, a) { border: 2px solid var(--retro-line); background: var(--retro-cream); min-height: 44px; padding: 8px 3px; font-size: 15px; border-radius: 3px; font-family: "NeoDunggeunmo", monospace; cursor: pointer; text-align: center; }
+.retro-library-filters :is(button, a)[aria-pressed="true"] { background: var(--retro-lavender); box-shadow: inset 1px 1px 0 #f7f4ff, 1px 1px 0 #aba0d2; }
 .retro-library-list { display: grid; gap: 16px; margin-bottom: 24px; }
 .retro-library-card { border: 2px solid var(--retro-line); border-radius: 4px; padding: 18px; background: #fffefd; box-shadow: 2px 2px 0 #d8d7ec; }
 .retro-library-card[data-relationship] { padding: 0; }
@@ -375,7 +375,7 @@
 @keyframes retro-saved-tap-marks { 0%, 16%, 25%, 30%, 39%, 100% { opacity: 0; } 18%, 23%, 32%, 37% { opacity: 1; } }
 
 @media (max-width: 359px) {
-  .retro-library-filters button { padding-inline: 1px; font-size: 14px; white-space: nowrap; }
+  .retro-library-filters :is(button, a) { padding-inline: 1px; font-size: 14px; white-space: nowrap; }
   .retro-form-panel { padding: 18px 10px; }
   .retro-field { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
   .retro-choice-field legend { width: 64px; margin-right: 8px; }

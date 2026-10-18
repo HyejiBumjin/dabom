@@ -1,20 +1,26 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
-import { Timestamp, type DocumentSnapshot, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { FieldPath, Timestamp, type DocumentSnapshot, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { getFirebaseAdminFirestore } from "./admin";
 import type { Relationship } from "@/lib/saju/profile-input";
 import { canReadDevelopmentPreview, type DevelopmentPreviewAccess } from "@/lib/saju/report-preview-access";
 import { allowsDevelopmentReports, paymentCollectionPrefix } from "@/lib/portone/payment-mode";
 import { recordCheckoutConsent, type CheckoutConsentRecord } from "@/lib/commerce/policy";
+import { READ_ACCOUNT_LIMIT, READ_LEASE_SIZE, READ_WINDOW_MS } from "@/lib/security/read-rate-limit";
+import { LIBRARY_PAGE_SIZE, LIBRARY_REPORT_LIMIT, libraryFilter, parseLibraryCursor, type LibraryFilter } from "@/lib/saju/library-page";
+import { isPaymentReadFresh, isPaymentGenerationFresh, PAYMENT_CHECK_LEASE_MS, PAYMENT_CHECK_RETRY_MS, type PaymentVerification, type PaymentCheckOutcome } from "@/lib/portone/verification-policy";
 
 export type Account = { id: string; kakaoId: string; nickname: string; email: string | null; createdAt: Date };
 export type Profile = { id: string; userId: string; birthKey: string; name: string; relationship: Relationship; gender: "MALE" | "FEMALE"; birthDate: Date; birthTime: string | null; isLunar: boolean; isLeapMonth: boolean; myeongsik: unknown; createdAt: Date };
 export type Product = { id: string; code: string; name: string; price: number; active: boolean };
-export type Order = { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date; checkoutConsent?: CheckoutConsentRecord };
+export type Order = PaymentVerification & { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date; checkoutConsent?: CheckoutConsentRecord };
 export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date; developmentPreviewAccess?: DevelopmentPreviewAccess; firstDeliveredAt?: Date; firstOpenedAt?: Date };
 export type ReportWithAccess = Report & { sajuProfile: Profile; order: Order | null };
 export type ReportPatch = Partial<Pick<Report, "status" | "content" | "retryCount" | "lastError" | "completedAt" | "promptVersion" | "model">>;
 export type NewReport = Pick<Report, "promptVersion" | "model" | "productCode">;
+type LibraryProfileRecord = Pick<Profile, "id" | "userId" | "name" | "relationship" | "birthDate" | "birthTime" | "isLunar" | "createdAt">;
+type LibraryReportRecord = Pick<Report, "id" | "userId" | "sajuProfileId" | "productCode" | "status" | "orderId" | "createdAt" | "developmentPreviewAccess">;
+type LibraryOrderRecord = Pick<Order, "id" | "userId" | "sajuProfileId" | "productCode" | "status">;
 export const stableId = (...parts: string[]) => createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 const validId = (id: string) => /^[A-Za-z0-9_-]{1,128}$/.test(id);
 
@@ -153,7 +159,12 @@ export class FirebaseStore {
       if (existing && (existing.userId !== userId || existing.orderId && existing.orderId !== order.id)) throw new Error("REPORT_OWNER_MISMATCH");
       const report = existing ?? this.newReport(userId, profile.id, metadata, order.id);
       // A concurrent cancellation forces a transaction retry; CANCELLED is terminal.
-      tx.update(this.collection("orders").doc(order.id), { status: "PAID", paidAmount: payment.amount, paidAt: order.paidAt ?? new Date(), pgTxId: payment.id });
+      tx.update(this.collection("orders").doc(order.id), {
+        status: "PAID", paidAmount: payment.amount, paidAt: order.paidAt ?? new Date(), pgTxId: payment.id,
+        // A duplicate initial confirmation may arrive after a newer recheck.
+        // Only the first fulfillment initializes freshness; later checks use CAS.
+        ...(order.status !== "PAID" ? { paymentVerifiedAt: new Date(), paymentCheckState: "VERIFIED", paymentCheckId: null, paymentCheckLeaseUntil: null, paymentCheckRetryAt: null } : {}),
+      });
       tx.set(this.collection("reports").doc(id), encode({ ...report, orderId: order.id }));
       return { ...report, orderId: order.id };
     });
@@ -162,14 +173,95 @@ export class FirebaseStore {
     return this.transaction(async tx => {
       const order = await this.read<Order>("orders", id, tx);
       if (!order || order.userId !== userId) throw new Error("ORDER_NOT_FOUND");
-      tx.update(this.collection("orders").doc(id), { status: "CANCELLED" });
+      tx.update(this.collection("orders").doc(id), { status: "CANCELLED", paymentCheckState: "REJECTED", paymentCheckId: null, paymentCheckLeaseUntil: null, paymentCheckRetryAt: null });
+    });
+  }
+  /** A shared lease bounds provider calls across tabs and server instances. */
+  async beginPaymentCheck(userId: string, id: string, force: boolean) {
+    return this.transaction(async tx => {
+      const order = await this.read<Order>("orders", id, tx);
+      if (!order || order.userId !== userId) throw new Error("ORDER_NOT_FOUND");
+      const now = Date.now();
+      if (order.status !== "PAID") return { kind: "denied" as const, order };
+      if (!force && isPaymentReadFresh(order, now)) return { kind: "cached" as const, order };
+      if ((order.paymentCheckLeaseUntil?.getTime() ?? 0) > now) return { kind: "busy" as const, order };
+      if ((order.paymentCheckRetryAt?.getTime() ?? 0) > now) return { kind: "cooldown" as const, order };
+      const checkId = randomUUID();
+      tx.update(this.collection("orders").doc(id), { paymentCheckId: checkId, paymentCheckStartedAt: new Date(now), paymentCheckLeaseUntil: new Date(now + PAYMENT_CHECK_LEASE_MS) });
+      return { kind: "claimed" as const, order, checkId };
+    });
+  }
+  async finishPaymentCheck(userId: string, id: string, checkId: string, outcome: PaymentCheckOutcome) {
+    return this.transaction(async tx => {
+      const order = await this.read<Order>("orders", id, tx);
+      if (!order || order.userId !== userId) throw new Error("ORDER_NOT_FOUND");
+      if (order.status === "CANCELLED") return { applied: false, order };
+      // A verified cancellation is terminal, including an expired worker's result.
+      if (outcome === "cancelled") {
+        const patch = { status: "CANCELLED" as const, paymentCheckState: "REJECTED" as const, paymentCheckId: null, paymentCheckLeaseUntil: null, paymentCheckRetryAt: null };
+        tx.update(this.collection("orders").doc(id), patch);
+        return { applied: true, order: { ...order, ...patch } };
+      }
+      const now = Date.now();
+      if (order.status !== "PAID" || order.paymentCheckId !== checkId || (order.paymentCheckLeaseUntil?.getTime() ?? 0) <= now) return { applied: false, order };
+      const state = outcome === "verified" ? "VERIFIED" : outcome === "unavailable" && order.paymentCheckState !== "REJECTED" ? "UNAVAILABLE" : "REJECTED";
+      const patch = {
+        paymentCheckState: state as NonNullable<PaymentVerification["paymentCheckState"]>,
+        paymentCheckId: null, paymentCheckLeaseUntil: null,
+        paymentCheckRetryAt: outcome === "verified" ? null : new Date(now + PAYMENT_CHECK_RETRY_MS),
+        // Use lookup start, not completion. Repeated failures cannot renew grace.
+        ...(outcome === "verified" ? { paymentVerifiedAt: order.paymentCheckStartedAt! } : {}),
+      };
+      tx.update(this.collection("orders").doc(id), patch);
+      return { applied: true, order: { ...order, ...patch } };
     });
   }
   async listLibrary(userId: string, development = allowsDevelopmentReports()) {
-    const [profiles, reports, orders] = await Promise.all(["profiles", "reports", "orders"].map(name => this.collection(name).where("userId", "==", userId).get()));
-    const paidOrders = new Map(orders.docs.map(doc => { const order = decode<Order>(doc)!; return [order.id, order]; }));
-    const allReports = reports.docs.map(doc => decode<Report>(doc)!).map(report => ({ ...report, order: report.orderId ? paidOrders.get(report.orderId) ?? null : null }));
-    return profiles.docs.map(doc => decode<Profile>(doc)!).sort((a,b) => b.createdAt.getTime()-a.createdAt.getTime()).map(profile => ({ ...profile, reports: allReports.filter(report => report.sajuProfileId === profile.id && report.userId === profile.userId && (development || canReadDevelopmentPreview(report, userId) || report.order?.status === "PAID" && report.order.sajuProfileId === profile.id && report.order.productCode === report.productCode)).sort((a,b) => b.createdAt.getTime()-a.createdAt.getTime()) }));
+    return (await this.listLibraryPage(userId, {}, development)).profiles;
+  }
+  async listLibraryPage(userId: string, options: { after?: string; relationship?: LibraryFilter; profile?: string; historyAfter?: string } = {}, development = allowsDevelopmentReports()) {
+    if (!validId(userId)) throw new Error("INVALID_IDENTITY");
+    const relationship = libraryFilter(options.relationship);
+    let query = this.collection("profiles").where("userId", "==", userId);
+    // A history link still scopes the profile lookup to its authenticated owner.
+    if (options.profile) {
+      if (!validId(options.profile)) return { profiles: [], nextCursor: null };
+      query = query.where(FieldPath.documentId(), "==", options.profile);
+    }
+    if (relationship !== "ALL") query = query.where("relationship", "==", relationship);
+    query = query.orderBy("createdAt", "desc").orderBy(FieldPath.documentId(), "desc");
+    const cursor = parseLibraryCursor(options.after);
+    if (cursor) query = query.startAfter(Timestamp.fromMillis(cursor.time), cursor.id);
+    const page = await query.select("userId", "name", "relationship", "birthDate", "birthTime", "isLunar", "createdAt").limit(LIBRARY_PAGE_SIZE + 1).get();
+    const docs = page.docs.slice(0, LIBRARY_PAGE_SIZE);
+    const profiles = await Promise.all(docs.map(async doc => {
+      const profile = decode<LibraryProfileRecord>(doc)!;
+      // Catalogue metadata only. Never load paid letter bodies or birth charts.
+      let reportQuery = this.collection("reports").where("userId", "==", userId).where("sajuProfileId", "==", profile.id)
+        .orderBy("createdAt", "desc").orderBy(FieldPath.documentId(), "desc");
+      const historyCursor = options.profile ? parseLibraryCursor(options.historyAfter) : null;
+      if (historyCursor) reportQuery = reportQuery.startAfter(Timestamp.fromMillis(historyCursor.time), historyCursor.id);
+      const snapshots = await reportQuery.select("userId", "sajuProfileId", "productCode", "status", "orderId", "createdAt", "developmentPreviewAccess").limit(LIBRARY_REPORT_LIMIT + 1).get();
+      const reportDocs = snapshots.docs.slice(0, LIBRARY_REPORT_LIMIT);
+      const reports = await Promise.all(reportDocs.map(async snapshot => {
+        const report = decode<LibraryReportRecord>(snapshot)!;
+        const order = report.orderId && validId(report.orderId)
+          ? decode<LibraryOrderRecord>((await this.database().getAll(this.collection("orders").doc(report.orderId), { fieldMask: ["userId", "sajuProfileId", "productCode", "status"] }))[0]) : null;
+        const paid = order?.userId === userId && order.status === "PAID" && order.sajuProfileId === profile.id && order.productCode === report.productCode;
+        // Older operator-granted previews predate catalogue metadata. Inspect only
+        // those explicit grants, retaining the existing nonempty-content check.
+        const preview = !order && report.orderId === null && report.status === "COMPLETED" && report.developmentPreviewAccess?.userId === userId
+          ? await this.getReport(report.id) : null;
+        if (!development && !paid && !(preview && canReadDevelopmentPreview(preview, userId))) return null;
+        return { id: report.id, productCode: report.productCode, status: report.status, createdAt: report.createdAt, order: paid ? order : null };
+      }));
+      const lastReport = reportDocs.at(-1);
+      const nextReportCursor = snapshots.size > LIBRARY_REPORT_LIMIT && lastReport ? Buffer.from(JSON.stringify({ time: lastReport.get("createdAt").toMillis(), id: lastReport.id })).toString("base64url") : null;
+      return { ...profile, nextReportCursor, reports: reports.filter(report => report !== null).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) };
+    }));
+    const last = profiles.at(-1);
+    const nextCursor = page.size > LIBRARY_PAGE_SIZE && last ? Buffer.from(JSON.stringify({ time: last.createdAt.getTime(), id: last.id })).toString("base64url") : null;
+    return { profiles, nextCursor };
   }
   async claimReport(id: string, patch: ReportPatch, userId: string, development = allowsDevelopmentReports()) {
     return this.transaction(async tx => {
@@ -178,6 +270,7 @@ export class FirebaseStore {
       const profile = await this.read<Profile>("profiles", report.sajuProfileId, tx);
       const order = report.orderId ? await this.read<Order>("orders", report.orderId, tx) : null;
       if (!profile || profile.userId !== userId || !development && (!order || order.status !== "PAID" || order.userId !== userId || order.sajuProfileId !== profile.id || order.productCode !== report.productCode)) throw new Error("PAYMENT_REQUIRED");
+      if (order && !isPaymentGenerationFresh(order)) throw new Error("PAYMENT_RECHECK_REQUIRED");
       // Recover an interrupted request after the serverless request budget expires.
       if (report.status === "GENERATING" && report.generationStartedAt && Date.now() - report.generationStartedAt.getTime() < 120_000) return null;
       const generationId = randomUUID();
@@ -189,6 +282,8 @@ export class FirebaseStore {
     return this.transaction(async tx => {
       const report = await this.read<Report>("reports", id, tx);
       if (!report || report.generationId !== generationId) throw new Error("REPORT_LEASE_LOST");
+      const order = report.orderId ? await this.read<Order>("orders", report.orderId, tx) : null;
+      if (report.orderId && (!order || order.status !== "PAID" || order.userId !== report.userId || order.paymentCheckState === "REJECTED")) throw new Error("PAYMENT_REQUIRED");
       tx.update(this.collection("reports").doc(id), encode(patch));
     });
   }
@@ -217,6 +312,20 @@ export class FirebaseStore {
       if (active && data.hits >= limit) return false;
       tx.set(ref, { hits: active ? data.hits + 1 : 1, resetAt: active ? data.resetAt : Timestamp.fromMillis(now + windowMs) });
       return true;
+    });
+  }
+  async reserveAccountReads(accountId: string) {
+    if (!validId(accountId)) throw new Error("INVALID_RATE_LIMIT");
+    const ref = this.collection("rateLimits").doc(stableId(accountId, "account-read-v1"));
+    return this.transaction(async tx => {
+      const data = (await tx.get(ref)).data();
+      const now = Date.now();
+      const resetAt = (Math.floor(now / READ_WINDOW_MS) + 1) * READ_WINDOW_MS;
+      const hits = data?.resetAt instanceof Timestamp && data.resetAt.toMillis() === resetAt ? data.hits : 0;
+      if (!Number.isSafeInteger(hits) || hits < 0) throw new Error("INVALID_READ_QUOTA");
+      const credits = Math.min(READ_LEASE_SIZE, Math.max(0, READ_ACCOUNT_LIMIT - hits));
+      if (credits) tx.set(ref, { hits: hits + credits, resetAt: Timestamp.fromMillis(resetAt) });
+      return { credits, resetAt };
     });
   }
 }
