@@ -423,7 +423,7 @@
 
 /* Review round 2: clear prices, themed pickers and distinct mascot reactions. */
 .commerce-home-link .commerce-home-product { display: block; text-decoration: none; }
-.commerce-home-price { display: block; margin: 3px 0 8px; font-size: 22px; font-weight: 750; }
+.commerce-home-price { display: block; margin: 3px 0 8px; font-family: "NeoDunggeunmo", monospace; font-size: 22px; font-weight: 400; }
 .retro-form[aria-busy="false"] > .retro-button:disabled { cursor: not-allowed; }
 .retro-date-time-input { display: flex; min-width: 0; position: relative; }
 .retro-date-time-input > .retro-input { padding-right: 42px; min-width: 0; font-size: 15px; }

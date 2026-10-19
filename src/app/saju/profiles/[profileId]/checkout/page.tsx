@@ -36,7 +36,7 @@ export default async function SajuCheckoutPage({ params }: { params: Promise<{ p
     <RetroPage><RetroWindow title="다봄 · 올해 운세 받기" closeHref="/saju/library">
       <div className="retro-library">
         <Link className="retro-back-link" href="/saju/library">← 내 운세함</Link>
-        <h1 className="retro-heading retro-checkout-heading">{profile.name}에게 온<br />2026년의 메시지</h1>
+        <h1 className="retro-heading retro-checkout-heading">{profile.name}님,<br />올해는 어떤 한 해가 될까?</h1>
         <div className="retro-library-card">
           <p>{relationshipLabel(profile.relationship)} · {profile.gender === "FEMALE" ? "여성" : "남성"}</p>
           <p>{profile.birthDate.toISOString().slice(0,10)} · {profile.isLunar ? `음력${profile.isLeapMonth ? " (윤달)" : ""}` : "양력"} · {profile.birthTime ?? "시각 모름"}</p>
