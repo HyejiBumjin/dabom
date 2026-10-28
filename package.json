@@ -23,6 +23,7 @@
     "security:dependencies": "node --test scripts/security-dependencies-check.test.mjs",
     "payment:check": "node --import tsx scripts/payment-client-check.ts",
     "profile:check": "node --import tsx scripts/report-request-client-check.ts",
+    "profile:age-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/profile-age-check.ts",
     "payment:mode-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/payment-mode-check.ts",
     "security:login-limit": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/security-login-rate-limit-check.ts",
     "security:read-limit": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/security-read-rate-limit-check.ts",

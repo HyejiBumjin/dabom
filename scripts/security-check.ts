@@ -56,7 +56,7 @@ let reportCount = 0;
 let cancelBetweenReadAndWrite = false;
 const order = () => ({ id: "order-fixture", merchantUid: provider.id, userId: "A", amount: 3900, status: paymentStatus, paidAt: null, product: { id: "product-fixture", price: 3900, code: "yearly_2026", active: true }, sajuProfileId: "profile-fixture", sajuProfile: { userId: profileOwner } });
 store.consumeRateLimit = async () => !rateBlocked;
-store.getProfile = (async () => ({ id: "profile-fixture", userId: profileOwner })) as never;
+store.getProfile = (async () => ({ id: "profile-fixture", userId: profileOwner, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false })) as never;
 store.getProduct = (async () => order().product) as never;
 store.getOrder = (async () => {
   const found = { ...order(), productCode: "yearly_2026" };

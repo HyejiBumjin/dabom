@@ -15,7 +15,7 @@ export const merchant = {
 };
 
 export const YEARLY_PRICE = 3900;
-export const POLICY_VERSION = "2026-10-28.1";
+export const POLICY_VERSION = "2026-10-28.2";
 // Enable only after the privacy transfer/retention procedures are verified.
 export const POLICY_EFFECTIVE_DATE: string | null = null;
 export function isCommerceReady() {

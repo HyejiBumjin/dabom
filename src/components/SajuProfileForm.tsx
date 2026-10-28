@@ -8,6 +8,7 @@ import { ExistingFortuneNotice } from "@/components/ExistingFortuneNotice";
 import { BirthDateInput, BirthTimeInput } from "@/components/BirthDateTimeInput";
 import { PROFILE_DRAFT_KEY as DRAFT_KEY, restoreProfileDraft } from "@/lib/profile-draft";
 import { ReportLoginRequired, requestSajuReport } from "@/lib/saju/report-request-client";
+import { birthDateEligibilityError } from "@/lib/saju/age-policy";
 
 export function SajuProfileForm({ accountId }: { accountId: string }) {
   const router = useRouter();
@@ -18,7 +19,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
   const [birthDate, setBirthDate] = useState(isDevelopment ? "1995-05-20" : "");
   const [birthTime, setBirthTime] = useState(isDevelopment ? "20:20" : "");
   const [timeUnknown, setTimeUnknown] = useState(false);
-  const [calendar, setCalendar] = useState("solar");
+  const [calendar, setCalendar] = useState<"solar" | "lunar">("solar");
   const [isLeapMonth, setIsLeapMonth] = useState(false);
   const [pending, setPending] = useState(false);
   const submissionInFlight = useRef(false);
@@ -31,6 +32,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
   const libraryNavigationInFlight = useRef(false);
   const nameInput = useRef<HTMLInputElement>(null);
   const inputReady = profileInputSchema.safeParse({ name, relationship, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth }).success;
+  const birthDateError = birthDate.length === 10 ? birthDateEligibilityError({ birthDate, calendar, isLeapMonth }) : null;
   useEffect(() => () => {
     activeRequest.current?.abort();
     if (navigationTimer.current) clearTimeout(navigationTimer.current);
@@ -120,7 +122,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     if (submissionInFlight.current) return;
     setError(null);
     if (!inputReady) {
-      setError("이름, 성별, 생년월일과 태어난 시각을 입력해 주세요.");
+      setError(birthDateError ?? "이름, 성별, 생년월일과 태어난 시각을 입력해 주세요.");
       return;
     }
     submissionInFlight.current = true;
@@ -183,7 +185,11 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
           </fieldset>
           <div className="retro-field">
             <label htmlFor="birthDate">생년월일</label>
-            <BirthDateInput value={birthDate} lunar={calendar === "lunar"} onChange={setBirthDate} />
+            <div>
+              <BirthDateInput value={birthDate} lunar={calendar === "lunar"} onChange={setBirthDate} describedBy={`birth-age-help${birthDateError ? " birth-age-error" : ""}`} invalid={Boolean(birthDateError)} />
+              <p id="birth-age-help" className="retro-form-help">만 14세 이상인 사람의 정보만 입력해줘.<br />가족·친구도 같아. 음력은 양력으로 바꾼 생일로 확인해.</p>
+              {birthDateError && <p id="birth-age-error" className="retro-error" role="status">{birthDateError}</p>}
+            </div>
           </div>
           <fieldset className="retro-choice-field">
             <legend>달력 기준</legend>
@@ -191,7 +197,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
               {[{ value: "solar", label: "양력" }, { value: "lunar", label: "음력" }].map(option => (
                 <label className="retro-choice" key={option.value}>
                   <input type="radio" name="calendar" value={option.value} checked={calendar === option.value} onChange={event => {
-                    setCalendar(event.target.value);
+                    setCalendar(option.value as "solar" | "lunar");
                     if (event.target.value === "solar") setIsLeapMonth(false);
                   }} />
                   {option.label}

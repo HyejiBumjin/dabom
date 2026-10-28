@@ -84,10 +84,10 @@ function TimePicker({ value, onChange, onClose }: { value: string; onChange: (va
   </PickerDialog>;
 }
 
-export function BirthDateInput({ value, lunar, onChange }: { value: string; lunar: boolean; onChange: (value: string) => void }) {
+export function BirthDateInput({ value, lunar, onChange, describedBy, invalid }: { value: string; lunar: boolean; onChange: (value: string) => void; describedBy?: string; invalid?: boolean }) {
   const [open, setOpen] = useState(false);
   return <div className="retro-date-time-input">
-    <input className="retro-input" id="birthDate" name="birthDate" type="text" inputMode="numeric" autoComplete="bday" placeholder="1995-05-20" maxLength={10} pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" value={value} required
+    <input className="retro-input" id="birthDate" name="birthDate" type="text" inputMode="numeric" autoComplete="bday" placeholder="1995-05-20" maxLength={10} pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" value={value} required aria-describedby={describedBy} aria-invalid={invalid || undefined}
       onChange={event => {
         const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
         onChange(digits.slice(0, 4) + (digits.length > 4 ? `-${digits.slice(4, 6)}` : "") + (digits.length > 6 ? `-${digits.slice(6)}` : ""));

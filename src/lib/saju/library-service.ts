@@ -7,6 +7,7 @@ import { SAJU_PRODUCT_CODE, type ProfileInput } from "@/lib/saju/profile-input";
 import { canReadSajuReport } from "@/lib/saju/account";
 import { allowsDevelopmentReports } from "@/lib/portone/payment-mode";
 import { requireVerifiedPayment } from "@/lib/portone/entitlement";
+import { assertProfileAge } from "./profile-age";
 
 const reportMetadata = () => ({ productCode: SAJU_PRODUCT_CODE, promptVersion: getReportPrompt().version, model: getConfiguredReportModel() });
 export function profileBirthKey(input: ProfileInput) {
@@ -19,6 +20,7 @@ export async function findExistingSajuReport(userId: string, input: ProfileInput
 }
 export async function saveSajuProfile(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore) {
   if (!userId) throw new Error("LOGIN_REQUIRED");
+  assertProfileAge({ birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth });
   const account = await db.getAccount(userId);
   if (!account) throw new Error("ACCOUNT_UNAVAILABLE");
   const birthKey = profileBirthKey(input);

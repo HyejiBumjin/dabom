@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { birthDateEligibilityError } from "./age-policy";
 
 export const RELATIONSHIPS = [
   { value: "SELF", label: "나" },
@@ -26,6 +27,9 @@ export const profileInputSchema = z.object({
   birthTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/).nullable(),
   calendar: z.enum(["solar", "lunar"]),
   isLeapMonth: z.boolean(),
+}).superRefine((input, context) => {
+  const error = birthDateEligibilityError(input);
+  if (error) context.addIssue({ code: "custom", path: ["birthDate"], message: error });
 }).transform(input => ({ ...input, isLeapMonth: input.calendar === "lunar" && input.isLeapMonth }));
 
 export type ProfileInput = z.output<typeof profileInputSchema>;

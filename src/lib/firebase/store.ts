@@ -6,6 +6,7 @@ import type { Relationship } from "@/lib/saju/profile-input";
 import { canReadDevelopmentPreview, type DevelopmentPreviewAccess } from "@/lib/saju/report-preview-access";
 import { allowsDevelopmentReports, paymentCollectionPrefix } from "@/lib/portone/payment-mode";
 import { recordCheckoutConsent, type CheckoutConsentRecord } from "@/lib/commerce/policy";
+import { assertProfileAge } from "@/lib/saju/profile-age";
 import { READ_ACCOUNT_LIMIT, READ_LEASE_SIZE, READ_WINDOW_MS } from "@/lib/security/read-rate-limit";
 import { LIBRARY_PAGE_SIZE, LIBRARY_REPORT_LIMIT, libraryFilter, parseLibraryCursor, type LibraryFilter } from "@/lib/saju/library-page";
 import { isPaymentReadFresh, isPaymentGenerationFresh, PAYMENT_CHECK_LEASE_MS, PAYMENT_CHECK_RETRY_MS, type PaymentVerification, type PaymentCheckOutcome } from "@/lib/portone/verification-policy";
@@ -105,6 +106,7 @@ export class FirebaseStore {
     return { ...report, sajuProfile: profile, order: linked };
   }
   async saveProfile(data: Omit<Profile, "id" | "createdAt">, expectedEpoch: string) {
+    assertProfileAge(data);
     return this.transaction(async tx => {
       const account = await this.requireActiveAccount(data.userId, tx);
       if ((account.dataEpoch ?? "legacy") !== expectedEpoch) throw new Error("ACCOUNT_CHANGED");
@@ -130,6 +132,7 @@ export class FirebaseStore {
       const id = this.reportId(profileId, metadata.productCode);
       const existing = await this.read<Report>("reports", id, tx);
       if (existing && (existing.userId !== userId || existing.sajuProfileId !== profileId)) throw new Error("REPORT_OWNER_MISMATCH");
+      if (existing?.status !== "COMPLETED") assertProfileAge(profile);
       const report = existing ?? this.newReport(userId, profileId, metadata, orderId);
       if (!existing) tx.create(this.collection("reports").doc(id), encode(report));
       else if (orderId && existing.orderId !== orderId) tx.update(this.collection("reports").doc(id), { orderId });
@@ -141,6 +144,7 @@ export class FirebaseStore {
       await this.requireActiveAccount(userId, tx);
       const profile = await this.read<Profile>("profiles", profileId, tx);
       if (!profile || profile.userId !== userId) throw new Error("PROFILE_NOT_FOUND");
+      assertProfileAge(profile);
       const product = await this.read<Product>("products", metadata.productCode, tx);
       if (!product || !product.active || !Number.isSafeInteger(product.price) || product.price <= 0) throw new Error("PRODUCT_UNAVAILABLE");
       const id = this.orderId(userId, profileId, product.code);
@@ -297,6 +301,7 @@ export class FirebaseStore {
       const profile = await this.read<Profile>("profiles", report.sajuProfileId, tx);
       const order = report.orderId ? await this.read<Order>("orders", report.orderId, tx) : null;
       if (!profile || profile.userId !== userId || !development && (!order || order.status !== "PAID" || order.userId !== userId || order.sajuProfileId !== profile.id || order.productCode !== report.productCode)) throw new Error("PAYMENT_REQUIRED");
+      assertProfileAge(profile);
       if (order && !isPaymentGenerationFresh(order)) throw new Error("PAYMENT_RECHECK_REQUIRED");
       // Recover an interrupted request after the serverless request budget expires.
       if (report.status === "GENERATING" && report.generationStartedAt && Date.now() - report.generationStartedAt.getTime() < 120_000) return null;
