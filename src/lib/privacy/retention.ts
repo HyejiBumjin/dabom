@@ -8,6 +8,7 @@ export const RETENTION = {
   advertisingMonths: 6,
   defaultLogDays: 30,
   requiredAuditLogDays: 400,
+  backupDays: 7,
 } as const;
 
 export function afterYears(date: Date, years: number) {

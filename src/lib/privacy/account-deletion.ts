@@ -93,7 +93,10 @@ export async function eraseAccount(stores: FirebaseStore[], auth: DeletionAuth, 
     // A placeholder also blocks a concurrent first login in the other namespace.
     for (const user of users) tx.set(user.ref, { deletionPending: true, deletionCaseId: caseId }, { merge: true });
     tx.update(request.ref, { status: "PROCESSING" });
-    tx.set(job, { userId: uid, status: "PENDING", startedAt: existingJob?.startedAt ?? new Date(), purgeAt: null });
+    // Keep the account generation with the deletion receipt. A restored backup
+    // must not mistake a later re-registration for the deleted account.
+    const accounts = users.map(user => ({ namespace: user.ref.parent.id, createdAt: user.get("createdAt") ?? null, dataEpoch: user.get("dataEpoch") ?? null }));
+    tx.set(job, { userId: uid, status: "PENDING", startedAt: existingJob?.startedAt ?? new Date(), accounts: existingJob?.accounts ?? accounts, purgeAt: null });
   });
   await ignoreMissingUser(() => auth.updateUser(uid, { disabled: true }));
   await ignoreMissingUser(() => auth.revokeRefreshTokens(uid));
