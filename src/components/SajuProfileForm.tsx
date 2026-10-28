@@ -7,6 +7,7 @@ import { RELATIONSHIPS, profileInputSchema, type Relationship } from "@/lib/saju
 import { ExistingFortuneNotice } from "@/components/ExistingFortuneNotice";
 import { BirthDateInput, BirthTimeInput } from "@/components/BirthDateTimeInput";
 import { PROFILE_DRAFT_KEY as DRAFT_KEY, restoreProfileDraft } from "@/lib/profile-draft";
+import { ReportLoginRequired, requestSajuReport } from "@/lib/saju/report-request-client";
 
 export function SajuProfileForm({ accountId }: { accountId: string }) {
   const router = useRouter();
@@ -96,6 +97,24 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     navigate("/saju/library");
   }
 
+  async function prepareReport(profileId: string, controller: AbortController, signal: AbortSignal) {
+    try {
+      const result = await requestSajuReport(profileId, signal);
+      if (controller.signal.aborted) return;
+      if (result.kind === "existing") { showExistingFortune(); return; }
+      navigate(result.href);
+    } catch (cause) {
+      if (controller.signal.aborted) throw cause;
+      if (cause instanceof ReportLoginRequired) {
+        const input = { name, relationship, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth };
+        try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ accountId, input })); } catch { /* Login still works without draft storage. */ }
+        navigate("/login?next=%2Fsaju");
+        return;
+      }
+      throw cause;
+    }
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submissionInFlight.current) return;
@@ -121,13 +140,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
       if (!response.ok) throw new Error(data.error || "저장하지 못했습니다.");
       try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* Optional storage. */ }
       if (data.existingReport) { showExistingFortune(); return; }
-      const reportResponse = await fetch(`/api/saju/profiles/${data.profileId}/reports`, { method: "POST", signal });
-      const reportData = await reportResponse.json();
-      if (controller.signal.aborted) return;
-      if (reportResponse.status === 402) { navigate(`/saju/profiles/${encodeURIComponent(data.profileId)}/checkout`); return; }
-      if (!reportResponse.ok) throw new Error(reportData.error || "리포트를 준비하지 못했습니다.");
-      if (reportData.existing) { showExistingFortune(); return; }
-      navigate(`/saju/reports/${encodeURIComponent(reportData.reportId)}`);
+      await prepareReport(data.profileId, controller, signal);
     } catch (cause) {
       if (controller.signal.aborted) return;
       setError(signal.aborted ? "연결이 오래 걸리고 있어. 잠시 뒤 다시 눌러줘. 기존 운세는 운세함에서 확인할 수 있어." : cause instanceof Error ? cause.message : "저장 중 오류가 발생했습니다.");
@@ -141,7 +154,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
   return (
     <>
       <form onSubmit={submit} className="retro-form" aria-busy={pending} aria-describedby={error ? "profile-error" : undefined}>
-        <fieldset className="retro-form-panel" disabled={pending} aria-label="생년월일 정보">
+        <fieldset className="retro-form-panel" disabled={pending} aria-label="운세 입력 정보">
           <fieldset className="retro-choice-field">
             <legend>누구의 운세?</legend>
             <div className="retro-choice-options retro-relationship-options">

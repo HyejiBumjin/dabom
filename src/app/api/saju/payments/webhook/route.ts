@@ -15,12 +15,24 @@ export async function POST(request: Request) {
     const raw = await readRequestText(request, 65536);
     webhook = await Webhook.verify(env.PORTONE_WEBHOOK_SECRET, raw, Object.fromEntries(request.headers));
   } catch (error) {
+    // Log only SDK-defined categories, never headers, payloads, IDs or secrets.
+    console.warn("[payment-webhook] rejected", {
+      reason: error instanceof Webhook.WebhookVerificationError
+        ? error.reason
+        : error instanceof RequestSecurityError ? "REQUEST_REJECTED" : "INVALID_PAYLOAD",
+    });
     return privateJson({ error: "유효하지 않은 결제 알림이야." }, error instanceof RequestSecurityError ? error.status : 400);
   }
   if (typeof webhook.type !== "string" || !webhook.type.startsWith("Transaction.") || !("data" in webhook) || !("paymentId" in webhook.data)) return privateJson({ ok: true });
-  if (webhook.data.storeId !== env.NEXT_PUBLIC_PORTONE_STORE_ID) return privateJson({ error: "상점이 일치하지 않아." }, 400);
+  if (webhook.data.storeId !== env.NEXT_PUBLIC_PORTONE_STORE_ID) {
+    console.warn("[payment-webhook] rejected", { reason: "STORE_MISMATCH" });
+    return privateJson({ error: "상점이 일치하지 않아." }, 400);
+  }
   const paymentId = webhook.data.paymentId;
-  if (!paymentId || paymentId.length > 80) return privateJson({ error: "결제 번호를 확인해줘." }, 400);
+  if (!paymentId || paymentId.length > 80) {
+    console.warn("[payment-webhook] rejected", { reason: "INVALID_PAYMENT_ID" });
+    return privateJson({ error: "결제 번호를 확인해줘." }, 400);
+  }
   try {
     const order = await firebaseStore.getOrder(paymentId);
     if (!order || order.productCode !== SAJU_PRODUCT_CODE) return privateJson({ ok: true });

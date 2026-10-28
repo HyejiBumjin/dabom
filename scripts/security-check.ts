@@ -115,6 +115,10 @@ function signedWebhook(body: unknown, options: { timestamp?: number; signature?:
 async function main() {
   const draft = JSON.stringify({ accountId: "A", input });
   check("same account can restore its validated profile draft", restoreProfileDraft(draft, "A")?.name === input.name);
+  const oldTopicDraft = JSON.stringify({ accountId: "A", input: { ...input, focusTopics: ["career", "money"] } });
+  const restoredOldDraft = restoreProfileDraft(oldTopicDraft, "A");
+  check("old interest selections are dropped while valid birth input is restored", restoredOldDraft?.name === input.name && restoredOldDraft.birthDate === input.birthDate && !("focusTopics" in restoredOldDraft));
+  check("old interest drafts remain isolated by account", restoreProfileDraft(oldTopicDraft, "B") === null);
   check("B cannot restore late A draft", restoreProfileDraft(draft, "B") === null);
   check("legacy unscoped birth/name draft is discarded", restoreProfileDraft(JSON.stringify(input), "B") === null);
   check("malformed draft never exposes input", restoreProfileDraft("{", "A") === null);
@@ -153,6 +157,22 @@ async function main() {
   check("interrupted purchase can resume after login", safeReturnPath("/saju/checkout/return?orderId=fixture") === "/saju/checkout/return?orderId=fixture");
   const { createElement } = require("react") as typeof import("react");
   const { renderToStaticMarkup } = require("react-dom/server") as typeof import("react-dom/server");
+  const { QueryProvider } = require("../src/components/providers/query-provider") as typeof import("../src/components/providers/query-provider");
+  const { AccountPrivacyBoundary } = require("../src/components/AccountPrivacyBoundary") as typeof import("../src/components/AccountPrivacyBoundary");
+  const { TopNav } = require("../src/components/TopNav") as typeof import("../src/components/TopNav");
+  const renderWithQueries = (node: import("react").ReactNode) => renderToStaticMarkup(createElement(QueryProvider, { children: node }));
+  const privateMarker = "private-account-fixture@example.test";
+  const protectedInitialHtml = renderWithQueries(createElement(AccountPrivacyBoundary, { accountId: "A", returnPath: "/saju/library", children: privateMarker }));
+  check("private pages stay hidden until browser identity revalidation", !protectedInitialHtml.includes(privateMarker) && protectedInitialHtml.includes('aria-busy="true"'));
+  const navInitialHtml = renderWithQueries(createElement(AccountPrivacyBoundary, { accountId: "A", returnPath: "/", compact: true, publicFallback: createElement(TopNav, { loggedIn: true, showLibraryLink: false }), children: privateMarker }));
+  check("logout renders before hydration without exposing account details", navInitialHtml.includes("로그아웃") && !navInitialHtml.includes(privateMarker) && !navInitialHtml.includes('aria-busy="true"'));
+  const LandingPage = require("../src/app/(public)/page").default as typeof import("../src/app/(public)/page").default;
+  const loggedInHome = renderWithQueries(await LandingPage());
+  check("authenticated home includes one logout button in its first HTML", (loggedInHome.match(/로그아웃/gu) ?? []).length === 1);
+  identity = null;
+  const guestHome = renderWithQueries(await LandingPage());
+  check("guest home initially renders login instead of logout", guestHome.includes('href="/login"') && !guestHome.includes("로그아웃"));
+  identity = "A";
   const { MessageReport } = require("../src/components/MessageReport") as typeof import("../src/components/MessageReport");
   const xssHtml = renderToStaticMarkup(createElement(MessageReport, { content: { paragraphs: ['<img src=x onerror="alert(1)">', '<script>alert(1)</script>'], meta: { charCount: 0, beats: [], termsUsed: [] } } }));
   check("model/report HTML is escaped rather than executed", !xssHtml.includes('<img src=x') && !xssHtml.includes('<script>') && xssHtml.includes('&lt;script&gt;'));
@@ -166,6 +186,7 @@ async function main() {
   assertSameOrigin(request("/x")); check("same-origin allowed", true);
   for (const birthDate of ["0000-01-01", "9999-01-01", "2025-02-29", "2026-02-31", "2026-13-01", "1995-05-20 OR 1=1"]) check(`invalid birth rejected ${birthDate}`, !profileInputSchema.safeParse({ ...input, birthDate }).success);
   for (const field of [{ name: "a".repeat(41) }, { name: "abc\u202Edef" }, { birthTime: "24:00" }, { gender: "admin" }, { relationship: "ADMIN" }]) check("invalid profile field rejected", !profileInputSchema.safeParse({ ...input, ...field }).success);
+  check("stale clients cannot persist interest selections", !("focusTopics" in profileInputSchema.parse({ ...input, focusTopics: ["career"] })));
   const massAssigned = profileInputSchema.parse({ ...input, userId: "B", status: "PAID", orderId: "stolen", role: "admin", developmentPreviewAccess: { userId: "B", grantedAt: new Date().toISOString() } });
   check("owner/payment/preview grant fields cannot be mass assigned", !("userId" in massAssigned) && !("status" in massAssigned) && !("developmentPreviewAccess" in massAssigned));
   await assert.rejects(() => readJsonBody(request("/x", {}, { "content-type": "text/plain" }))); check("simple cross-site form content type denied", true);

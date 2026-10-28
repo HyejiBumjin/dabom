@@ -1,7 +1,8 @@
 import { DAY_MASTER_SCRIPT, INTERACTION_SCRIPT, TEN_GOD_GROUP_SCRIPT, type ScriptSource } from "@/lib/saju/script-database";
 import type { ReportDomain, ReportFacts } from "@/lib/saju/report-facts";
+import { BRANCH_RELATION_MEANINGS, createReportDetailCorpus } from "@/lib/saju/report-detail-corpus";
 
-export const CORPUS_VERSION = "2026.2";
+export const CORPUS_VERSION = "2026.4-personalized";
 export const REPORT_OUTLINE: Array<{ id: ReportDomain; title: string }> = [
   { id: "essence", title: "본질과 성향" },
   { id: "yearly", title: "2026년 환경적 흐름" },
@@ -11,7 +12,7 @@ export const REPORT_OUTLINE: Array<{ id: ReportDomain; title: string }> = [
   { id: "summary", title: "총평과 행동 가이드" },
 ];
 
-type FactField = "dayMaster" | "annualTenGod" | "dominantTenGodGroup" | "mentalInteraction" | "monthlyRelation" | "careerPattern" | "daYunTenGod" | "hasNatalClash" | "hasRepeatedNatalBranch" | "daYunNatalRelation" | "annualDaYunTheme";
+type FactField = "dayMaster" | "annualTenGod" | "dominantTenGodGroup" | "mentalInteraction" | "monthlyRelation" | "careerPattern" | "daYunTenGod" | "hasNatalClash" | "hasRepeatedNatalBranch" | "daYunNatalRelation" | "annualDaYunTheme" | "natalMonthTenGod" | "natalMonthMainTenGod" | "hasAnnualClash" | "hasAnnualCombination";
 export interface CorpusCondition { field: FactField; equals: string | string[]; }
 export interface CorpusFragment {
   id: string;
@@ -104,7 +105,12 @@ const tenGodFragments = Object.entries(TEN_GOD_GROUP_SCRIPT).map(([group, source
 const annualFragments = Object.entries(annualSource).map(([god, source]) => sourceFragment(`F-ANNUAL-${god}`, ["yearly"], [{ field: "annualTenGod", equals: god }], ["annual-ten-god"], source, 4, "올해의 바깥 환경으로만 풀고, 취업·합격·수입을 예언하지 않는다.", ANNUAL_SCENE_ANCHORS[god]));
 const interactionFragments = Object.entries(INTERACTION_SCRIPT).flatMap(([key, source]) => {
   if (key === "화극금" || key === "수극화") return [sourceFragment(`F-INTERACTION-${key}`, ["mental"], [{ field: "mentalInteraction", equals: key }], ["mental-interaction"], source, 4, "건강 진단이나 사건 예고 없이, 감정과 행동의 패턴으로만 풀어낸다.", key === "화극금" ? ["이불 킥", "더 잘", "채찍"] : ["현타", "카톡", "혼자"])];
-  return [sourceFragment(`F-MONTHLY-${key}`, ["relation"], [{ field: "monthlyRelation", equals: key === "충" ? "clash" : "combination" }], ["monthly-relation"], source, 4, "관계의 종료·이별·사고를 단정하지 말고, 해당 월의 대화와 일정 리듬으로만 쓴다.", key === "충" ? ["단톡방", "알림", "섭섭"] : ["파트너", "발", "답답"])];
+  const relation = key === "충" ? "clash" : "combination";
+  const meaning = BRANCH_RELATION_MEANINGS[relation];
+  return [{
+    ...sourceFragment(`F-MONTHLY-${key}`, ["relation"], [{ field: "monthlyRelation", equals: relation }], ["monthly-relation"], { mechanism: meaning.mechanism, translation: meaning.translation, concreteScene: "" }, 4, "해당 월의 월운과 원국 사이에서 확인한 관계만 설명한다. 기회와 조율 조건을 함께 읽고, 감정·갈등·이별·사고·성사를 단정하지 않는다. 다른 관계인 달까지 이 해석을 적용하지 않는다.", []),
+    expansion: { mechanismSteps: ["해당 월 지지와 원국의 관계 확인", meaning.meaning, meaning.decisionRule], sceneVariants: [], decisionRule: meaning.decisionRule, repetitionGuard: "월별 조건의 차이를 설명하고 같은 관계의 정의와 조언을 반복하지 않는다." },
+  }];
 });
 
 const careerFragments: CorpusFragment[] = [
@@ -115,7 +121,7 @@ const careerFragments: CorpusFragment[] = [
 ];
 
 const defaultFragments: CorpusFragment[] = [
-  { id: "F-YEARLY-ROLE-RESULTS", status: "approved", version: CORPUS_VERSION, domains: ["yearly"], direction: "mixed", strength: 5, conditions: [{ field: "annualDaYunTheme", equals: "role-and-results" }], grounds: ["annual-da-yun-theme", "annual-ten-god", "da-yun-ten-god"], mechanism: "올해는 정관이 맡은 역할·평가를 선명하게 만들고, 현재 대운의 재성은 그 역할이 실제로 남기는 결과와 자원을 따지게 만든다. 요구를 다 받아내는 것과 내 이름으로 남길 일을 고르는 것이 같은 문제가 된다.", translation: "‘일을 많이 하는 사람’보다 ‘내가 끝낸 결과물이 분명한 사람’ 쪽으로 움직여야 덜 소모되는 해. 부탁을 받을 때도 착한 사람 모드로 다 받기보다, 이 일이 포트폴리오·조건·경험 중 무엇으로 남는지 보는 판.", concreteScene: "팀장에게 새 일을 받았을 때 바로 ‘네’부터 치기보다, 마감·담당 범위·내 이름으로 남는 결과물을 먼저 묻는 장면. 회의 뒤에는 받은 일을 메모로 정리하고, 이번 분기에 보여 줄 작업 하나를 따로 남겨 두는 장면.", sceneAnchors: ["마감", "담당 범위", "결과물"], guidance: "정관과 정재를 따로 설명하지 말고, 올해의 역할 압박과 10년의 실속 감각이 한 선택에서 만난다는 구조로 풀어낸다. 월운 달은 이 fragment에서 쓰지 않는다." },
+  { id: "F-YEARLY-ROLE-RESULTS", status: "approved", version: CORPUS_VERSION, domains: ["yearly"], direction: "mixed", strength: 5, conditions: [{ field: "annualDaYunTheme", equals: "role-and-results" }], grounds: ["annual-da-yun-theme", "annual-ten-god", "da-yun-ten-god"], mechanism: "올해의 관성은 맡은 역할과 요구되는 기준을 읽는 근거이고, 현재 대운의 재성은 자원의 활용과 관리를 읽는 장기 배경이다. 올해 맡을 역할에 필요한 자원과 책임의 범위를 함께 살피는 구조로 연결한다.", translation: "‘일을 많이 하는 사람’보다 ‘내가 끝낸 결과물이 분명한 사람’ 쪽으로 움직여야 덜 소모되는 해. 부탁을 받을 때도 착한 사람 모드로 다 받기보다, 이 일이 포트폴리오·조건·경험 중 무엇으로 남는지 보는 판.", concreteScene: "팀장에게 새 일을 받았을 때 바로 ‘네’부터 치기보다, 마감·담당 범위·내 이름으로 남는 결과물을 먼저 묻는 장면. 회의 뒤에는 받은 일을 메모로 정리하고, 이번 분기에 보여 줄 작업 하나를 따로 남겨 두는 장면.", sceneAnchors: ["마감", "담당 범위", "결과물"], guidance: "실제 annualTenGod와 daYunTenGod를 확인해 각각의 명칭과 의미를 사용한다. 편관을 정관으로, 편재를 정재로 바꾸지 않는다. 올해 맡을 역할과 대운의 자원 관리가 한 선택에서 어떻게 만나는지 설명하고 월운 달은 넣지 않는다." },
   { id: "F-ESSENCE-REPEATED-BRANCH", status: "approved", version: CORPUS_VERSION, domains: ["essence"], direction: "neutral", strength: 3, conditions: [{ field: "hasRepeatedNatalBranch", equals: "true" }], grounds: ["natal-branch-overlap"], mechanism: "원국 안에서 같은 지지가 겹친다는 계산값이 있다. 같은 결의 감정·관심사·반응을 한 번 더 붙잡고 확인하는 패턴을 읽는 보조 근거로 쓴다.", translation: "마음에 걸린 감정이나 관심사를 반복해서 확인하는 반응을 읽는 보조 해석.", concreteScene: "대화는 끝났는데 집에 와서 ‘아까 그 말은 무슨 뜻이었지?’ 하고 카톡을 다시 열어보는 장면. 이미 정리한 파일도 마지막으로 한 번 더 열어보고 닫는 장면.", sceneAnchors: ["카톡", "다시", "파일"], guidance: "반복 지지는 성격의 단정이나 길흉이 아니다. 일간 fragment를 보조하는 ‘반복 확인’ 장면으로만 한 번 사용한다." },
   { id: "F-RELATION-NATAL-CLASH", status: "approved", version: CORPUS_VERSION, domains: ["relation"], direction: "mixed", strength: 4, conditions: [{ field: "hasNatalClash", equals: "true" }], grounds: ["natal-branch-clash"], mechanism: "원국 안에 서로 부딪히는 지지 관계가 계산된다. 관계를 끊는다는 뜻이 아니라, 마음으로는 참다가도 일정·말투·거리감이 어긋나면 한 번에 불편함이 올라오는 반응 재료로 쓴다.", translation: "평소에는 맞춰 주다가도 ‘이건 내 방식이 아니야’ 싶은 순간에는 속도가 확 바뀔 수 있는 결. 문제는 사람이 아니라, 참는 시간과 말하는 타이밍이 엇갈리는 데서 생기기 쉽다.", concreteScene: "회의나 약속에서는 괜찮다고 넘겼는데 집에 와서 갑자기 기분이 올라와 답장 창을 열었다 닫는 장면. 서운한 이유를 바로 말하지 못하고, 먼저 일정부터 취소하고 싶어지는 장면.", sceneAnchors: ["답장 창", "서운", "일정"], guidance: "관계 문단의 고유 재료다. 3·4·10월을 다시 나열하지 말고, 원국 내부의 반응 패턴과 말하는 타이밍만 다룬다." },
   { id: "F-CAREER-DAYUN-COMBINATION", status: "approved", version: CORPUS_VERSION, domains: ["career"], direction: "mixed", strength: 4, conditions: [{ field: "daYunNatalRelation", equals: "combination" }], grounds: ["da-yun-branch-relation"], mechanism: "현재 대운의 지지와 원국 지지가 합으로 계산된다. 긴 흐름에서 혼자 속도만 내기보다, 이미 가진 환경·협업·기존 경험과 엮여 결과를 만드는 재료로 쓴다.", translation: "완전히 새 판을 뒤집기보다 지금 연결된 사람·기술·경력을 조합해서 내 몫을 만드는 10년의 결. 남의 방식에 끌려가기만 하라는 뜻은 아니고, 혼자 새로 시작하는 비용을 따져 보라는 뜻.", concreteScene: "완전히 새로운 공부를 벌이기보다, 지금 하던 업무에서 맡은 파트를 조금 더 선명하게 만들어 포트폴리오 한 줄로 바꾸는 장면. 협업할 때도 내 담당 범위를 문서로 남겨 두는 장면.", sceneAnchors: ["협업", "담당 범위", "문서"], guidance: "대운 지지의 합은 현재 대운의 실속 fragment를 보완한다. 연애·결혼·특정 파트너를 예언하지 말고, 협업과 경력 자산의 결합으로만 푼다." },
@@ -128,7 +134,7 @@ const defaultFragments: CorpusFragment[] = [
 
 const summaryFragment: CorpusFragment = { id: "F-SUMMARY-RESULT", status: "approved", version: CORPUS_VERSION, domains: ["summary"], direction: "neutral", strength: 3, conditions: [], grounds: ["da-yun-ten-god", "annual-ten-god"], mechanism: "대운은 긴 흐름의 배경이고 세운은 올해의 환경이다. 둘을 합쳐 당장 무슨 일이 일어난다고 결론내리지는 않는다.", translation: "더 많은 일을 벌이는 것보다 이미 가진 준비를 손에 남는 결과물로 바꾸는 쪽에 힘이 실리는 해.", concreteScene: "이번 주 할 일 중 남에게 보여 줄 하나, 돈이나 시간을 아낄 하나, 미뤄 둔 대화 하나를 골라 끝내는 장면.", sceneAnchors: ["이번 주", "결과물", "대화"], guidance: "한 줄 응원으로 마무리하되 운명적 약속을 하지 않는다." };
 
-export const INTERPRETATION_CORPUS: CorpusFragment[] = [...dayMasterFragments, ...tenGodFragments, ...annualFragments, ...interactionFragments, ...careerFragments, ...defaultFragments, summaryFragment];
+export const INTERPRETATION_CORPUS: CorpusFragment[] = [...dayMasterFragments, ...tenGodFragments, ...annualFragments, ...interactionFragments, ...careerFragments, ...defaultFragments, ...createReportDetailCorpus(CORPUS_VERSION), summaryFragment];
 
 function matches(fragment: CorpusFragment, facts: ReportFacts) {
   return fragment.status === "approved" && fragment.conditions.every((condition) => {

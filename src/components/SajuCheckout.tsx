@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { requestPayment } from "@portone/browser-sdk/v2";
 import { CheckoutLoginRequired, postCheckout, preparedCheckoutSchema } from "@/lib/portone/checkout-client";
 import Link from "next/link";
-import { POLICY_VERSION, checkoutNotices } from "@/lib/commerce/policy";
+import { POLICY_VERSION, checkoutNotices, merchant } from "@/lib/commerce/policy";
 
-export function SajuCheckout({ profileId, price, available, testMode = false }: { profileId: string; price: number; available: boolean; testMode?: boolean }) {
+export function SajuCheckout({ profileId, paymentCustomerId, price, available, testMode = false }: { profileId: string; paymentCustomerId: string; price: number; available: boolean; testMode?: boolean }) {
   const [pending, setPending] = useState(false);
   const [step, setStep] = useState("결제를 준비하는 중…");
   const paymentInFlight = useRef(false);
@@ -33,6 +33,9 @@ export function SajuCheckout({ profileId, price, available, testMode = false }: 
       const result = await requestPayment({
         storeId: process.env.NEXT_PUBLIC_PORTONE_STORE_ID!, channelKey: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY!,
         paymentId: order.orderId, orderName: order.orderName, totalAmount: order.amount, currency: "CURRENCY_KRW", payMethod: "CARD", redirectUrl: returnUrl.toString(),
+        // KCP requires the registered merchant name for mobile card checkout.
+        // The merchant-scoped identifier does not expose the Kakao account ID.
+        bypass: { kcp_v2: { site_name: merchant.name, kcp_pay_title: "다봄", shop_user_id: paymentCustomerId } },
       });
       if (controller.signal.aborted) return;
       if (!result) return;

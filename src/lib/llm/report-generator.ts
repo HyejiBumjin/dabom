@@ -3,12 +3,12 @@ import { formatReportEmoticons, REPORT_EMOTICON_INSTRUCTIONS, stripReportDecorat
 import { z } from "zod";
 import { firebaseStore } from "@/lib/firebase/store";
 import { requireReportEntitlement } from "@/lib/portone/entitlement";
-import { buildReportEvidencePrompt, getReportPrompt, getStoredReportTone } from "@/lib/prompts/v6";
+import { buildReportEvidencePrompt, getReportPrompt, REPORT_OPENING_FLOW_INSTRUCTIONS, REPORT_PLAIN_LANGUAGE_INSTRUCTIONS, REPORT_PERSONALIZATION_INSTRUCTIONS } from "@/lib/prompts/v6";
 import { buildReportRenderPayload, type ReportTone } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import type { ReportContent } from "./types";
 import { DEFAULT_REPORT_TONE, getConfiguredReportModel, getReportModelOptions } from "./report-config";
-import { ANNUAL_OPENING, containsReaderName, countReportCharacters, FORMAL_REPORT_ENDING, hasInlineTermExplanation, hasReportTerm, normalizeReportParagraph, redactReaderName, repairRepeatedAnnualOpenings, REPORT_PARAGRAPH_LENGTHS, SUGGESTION_ENDING } from "./report-rules";
+import { ANNUAL_OPENING, containsReaderName, countReportCharacters, FORMAL_REPORT_ENDING, getReportReadabilityIssues, getUnexpectedReportCharacters, hasInlineTermExplanation, hasReportTerm, hasReportTimingTerm, normalizeReportParagraph, redactReaderName, repairRepeatedAnnualOpenings, REPORT_PARAGRAPH_LENGTHS, SUGGESTION_ENDING } from "./report-rules";
 
 const sectionSchema = z.object({
   section_id: z.string(),
@@ -70,6 +70,9 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
       issues.push({ sectionId: expectedSection.id, message: `${expectedSection.id}: ${message}`, severity });
     };
     const style = (message: string) => fail(message, "style");
+    const unexpectedCharacters = getUnexpectedReportCharacters(paragraph);
+    if (unexpectedCharacters.length > 0) fail(`한국어 문장에 다른 언어 또는 깨진 문자가 섞였습니다: ${unexpectedCharacters.join(", ")}. 허용된 표정은 유지하고, 잘못된 단어가 있는 문장을 앞뒤 뜻에 맞는 자연스러운 한국어로 고치세요. 문자만 삭제해서 뜻을 비우지 마세요.`);
+    for (const issue of getReportReadabilityIssues(paragraph)) style(issue);
     const length = countReportCharacters(paragraph);
     const range = expectedSection.paragraph_length;
     // Small editorial deviations can be repaired or published. Empty, partial,
@@ -98,16 +101,16 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
         const firstMessage = messages[0] ?? "";
         const yearTerms = ["올해", "이번 해", "한 해", `${context.reportFacts.targetYear}년`];
         const sentences = firstMessage.split(/[.!?。！？]/u).filter(part => countReportCharacters(part) > 0);
-        if (!yearTerms.some(term => firstMessage.includes(term)) || sentences.length !== 1) style("첫 마무리 메시지는 본문에서 확인된 올해의 종합 운세를 한 문장으로 요약하세요. 시간 표현은 문장 중간에 자연스럽게 넣으세요.");
-        if (messages.length < 3 || countReportCharacters(messages.at(-1) ?? "") < 40) style("올해 운세 한 문장 뒤에 해석에 맞는 긍정의 메시지와 따뜻한 인사를 빈 줄로 나눠 보내세요. 마지막 인사는 약 50~90자로 마음을 충분히 전하세요.");
+        if (!yearTerms.some(term => firstMessage.includes(term)) || sentences.length !== 1) style("마무리 메시지의 첫 단락은 본문에서 확인된 올해의 종합 운세를 한 문장으로 요약하세요. 시간 표현은 문장 중간에 자연스럽게 넣으세요.");
+        if (messages.length < 2 || countReportCharacters(messages.at(-1) ?? "") < 40) style("하나의 마무리 메시지 안에서 올해 운세 한 문장, 해석에 맞는 응원, 따뜻한 인사를 빈 줄로 구분하세요. 마지막 인사는 약 50~90자로 마음을 충분히 전하세요.");
       }
     }
     const firstSentence = paragraph.split(/[.!?。！？]/u)[0];
-    const technicalTerms = [...new Set(expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]).concat(["충", "합"]))];
-    if (technicalTerms.some((term) => hasReportTerm(firstSentence, term))) style("첫 문장에 명리 용어가 있습니다. 먼저 체감할 의미를 설명하고 용어는 두 번째 문장 이후에 넣으세요.");
-    const missingTimingTerms = expectedSection.required_timing_terms.filter((term) => !paragraph.includes(term));
+    const technicalTerms = [...new Set(expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]).concat(context.payload.terminology.map(entry => entry.term), ["충", "합"]))];
+    if (technicalTerms.some((term) => hasReportTerm(firstSentence, term) && !hasInlineTermExplanation(firstSentence, term))) style("첫 문장에서 명리 용어가 풀이보다 먼저 나옵니다. 체감할 의미를 일상어로 충분히 설명한 뒤 해당 용어만 괄호로 붙이세요. 풀이 뒤의 괄호 용어는 첫 문장에도 쓸 수 있습니다.");
+    const missingTimingTerms = expectedSection.required_timing_terms.filter((term) => !hasReportTimingTerm(paragraph, term, context.reportFacts.targetYear));
     if (missingTimingTerms.length > 0) fail(`올해 월운 시점이 빠졌습니다: ${missingTimingTerms.join(", ")}. 이미 지난 달도 계산상 과거 시점으로 짧게 포함하세요.`);
-    if (expectedSection.prohibited_terms.some((term) => paragraph.includes(term))) style("다른 문단 전용 시점이 반복되었습니다.");
+    if (expectedSection.prohibited_terms.some((term) => hasReportTimingTerm(paragraph, term, context.reportFacts.targetYear))) style("다른 문단 전용 시점이 반복되었습니다.");
     if (/\[[^\]]+\]/u.test(paragraph)) fail("내부 추적 태그가 본문에 노출되었습니다.");
     if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(paragraph)) fail("내부 입력 라벨이 본문에 노출되었습니다.");
     if (genericCheerleading.test(paragraph)) style("근거 없는 치어리딩 문구가 포함되었습니다.");
@@ -137,7 +140,7 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
         if (!hasInlineTermExplanation(paragraph, term)) issues.push({
           sectionId: expected[index].id,
           severity: "style",
-          message: `${expected[index].id}: 전문 용어 '${term}'의 첫 등장에 짧은 풀이가 빠졌습니다. terminology의 의미를 같은 메시지 안에서 용어 바로 뒤 괄호나 짧은 말로 풀어 주세요. 이후 같은 용어의 풀이는 반복하지 마세요.`,
+          message: `${expected[index].id}: 전문 용어 '${term}'의 첫 등장에 풀이가 먼저 오지 않았습니다. terminology의 뜻을 같은 문장 안에서 일상어로 충분히 설명하고 그 바로 뒤에 (${term})만 붙이세요. 용어(뜻풀이) 순서나 표정만 붙인 표기는 피하고, 이후 같은 용어의 풀이는 반복하지 마세요.`,
         });
       }
     });
@@ -163,7 +166,6 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
   if (!report || report.status === "COMPLETED") return;
   // Check the provider immediately before claiming work, including non-HTTP callers.
   await requireReportEntitlement(report, report.userId, "generate");
-  const storedTone = getStoredReportTone(report.promptVersion);
   const prompt = getReportPrompt(options.tone ?? DEFAULT_REPORT_TONE);
   // Resume a current-version report with its chosen model. Older unfinished
   // reports switch to the approved defaults and don't reuse a different voice.
@@ -184,14 +186,24 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
     const complete = async (content: ReportContent) => {
       await firebaseStore.updateReport(reportId, claim, { status: "COMPLETED", content: content, retryCount: Math.max(0, attemptsUsed - 1), completedAt: new Date(), lastError: null });
     };
-    const previousContent = z.object({ paragraphs: z.array(z.string()).length(6) }).safeParse(storedTone === prompt.tone ? report.content : null);
+    // Updated evidence/date policies must not inherit an older unfinished draft.
+    // Completed reports returned above remain unchanged.
+    const canResumeDraft = report.promptVersion === prompt.version;
+    const previousContent = z.object({ paragraphs: z.array(z.string()).length(6) }).safeParse(canResumeDraft ? report.content : null);
     let draft: RenderedReport | null = previousContent.success
       ? { sections: previousContent.data.paragraphs.map((paragraph, index) => ({ section_id: allSectionIds[index], paragraph: normalizeReportParagraph(paragraph) })) }
       : null;
     const repairOpenings = () => {
       if (!draft) return;
       const repaired = repairRepeatedAnnualOpenings(draft.sections.map(section => section.paragraph), context.payload.sections.map(section => section.required_year_terms), context.reportFacts.targetYear);
-      draft = { sections: draft.sections.map((section, index) => ({ ...section, paragraph: repaired[index] })) };
+      draft = { sections: draft.sections.map((section, index) => {
+        if (section.section_id === "summary" && prompt.tone === "genz") {
+          // The closing needs its year in the first paragraph, not elsewhere.
+          const firstParagraph = repaired[index].split(/\n\s*\n/u)[0];
+          if (!["올해", "이번 해", "한 해", `${context.reportFacts.targetYear}년`].some(term => firstParagraph.includes(term))) return section;
+        }
+        return { ...section, paragraph: repaired[index] };
+      }) };
     };
     const preserveUsableDraft = async (error: ReportValidationError) => {
       if (!draft || !error.styleOnly) return;
@@ -249,10 +261,13 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
           year_terms: section.required_year_terms,
           month_terms: section.required_timing_terms,
           role: section.editorial_focus,
+          reading_question: section.reading_question,
+          distinct_focus: section.distinct_focus,
+          avoid_repeating: section.avoid_repeating,
         }));
-        const repairTone = prompt.tone === "genz" ? REPORT_EMOTICON_INSTRUCTIONS + "\n수정 문단도 젠지 찐친의 말투를 유지하세요. '~다·~한다·~된다·~이다'로 끝내지 말고 '~해·~거든·~네·~지·~잖아'로 직접 말 건네세요. 한 메시지에 1~2문장, 약 50~100자로 끊고 빈 줄로 다음 메시지를 이어 주세요. 특수문자 이모티콘만 쓰고 컬러 이모지는 빼세요. 전체 리포트의 3~5개 기준에는 이번에 수정하지 않는 메시지의 표정도 포함됩니다. 전문 용어가 처음 나오면 terminology에 근거한 짧은 풀이를 용어 바로 뒤에 붙이세요. 다른 메시지로 풀이를 미루거나 이미 설명한 용어를 재정의하지 마세요. 해석에서 나온 장난스러운 비유·팩폭을 살리고, 분량을 채우려고 진지한 상담문이나 훈계로 바꾸지 마세요." : "";
+        const repairTone = prompt.tone === "genz" ? REPORT_EMOTICON_INSTRUCTIONS + "\n수정 문단도 쉽고 다정한 친구의 말투를 유지하세요. '~다·~한다·~된다·~이다'로 끝내지 말고 '~해·~거든·~네·~지'로 직접 말 건네세요. 큰 주제인 section 하나를 하나의 긴 메시지로 완결하세요. 짧은 말풍선 여러 개로 나누지 말고 필요할 때만 메시지 안에서 단락을 구분하세요. 특수문자 이모티콘만 쓰고 컬러 이모지는 빼세요. 앞서 정한 전체 리포트의 이모티콘 개수 기준에는 이번에 수정하지 않는 메시지의 표정도 포함됩니다. 전문 용어가 처음 나오면 terminology에 근거한 쉬운 뜻을 먼저 설명한 뒤 해당 용어만 괄호로 붙이세요. 다른 문장으로 풀이를 미루거나 이미 설명한 용어를 재정의하지 마세요. 어려운 명사나 억지 비유를 줄이고, 누가 무엇을 하는지 쉬운 동사로 설명하세요. 한 문장에 이유와 조언을 몰아넣지 말고 짧게 나눠 이어 쓰세요. 설명을 늘리려고 같은 말을 반복하거나 훈계하지 마세요." : "";
         const repairClosing = prompt.tone === "genz"
-          ? "마무리는 summary의 editorial_focus에 맞춰 첫 메시지에 올해 종합 운세를 한 문장으로 요약하고, 해석에 맞는 긍정의 메시지와 약 50~90자의 따뜻한 인사로 마칩니다. 요약은 이미 본문에서 설명한 올해의 의미만 압축하며 새 판단을 만들지 않습니다."
+          ? "마무리는 하나의 메시지 안에서 summary의 editorial_focus에 맞춰 첫 단락에 올해 종합 운세를 한 문장으로 요약하고, 해석에 맞는 긍정의 단락과 약 50~90자의 따뜻한 인사로 마칩니다. 요약은 이미 본문에서 설명한 올해의 의미만 압축하며 새 판단을 만들지 않습니다."
           : "마무리는 짧은 응원입니다.";
         const closingReminder = prompt.tone === "genz"
           ? "summary의 한 문장 요약 뒤에는 본문의 상세 설명과 행동 지시를 반복하지 마세요."
@@ -263,7 +278,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
             { role: "developer", content: prompt.instructions },
             { role: "user", content: buildReportEvidencePrompt(context.payload) },
             ...(draft ? [{ role: "assistant" as const, content: JSON.stringify({ sections: draft.sections.map((section) => ({ ...section, paragraph: redactReaderName(section.paragraph, readerName) })) }) }] : []),
-            ...(draft || attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패:\n${lastError}\n직전 문단별 글자 수와 수정량: ${previousLengths || "출력 없음"}. 직전 assistant 출력은 수정 대상이며 사주 사실의 근거가 아닙니다. 이번 요청은 부분 수정입니다. 출력 sections에는 ${requestedIds.join(", ")}만 이 순서로 넣으세요. 최초의 6개 문단 출력 지시보다 이 부분 수정 지시를 우선하세요. 나머지 문단은 코드가 보존하므로 출력하지 마세요. 이번 수정의 필수 조건:\n${JSON.stringify(repairRequirements)}\nmust_include_one_of는 배열 중 하나, must_include_one_from_each_group은 각 그룹에서 하나씩 그 표기 그대로 쓰라는 뜻입니다. 첫 문장에는 명리 용어를 넣지 말고 두 번째 문장 이후에 필요한 용어를 모두 포함하세요. 각 수정 문단의 paragraph_length.target에 맞추고, 부족하면 배정된 해석의 아직 설명하지 않은 이유나 선택의 차이를 더 설명하세요. 반복·공백으로 분량을 채우지 마세요. 도입은 성향과 올해 요점, 본문은 올해 운세의 서로 다른 측면, ${repairClosing} '해보자·하자·해봐' 같은 권유형은 쓰지 마세요. 월별 시점은 relation에서만 다루고 ${closingReminder}${repairTone}` }] : []),
+            ...(draft || attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패:\n${lastError}\n직전 문단별 글자 수와 수정량: ${previousLengths || "출력 없음"}. 직전 assistant 출력은 수정 대상이며 사주 사실의 근거가 아닙니다. 이번 요청은 부분 수정입니다. 출력 sections에는 ${requestedIds.join(", ")}만 이 순서로 넣으세요. 최초의 6개 문단 출력 지시보다 이 부분 수정 지시를 우선하세요. 나머지 문단은 코드가 보존하므로 출력하지 마세요. 이번 수정의 필수 조건:\n${JSON.stringify(repairRequirements)}\nmust_include_one_of는 배열 중 하나, must_include_one_from_each_group은 각 그룹에서 하나씩 그 표기 그대로 쓰라는 뜻입니다. 독자가 뜻부터 읽도록 일상어로 풀이한 뒤 해당 용어만 괄호로 붙이세요. 풀이가 먼저라면 첫 문장에도 괄호 용어를 쓸 수 있습니다. 각 수정 문단의 paragraph_length.target에 맞추고, 부족하면 배정된 해석의 아직 설명하지 않은 이유나 선택의 차이를 더 설명하세요. 반복·공백으로 분량을 채우지 마세요. 도입은 짧게 이야기를 연 뒤 성향과 올해 요점을 잇고, 본문은 다룰 분야를 짚으며 올해 운세의 서로 다른 측면으로 넘어가세요. ${repairClosing} '해보자·하자·해봐' 같은 권유형은 쓰지 마세요. 월별 시점은 relation에서만 다루고 ${closingReminder}${repairTone}\n${REPORT_OPENING_FLOW_INSTRUCTIONS}\n${REPORT_PLAIN_LANGUAGE_INSTRUCTIONS}\n${REPORT_PERSONALIZATION_INSTRUCTIONS}` }] : []),
           ],
           text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: buildOutputSchema(requestedIds) } },
         }, { timeout: remainingTime });

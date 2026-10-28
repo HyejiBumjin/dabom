@@ -261,7 +261,8 @@
 .retro-messages { display: grid; gap: 20px; padding: 24px 22px 0; }
 .retro-message-group { display: grid; gap: 14px; }
 .retro-message-group .retro-bubble { --bubble-fill: #fff; }
-.retro-message-group .retro-bubble:nth-child(even) { margin-left: 10px; width: calc(100% - 10px); }
+.retro-bubble--topic p + p { margin-top: 1em; }
+.retro-term-note { color: #676974; font-size: .82em; font-weight: 400; white-space: nowrap; }
 .retro-message-group .retro-bubble--summary { --bubble-fill: #f0eaff; border-color: #8472ae; font-weight: 600; animation: retro-summary-shiver .6s linear infinite; }
 .retro-messages[data-reveal-motion="enabled"] [data-report-message] { transition: opacity .18s ease-out, transform .18s ease-out; }
 .retro-messages[data-reveal-motion="enabled"] [data-report-message]:not([data-revealed]) { opacity: 0; transform: translateY(6px); }

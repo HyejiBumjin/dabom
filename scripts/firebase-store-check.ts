@@ -41,6 +41,8 @@ async function main() {
   check("unsafe document paths do not resolve", await store.getProfile("../users/owner") === null);
   const profile = await store.getProfile(profileId);
   check("calculation JSON and date round trip", profile?.birthDate instanceof Date && typeof profile.myeongsik === "object");
+  // Stored preferences from the retired topic selector must not affect new purchases.
+  await store.collection("profiles").doc(profileId).update({ focusTopics: ["career"] });
   await rejects("cross-account order rejected", () => store.prepareOrder("kakao_10002", profileId, metadata));
   await rejects("production free report rejected", () => store.ensureReport("kakao_10001", profileId, metadata, undefined, false));
   for (const invalid of [undefined, {}, { ...consent, version: "old" }, { ...consent, terms: false }, { ...consent, digitalContent: false }, { ...consent, terms: "true" }, { ...consent, acceptedAt: "2000-01-01", amount: 1 }]) {
@@ -51,9 +53,11 @@ async function main() {
   const orderId = store.orderId("kakao_10001", profileId, metadata.productCode);
   check("concurrent prepares reuse one unpaid order", prepared.every(o => !o.existing && o.orderId === orderId) && (await store.collection("orders").get()).size === 1);
   const firstConsent = (await store.getOrder(orderId))!.checkoutConsent!;
+  check("legacy profile interests are not copied into new orders", !Object.hasOwn((await store.collection("orders").doc(orderId).get()).data()!, "focusTopics"));
   check("server snapshots exact consent, product price and timestamp", firstConsent.amount === 3900 && firstConsent.termsText === checkoutNotices.terms && firstConsent.digitalContentText === checkoutNotices.digitalContent && Number.isFinite(Date.parse(firstConsent.acceptedAt)));
   await store.prepareOrder("kakao_10001", profileId, metadata, consent);
   check("retries preserve original consent evidence", (await store.getOrder(orderId))!.checkoutConsent!.acceptedAt === firstConsent.acceptedAt && (await store.collection("checkoutConsents").get()).size === 1);
+  await store.collection("orders").doc(orderId).update({ focusTopics: ["money"] });
   const payment = { id: orderId, status: "PAID", currency: "KRW", amount: 3900 };
   for (const patch of [{ id: "stolen" }, { amount: 1 }, { amount: NaN }, { status: "READY" }, { currency: "USD" }]) await rejects("forged payment cannot grant entitlement", () => store.fulfillOrder("kakao_10001", orderId, { ...payment, ...patch }, metadata));
   await rejects("other account cannot confirm payment", () => store.fulfillOrder("kakao_10002", orderId, payment, metadata));
@@ -61,6 +65,7 @@ async function main() {
   const reportId = paid[0].id;
   check("pending report cannot be marked delivered", !await store.markReportReceipt("kakao_10001", reportId, "delivered"));
   check("concurrent confirms create exactly one report", new Set(paid.map(r => r.id)).size === 1 && (await store.collection("reports").get()).size === 1);
+  check("legacy order interests do not block or personalize new reports", paid.every(report => !Object.hasOwn(report, "focusTopics")) && !Object.hasOwn((await store.collection("reports").doc(reportId).get()).data()!, "focusTopics"));
   check("paid recheckout reopens existing report", (await store.prepareOrder("kakao_10001", profileId, metadata)).existing);
   const access = (await store.getReportWithAccess(reportId))!;
   check("paid owner allowed; other user denied", canReadSajuReport(access, {id:"kakao_10001"}, false) && !canReadSajuReport(access, {id:"kakao_10002"}, false));

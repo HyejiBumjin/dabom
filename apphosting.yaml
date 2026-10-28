@@ -37,3 +37,15 @@ env:
     value: gpt-6-luna
     availability:
       - RUNTIME
+  - variable: PORTONE_API_SECRET
+    secret: dabom-portone-api-secret
+    availability:
+      - RUNTIME
+  - variable: PORTONE_WEBHOOK_SECRET
+    secret: dabom-portone-webhook-secret
+    availability:
+      - RUNTIME
+  - variable: NEXT_PUBLIC_PORTONE_STORE_ID
+    value: store-003fb8a8-aa84-4444-95d9-518b2e1db441
+  - variable: NEXT_PUBLIC_PORTONE_CHANNEL_KEY
+    value: channel-key-0b09c922-8e55-4b23-9bdc-d76bfbcf0ffd

@@ -1,14 +1,19 @@
 import Link from "next/link";
 import type { ReportContent } from "@/lib/llm/types";
-import { splitReportMessages } from "@/lib/report-message-layout";
+import { reportTopicParagraphs } from "@/lib/report-message-layout";
 import { formatReportEmoticons, splitReportEmoticons } from "@/lib/report-emoticons";
+import { explanationFirstReportText, splitReportTermAnnotations } from "@/lib/report-term-annotations";
 import { PixelEnvelope, RetroFooter } from "@/components/RetroWindow";
 import { ScrollRevealMessages } from "@/components/RetroMotion";
 import { SittingMessengerCat } from "@/components/SittingMessengerCat";
 
 /** All stored messages, including the closing, stay in one page scroll. */
 export function MessageReport({ content }: { content: ReportContent }) {
-  const groups = formatReportEmoticons(content.paragraphs).map(splitReportMessages);
+  const terms = Array.isArray(content.meta?.termsUsed)
+    ? content.meta.termsUsed.flatMap(entry => typeof entry?.term === "string" ? [entry.term] : [])
+    : [];
+  const groups = formatReportEmoticons(content.paragraphs)
+    .map(paragraph => reportTopicParagraphs(explanationFirstReportText(paragraph, terms)));
 
   return (
     <article aria-label="다봄의 운세 메시지" data-report-presentation="message">
@@ -20,15 +25,17 @@ export function MessageReport({ content }: { content: ReportContent }) {
         </div>
       </header>
       <ScrollRevealMessages>
-        {groups.map((messages, groupIndex) => (
+        {groups.map((paragraphs, groupIndex) => (
           <div key={groupIndex} className="retro-message-group">
-            {messages.map((message, index) => (
-              <div key={index} data-report-message className={`retro-bubble${groupIndex === groups.length - 1 && index === 0 ? " retro-bubble--summary" : ""}`}>
-                <p>{splitReportEmoticons(message).map((part, partIndex) => part.isEmoticon
-                  ? <span key={partIndex} className="retro-emoticon">{part.text}</span>
-                  : part.text)}</p>
-              </div>
-            ))}
+            <div data-report-message className={`retro-bubble retro-bubble--topic${groupIndex === groups.length - 1 ? " retro-bubble--summary" : ""}`}>
+              {paragraphs.map((paragraph, index) => (
+                <p key={index}>{splitReportTermAnnotations(paragraph, terms).map((part, partIndex) => part.isTerm
+                  ? <span key={partIndex} className="retro-term-note">{part.text}</span>
+                  : <span key={partIndex}>{splitReportEmoticons(part.text).map((reaction, reactionIndex) => reaction.isEmoticon
+                    ? <span key={reactionIndex} className="retro-emoticon">{reaction.text}</span>
+                    : reaction.text)}</span>)}</p>
+              ))}
+            </div>
           </div>
         ))}
       </ScrollRevealMessages>

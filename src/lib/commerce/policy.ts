@@ -5,12 +5,12 @@ export const merchant = {
   name: "찌야",
   representative: "최혜지",
   registrationNumber: "329-06-03628",
-  address: "서울특별시 관악구 시흥대로158가길, 301호",
+  address: "서울특별시 관악구 시흥대로158가길 9, 301호",
   phone: "010-2370-1667",
   email: "att1667.hj@gmail.com",
-  mailOrderRegistration: "",
-  // Confirm the building number, PG-accepted contact number and registration
-  // before opening live sales. An industry classification is not a permit ID.
+  mailOrderRegistration: "2026-서울관악-2068",
+  // Registration is confirmed. Verify the PG-accepted contact number
+  // before opening live sales.
   businessDetailsVerified: false,
 };
 

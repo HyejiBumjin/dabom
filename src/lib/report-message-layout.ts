@@ -50,3 +50,19 @@ export function splitReportMessages(paragraph: string) {
     return messages;
   });
 }
+
+/** One section is one topic bubble; line breaks are breathing room inside it. */
+export function reportTopicParagraphs(paragraph: string) {
+  const blocks = paragraph.split(/\n+/u).map(block => block.trim()).filter(Boolean);
+  if (blocks.length <= 3) return blocks;
+  // Older reports used many tiny lines. Keep their order and sentences intact,
+  // joining adjacent lines into at most three paragraphs within the same topic.
+  const groups: string[] = [];
+  let offset = 0;
+  for (let remaining = 3; remaining > 0; remaining -= 1) {
+    const size = Math.ceil((blocks.length - offset) / remaining);
+    groups.push(blocks.slice(offset, offset + size).join(" "));
+    offset += size;
+  }
+  return groups;
+}

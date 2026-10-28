@@ -6,8 +6,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_CHANGE_EVENT, AUTH_CHANGE_KEY, clearProfileDraft } from "@/lib/auth-change";
 import { retryAfterSeconds } from "@/lib/report-access-error";
 
+interface AccountPrivacyBoundaryProps {
+  accountId: string;
+  returnPath: string;
+  children: ReactNode;
+  compact?: boolean;
+  /** Public actions only: never include account details or private content. */
+  publicFallback?: ReactNode;
+}
+
 /** Server authorization is still required. This guard revokes already rendered UI. */
-export function AccountPrivacyBoundary({ accountId, returnPath, children, compact = false }: { accountId: string; returnPath: string; children: ReactNode; compact?: boolean }) {
+export function AccountPrivacyBoundary({ accountId, returnPath, children, compact = false, publicFallback }: AccountPrivacyBoundaryProps) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<"checking" | "verified" | "unavailable" | "revoked">("checking");
   const [mounted, setMounted] = useState(false);
@@ -107,7 +116,7 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
 
   if (state === "revoked") return <p role="status">로그인 화면으로 이동할게.</p>;
   return <>
-    {state === "checking" && <div className={compact ? "h-14" : "retro-page"} role="status" aria-label="화면 불러오는 중" aria-busy="true">
+    {state === "checking" && (publicFallback ?? <div className={compact ? "h-14" : "retro-page"} role="status" aria-label="화면 불러오는 중" aria-busy="true">
       {!compact && <div className="retro-window" aria-hidden="true">
         <div className="retro-titlebar"><span className="h-4 w-24 rounded bg-white/60" /></div>
         <div className="space-y-6 p-8 motion-safe:animate-pulse">
@@ -116,11 +125,11 @@ export function AccountPrivacyBoundary({ accountId, returnPath, children, compac
           <div className="h-40 rounded bg-slate-100" />
         </div>
       </div>}
-    </div>}
-    {state === "unavailable" && <section className={compact ? "text-sm" : "retro-status"} role="status">
+    </div>)}
+    {state === "unavailable" && (publicFallback ?? <section className={compact ? "text-sm" : "retro-status"} role="status">
       <p>{rateLimited ? "요청이 잠깐 몰렸어. 조금 기다리면 자동으로 다시 연결할게." : "연결이 잠깐 끊겼어. 다시 연결해줘."}</p>
       <button type="button" className="retro-button" onClick={() => void verify()}>다시 연결하기</button>
-    </section>}
+    </section>)}
     {/* Keep an in-progress form mounted during a same-account foreground check. */}
     {mounted && <div hidden={state !== "verified"} inert={state !== "verified"}>{children}</div>}
   </>;
