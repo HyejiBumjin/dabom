@@ -70,6 +70,7 @@ function signedWebhook(orderId: string) {
   return new Request("https://dabom.test/webhook", { method: "POST", body: raw, headers: { "webhook-id": id, "webhook-timestamp": timestamp, "webhook-signature": `v1,${signature}` } });
 }
 async function main() {
+  await store.collection("users").doc(owner).create({ id: owner, createdAt: new Date() });
   const fresh = await seed("fresh");
   check("fresh paid read avoids provider calls", (await read(fresh.reportId)).status === 200 && providerCalls === 0);
   identity = "kakao_other";

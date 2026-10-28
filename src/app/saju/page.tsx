@@ -1,3 +1,4 @@
+import { accountScope } from "@/lib/account-scope";
 import Link from "next/link";
 import { SajuProfileForm } from "@/components/SajuProfileForm";
 import { RetroFooter, RetroPage, RetroWindow } from "@/components/RetroWindow";
@@ -8,7 +9,7 @@ import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 export default async function SajuInputPage() {
   const account = await requireSajuAccount("/saju");
   return (
-    <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath="/saju"><RetroPage>
+    <AccountPrivacyBoundary key={accountScope(account)} accountId={accountScope(account)} returnPath="/saju"><RetroPage>
       <RetroWindow title="다봄 · 내 정보" closeHref="/">
         <div className="retro-input-page">
           <Link href="/" className="retro-back-link">← 처음으로</Link>
@@ -20,7 +21,7 @@ export default async function SajuInputPage() {
             </div>
             <ExpressiveCat mood="curious" />
           </header>
-          <SajuProfileForm accountId={account.id} />
+          <SajuProfileForm accountId={accountScope(account)} />
           <RetroFooter />
         </div>
       </RetroWindow>

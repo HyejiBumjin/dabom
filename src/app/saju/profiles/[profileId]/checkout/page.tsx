@@ -1,3 +1,4 @@
+import { accountScope } from "@/lib/account-scope";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { firebaseStore, stableId } from "@/lib/firebase/store";
@@ -33,7 +34,7 @@ export default async function SajuCheckoutPage({ params }: { params: Promise<{ p
   const product = await firebaseStore.getProduct(SAJU_PRODUCT_CODE);
   const testMode = isPaymentTestMode();
   const available = Boolean(product?.active && product.price === YEARLY_PRICE && (testMode || isCommerceReady()) && env.NEXT_PUBLIC_PORTONE_STORE_ID && env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY && env.PORTONE_API_SECRET && env.PORTONE_WEBHOOK_SECRET);
-  return <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath={returnPath}>
+  return <AccountPrivacyBoundary key={accountScope(account)} accountId={accountScope(account)} returnPath={returnPath}>
     <RetroPage><RetroWindow title="다봄 · 올해 운세 받기" closeHref="/saju/library">
       <div className="retro-library">
         <Link className="retro-back-link" href="/saju/library">← 내 운세함</Link>

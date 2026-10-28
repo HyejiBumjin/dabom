@@ -43,7 +43,11 @@
     "firebase:preflight": "node --conditions=react-server --import tsx scripts/firebase-production-check.ts --check",
     "security:secrets:check": "node --test scripts/security-secret-check.test.mjs",
     "firebase:hosting-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/firebase-hosting-check.ts",
-    "payment:reconciliation-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/payment-reconciliation-check.ts"
+    "payment:reconciliation-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/payment-reconciliation-check.ts",
+    "privacy:account": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-account.ts",
+    "privacy:check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-retention-check.ts",
+    "privacy:requests": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-requests.ts",
+    "support:check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/support-request-check.ts"
   },
   "dependencies": {
     "@portone/browser-sdk": "^0.1.3",

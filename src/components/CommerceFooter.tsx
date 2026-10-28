@@ -8,6 +8,7 @@ export function CommerceFooter() {
       <Link href="/terms">이용약관</Link>
       <Link href="/privacy">개인정보처리방침</Link>
       <Link href="/refund">환불 안내</Link>
+      <Link href="/support" prefetch={false}>환불·개인정보 요청</Link>
     </nav>
     <p>{merchant.name} · 대표 {merchant.representative}</p>
     <p>사업자등록번호 {merchant.registrationNumber}</p>

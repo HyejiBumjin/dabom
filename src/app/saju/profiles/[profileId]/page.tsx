@@ -1,3 +1,4 @@
+import { accountScope } from "@/lib/account-scope";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { firebaseStore } from "@/lib/firebase/store";
@@ -57,7 +58,7 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
   };
 
   return (
-    <AccountPrivacyBoundary key={account.id} accountId={account.id} returnPath={`/saju/profiles/${profileId}`}><main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
+    <AccountPrivacyBoundary key={accountScope(account)} accountId={accountScope(account)} returnPath={`/saju/profiles/${profileId}`}><main className="mx-auto min-h-screen max-w-2xl px-5 py-12 sm:py-20">
       <Link href="/saju" className="text-sm text-zinc-500 hover:text-zinc-900">← 입력 다시 하기</Link>
 
       <header className="mt-8">

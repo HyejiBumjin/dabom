@@ -29,6 +29,8 @@ let passed = 0;
 function check(name: string, condition: unknown) { assert.ok(condition, name); passed++; console.log(`PASS ${name}`); }
 async function rejects(name: string, action: () => Promise<unknown>) { await assert.rejects(action); check(name, true); }
 async function main() {
+  await store.saveAccount("kakao_10001", "10001", "합성 사용자");
+  await store.saveAccount("kakao_10002", "10002", "합성 사용자 2");
   await store.collection("products").doc(metadata.productCode).create({ ...metadata, code: metadata.productCode, name: "합성 상품", active: true, price: 3900 });
   const profiles = await Promise.all(Array.from({length: 4}, () => saveSajuProfile("kakao_10001", input, store)));
   const profileId = profiles[0].profileId;

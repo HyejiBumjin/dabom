@@ -101,9 +101,13 @@ export async function finishKakaoLogin(code: string) {
   }));
   const verified = await auth.verifyIdToken(signedIn.idToken, true);
   if (verified.uid !== uid || verified.loginProvider !== "kakao" || Date.now() / 1000 - verified.auth_time > 300) throw new Error("INVALID_AUTH_IDENTITY");
-  await firebaseStore.saveAccount(uid, kakaoId, nickname);
+  const account = await firebaseStore.saveAccount(uid, kakaoId, nickname);
   const session = await auth.createSessionCookie(signedIn.idToken, { expiresIn: SESSION_SECONDS * 1000 });
-  await firebaseStore.collection("sessions").doc(sha(session)).create({ uid, expiresAt: Timestamp.fromMillis(Date.now() + SESSION_SECONDS * 1000) });
+  await firebaseStore.transaction(async tx => {
+    const current = await firebaseStore.requireActiveAccount(uid, tx);
+    if (current.createdAt.getTime() !== account.createdAt.getTime()) throw new Error("ACCOUNT_CHANGED");
+    tx.create(firebaseStore.collection("sessions").doc(sha(session)), { uid, expiresAt: Timestamp.fromMillis(Date.now() + SESSION_SECONDS * 1000) });
+  });
   const expired = await firebaseStore.collection("sessions").where("expiresAt", "<", new Date()).limit(20).get();
   await Promise.all(expired.docs.map(doc => doc.ref.delete()));
   return session;

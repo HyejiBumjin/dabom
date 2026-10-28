@@ -10,7 +10,7 @@ import { READ_ACCOUNT_LIMIT, READ_LEASE_SIZE, READ_WINDOW_MS } from "@/lib/secur
 import { LIBRARY_PAGE_SIZE, LIBRARY_REPORT_LIMIT, libraryFilter, parseLibraryCursor, type LibraryFilter } from "@/lib/saju/library-page";
 import { isPaymentReadFresh, isPaymentGenerationFresh, PAYMENT_CHECK_LEASE_MS, PAYMENT_CHECK_RETRY_MS, type PaymentVerification, type PaymentCheckOutcome } from "@/lib/portone/verification-policy";
 
-export type Account = { id: string; kakaoId: string; nickname: string; email: string | null; createdAt: Date };
+export type Account = { id: string; kakaoId: string; nickname: string; email: string | null; createdAt: Date; dataEpoch?: string; deletionPending?: boolean };
 export type Profile = { id: string; userId: string; birthKey: string; name: string; relationship: Relationship; gender: "MALE" | "FEMALE"; birthDate: Date; birthTime: string | null; isLunar: boolean; isLeapMonth: boolean; myeongsik: unknown; createdAt: Date };
 export type Product = { id: string; code: string; name: string; price: number; active: boolean };
 export type Order = PaymentVerification & { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date; checkoutConsent?: CheckoutConsentRecord };
@@ -56,12 +56,25 @@ export class FirebaseStore {
     const ref = this.collection(collection).doc(id);
     return decode<T>(await (tx ? tx.get(ref) : ref.get()));
   }
-  getAccount(id: string) { return this.read<Account>("users", id); }
+  async getAccount(id: string) {
+    const account = await this.read<Account>("users", id);
+    return account?.deletionPending ? null : account;
+  }
+  /** Read in the same transaction as a write so a deletion cannot race it. */
+  async requireActiveAccount(id: string, tx: Transaction) {
+    const account = await this.read<Account>("users", id, tx);
+    if (!account || account.deletionPending) throw new Error("ACCOUNT_UNAVAILABLE");
+    return account;
+  }
   async saveAccount(id: string, kakaoId: string, nickname: string) {
     if (!validId(id) || id !== `kakao_${kakaoId}`) throw new Error("INVALID_IDENTITY");
     return this.transaction(async tx => {
       const existing = await this.read<Account>("users", id, tx);
-      const account: Account = { id, kakaoId, nickname, email: null, createdAt: existing?.createdAt ?? new Date() };
+      if (existing?.deletionPending) throw new Error("ACCOUNT_UNAVAILABLE");
+      // Old accounts keep their original IDs. Rejoining gets a new namespace,
+      // so a retired provider payment ID can never buy a second report.
+      const account: Account = { id, kakaoId, nickname, email: null, createdAt: existing?.createdAt ?? new Date(),
+        ...(existing ? existing.dataEpoch ? { dataEpoch: existing.dataEpoch } : {} : { dataEpoch: randomUUID() }) };
       tx.set(this.collection("users").doc(id), account);
       return account;
     });
@@ -70,7 +83,11 @@ export class FirebaseStore {
   getProduct(code: string) { return this.read<Product>("products", code); }
   getOrder(id: string) { return this.read<Order>("orders", id); }
   getReport(id: string) { return this.read<Report>("reports", id); }
-  profileId(userId: string, birthKey: string) { return stableId(userId, birthKey); }
+  async profileId(userId: string, birthKey: string) {
+    const account = await this.getAccount(userId);
+    if (!account) throw new Error("ACCOUNT_UNAVAILABLE");
+    return account.dataEpoch ? stableId(userId, birthKey, account.dataEpoch) : stableId(userId, birthKey);
+  }
   reportId(profileId: string, productCode: string) { return stableId(profileId, productCode); }
   orderId(userId: string, profileId: string, productCode: string) {
     const parts = [userId, profileId, productCode];
@@ -87,9 +104,11 @@ export class FirebaseStore {
     const linked = order && order.userId === profile.userId && order.sajuProfileId === profile.id && order.productCode === report.productCode ? order : null;
     return { ...report, sajuProfile: profile, order: linked };
   }
-  async saveProfile(data: Omit<Profile, "id" | "createdAt">) {
-    const id = this.profileId(data.userId, data.birthKey);
+  async saveProfile(data: Omit<Profile, "id" | "createdAt">, expectedEpoch: string) {
     return this.transaction(async tx => {
+      const account = await this.requireActiveAccount(data.userId, tx);
+      if ((account.dataEpoch ?? "legacy") !== expectedEpoch) throw new Error("ACCOUNT_CHANGED");
+      const id = account.dataEpoch ? stableId(data.userId, data.birthKey, account.dataEpoch) : stableId(data.userId, data.birthKey);
       const previous = await this.read<Profile>("profiles", id, tx);
       if (previous && previous.userId !== data.userId) throw new Error("PROFILE_OWNER_MISMATCH");
       if (previous) tx.update(this.collection("profiles").doc(id), { name: data.name, relationship: data.relationship });
@@ -102,6 +121,7 @@ export class FirebaseStore {
   }
   async ensureReport(userId: string, profileId: string, metadata: NewReport, orderId?: string, development = allowsDevelopmentReports()) {
     return this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const profile = await this.read<Profile>("profiles", profileId, tx);
       if (!profile || profile.userId !== userId) throw new Error("PROFILE_NOT_FOUND");
       const order = orderId ? await this.read<Order>("orders", orderId, tx) : null;
@@ -118,6 +138,7 @@ export class FirebaseStore {
   }
   async prepareOrder(userId: string, profileId: string, metadata: NewReport, consent?: unknown) {
     const result = await this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const profile = await this.read<Profile>("profiles", profileId, tx);
       if (!profile || profile.userId !== userId) throw new Error("PROFILE_NOT_FOUND");
       const product = await this.read<Product>("products", metadata.productCode, tx);
@@ -148,6 +169,7 @@ export class FirebaseStore {
   }
   async fulfillOrder(userId: string, orderId: string, payment: { id: string; amount: number; status: string; currency: string }, metadata: NewReport) {
     return this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const order = await this.read<Order>("orders", orderId, tx);
       if (!order || order.userId !== userId || order.productCode !== metadata.productCode) throw new Error("ORDER_NOT_FOUND");
       const profile = await this.read<Profile>("profiles", order.sajuProfileId, tx);
@@ -171,14 +193,17 @@ export class FirebaseStore {
   }
   async cancelOrder(userId: string, id: string) {
     return this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const order = await this.read<Order>("orders", id, tx);
       if (!order || order.userId !== userId) throw new Error("ORDER_NOT_FOUND");
-      tx.update(this.collection("orders").doc(id), { status: "CANCELLED", paymentCheckState: "REJECTED", paymentCheckId: null, paymentCheckLeaseUntil: null, paymentCheckRetryAt: null });
+      if (order.status === "CANCELLED") return;
+      tx.update(this.collection("orders").doc(id), { status: "CANCELLED", cancelledAt: new Date(), paymentCheckState: "REJECTED", paymentCheckId: null, paymentCheckLeaseUntil: null, paymentCheckRetryAt: null });
     });
   }
   /** A shared lease bounds provider calls across tabs and server instances. */
   async beginPaymentCheck(userId: string, id: string, force: boolean) {
     return this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const order = await this.read<Order>("orders", id, tx);
       if (!order || order.userId !== userId) throw new Error("ORDER_NOT_FOUND");
       const now = Date.now();
@@ -193,12 +218,13 @@ export class FirebaseStore {
   }
   async finishPaymentCheck(userId: string, id: string, checkId: string, outcome: PaymentCheckOutcome) {
     return this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const order = await this.read<Order>("orders", id, tx);
       if (!order || order.userId !== userId) throw new Error("ORDER_NOT_FOUND");
       if (order.status === "CANCELLED") return { applied: false, order };
       // A verified cancellation is terminal, including an expired worker's result.
       if (outcome === "cancelled") {
-        const patch = { status: "CANCELLED" as const, paymentCheckState: "REJECTED" as const, paymentCheckId: null, paymentCheckLeaseUntil: null, paymentCheckRetryAt: null };
+        const patch = { status: "CANCELLED" as const, cancelledAt: new Date(), paymentCheckState: "REJECTED" as const, paymentCheckId: null, paymentCheckLeaseUntil: null, paymentCheckRetryAt: null };
         tx.update(this.collection("orders").doc(id), patch);
         return { applied: true, order: { ...order, ...patch } };
       }
@@ -265,6 +291,7 @@ export class FirebaseStore {
   }
   async claimReport(id: string, patch: ReportPatch, userId: string, development = allowsDevelopmentReports()) {
     return this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const report = await this.read<Report>("reports", id, tx);
       if (!report || report.userId !== userId || report.status === "COMPLETED") return null;
       const profile = await this.read<Profile>("profiles", report.sajuProfileId, tx);
@@ -282,6 +309,7 @@ export class FirebaseStore {
     return this.transaction(async tx => {
       const report = await this.read<Report>("reports", id, tx);
       if (!report || report.generationId !== generationId) throw new Error("REPORT_LEASE_LOST");
+      await this.requireActiveAccount(report.userId, tx);
       const order = report.orderId ? await this.read<Order>("orders", report.orderId, tx) : null;
       if (report.orderId && (!order || order.status !== "PAID" || order.userId !== report.userId || order.paymentCheckState === "REJECTED")) throw new Error("PAYMENT_REQUIRED");
       tx.update(this.collection("reports").doc(id), encode(patch));
@@ -291,6 +319,7 @@ export class FirebaseStore {
    * Neither proves human reading nor automatically rules out a refund. */
   async markReportReceipt(userId: string, id: string, event: "delivered" | "opened") {
     return this.transaction(async tx => {
+      await this.requireActiveAccount(userId, tx);
       const report = await this.read<Report>("reports", id, tx);
       if (!report || report.userId !== userId || report.status !== "COMPLETED" || !report.content || !report.orderId) return false;
       const profile = await this.read<Profile>("profiles", report.sajuProfileId, tx);
