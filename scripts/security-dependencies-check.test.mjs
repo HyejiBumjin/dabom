@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Linter } from "eslint";
 import nextPlugin from "@next/eslint-plugin-next";
+import { z } from "zod";
 
 // Exercise the real Next ESLint consumer, including its directory-glob path.
 // The app's default config alone never calls globSync, so lint alone misses an
@@ -36,6 +37,34 @@ test("Next uses the reviewed release containing the October 2026 security fixes"
   assert.equal(manifest.dependencies.next, reviewedVersion);
   assert.equal(lock.packages["node_modules/next"].version, reviewedVersion);
   assert.equal(require("next/package.json").version, reviewedVersion);
+});
+
+test("all installed and locked Zod copies include the collection size security fix", () => {
+  // https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
+  const lock = JSON.parse(readFileSync(new URL("../package-lock.json", import.meta.url)));
+  const patched = version => {
+    const [major, minor, patch] = version.split(".").map(Number);
+    return major > 4 || (major === 4 && (minor > 6 || (minor === 6 && patch >= 6)));
+  };
+  for (const [entry, pkg] of Object.entries(lock.packages)) {
+    if (/(?:^|\/)node_modules\/zod$/.test(entry)) assert.ok(patched(pkg.version), `Unpatched Zod returned: ${entry}`);
+  }
+  assert.ok(patched(require("zod/package.json").version));
+});
+
+test("oversized report-shaped arrays fail before accumulating per-item validation errors", async () => {
+  const schema = z.object({ sections: z.array(z.object({ paragraph: z.string() })).length(6) });
+  const oversized = { sections: Array.from({ length: 1000 }, () => ({ paragraph: null })) };
+  for (const result of [schema.safeParse(oversized), await schema.safeParseAsync(oversized)]) {
+    assert.equal(result.success, false);
+    assert.equal(result.error.issues.length, 1);
+    assert.equal(result.error.issues[0].code, "too_big");
+    assert.deepEqual(result.error.issues[0].path, ["sections"]);
+  }
+  assert.equal(schema.safeParse({ sections: Array.from({ length: 6 }, () => ({ paragraph: "정상 문장" })) }).success, true);
+  const invalid = schema.safeParse({ sections: Array.from({ length: 6 }, () => ({ paragraph: null })) });
+  assert.equal(invalid.success, false);
+  assert.equal(invalid.error.issues.length, 6);
 });
 
 test("Next resolves the scoped adapter and the lockfile excludes the vulnerable chain", () => {
