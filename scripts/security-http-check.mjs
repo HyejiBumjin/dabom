@@ -16,7 +16,7 @@ async function check(path, { method = "GET", status, headers = {}, body } = {}) 
   return response;
 }
 const api = [
-  ["GET", "/api/auth/account"],
+  ["GET", "/api/auth/account"], ["POST", "/api/support/requests"],
   ["POST", "/api/saju/profiles"], ["POST", "/api/saju/profiles/security-probe/reports"],
   ["GET", "/api/saju/reports/security-probe"], ["POST", "/api/saju/reports/security-probe/generate"],
   ["POST", "/api/saju/reports/security-probe/opened"],
@@ -56,7 +56,7 @@ async function main() {
   }
   for (const [method, path] of api.filter(([method]) => method === "POST")) await check(path, { method, status: 403, headers: { origin: "https://evil.invalid", "content-type": "application/json" }, body: "{}" });
   await check("/api/auth/logout", { method: "POST", status: 403, headers: { origin: "https://evil.invalid" } });
-  for (const path of ["/saju", "/saju/library", "/saju/profiles/security-probe/checkout", "/saju/reports/security-probe", "/saju/checkout/return?orderId=probe"]) {
+  for (const path of ["/support", "/saju", "/saju/library", "/saju/profiles/security-probe/checkout", "/saju/reports/security-probe", "/saju/checkout/return?orderId=probe"]) {
     const response = await check(path, { status: 307 });
     assert.equal(new URL(response.headers.get("location"), origin).pathname, "/login"); passed++;
   }
@@ -67,7 +67,7 @@ async function main() {
   const imageRejection = origin.hostname.endsWith(".hosted.app") || (deployed && process.env.SECURITY_HOSTING === "firebase") ? [400, 404] : 400;
   await check("/_next/image?url=http%3A%2F%2Fexample.invalid%2Fprobe.png&w=640&q=75", { status: imageRejection });
   await check("/_next/image?url=http%3A%2F%2F127.0.0.1%3A3100%2F&w=640&q=75", { status: imageRejection });
-  for (const [method, path] of [["GET", "/api/saju/payments/confirm"], ["DELETE", "/api/saju/profiles"], ["PUT", "/api/saju/reports/security-probe"]]) await check(path, { method, status: 405 });
+  for (const [method, path] of [["GET", "/api/support/requests"], ["GET", "/api/saju/payments/confirm"], ["DELETE", "/api/saju/profiles"], ["PUT", "/api/saju/reports/security-probe"]]) await check(path, { method, status: 405 });
   await check("/api/saju/payments/webhook", { method: "POST", status: [400, 503], headers: { "content-type": "application/json" }, body: '{"type":"Transaction.Paid","data":{"paymentId":"forged","storeId":"forged"}}' });
   const callback = await check("/api/auth/callback?next=%2F%2Fevil.invalid", { status: 307, headers: { "x-forwarded-host": "evil.invalid", "x-forwarded-proto": "https" } });
   const configuredOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
