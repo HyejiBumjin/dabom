@@ -72,12 +72,15 @@ async function main() {
   store.getReportWithAccess = (async () => null) as never;
   const { POST: createReport } = require("../src/app/api/saju/profiles/[profileId]/reports/route");
   check("old profile ID cannot create a report", (await createReport(request({}), { params: Promise.resolve({ profileId: child.id }) })).status === 400);
-  store.getReportWithAccess = (async () => ({ id: "report-fixture", userId: "fixture-owner", status: "PENDING", sajuProfile: child, order: null })) as never;
+  store.getReportWithAccess = (async () => ({ id: "report-fixture", userId: "fixture-owner", sajuProfileId: child.id, status: "PENDING", sajuProfile: child, order: null })) as never;
   const { generateReport } = require("../src/lib/llm/report-generator");
   await assert.rejects(() => generateReport("report-fixture"), (error: unknown) => error instanceof Error && error.message === MINIMUM_AGE_MESSAGE);
   check("non-HTTP generation is rejected before provider calls", true);
   const { POST: generate } = require("../src/app/api/saju/reports/[reportId]/generate/route");
   check("legacy generation API returns the age message", (await generate(request({}), { params: Promise.resolve({ reportId: "report-fixture" }) })).status === 400);
+  const { default: ReportPage } = require("../src/app/saju/reports/[reportId]/page");
+  await assert.rejects(() => ReportPage({ params: Promise.resolve({ reportId: "report-fixture" }) }), (error: unknown) => error instanceof Error && "digest" in error && String(error.digest).includes(`/saju/profiles/${child.id}/checkout`));
+  check("legacy unfinished page opens the age notice instead of retrying generation", true);
   console.log(`Profile age: ${passed} PASS. Synthetic data only; no database, payment, or LLM calls.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
