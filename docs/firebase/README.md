@@ -54,6 +54,17 @@ npm run saju:compare
 
 ## 운영 배포 전
 
+### 최신 운영 반영 (2026-10-28)
+
+- `develop` 소스 커밋 `11bed5c`를 원격에 푸시하고 Firebase App Hosting `build-2026-10-28-001`로 배포했다. build READY, backend reconciling=false, Cloud Run Ready, 운영 트래픽 100%를 확인했다.
+- 통신판매업 신고번호 `2026-서울관악-2068`과 건물번호를 포함한 사업장 주소가 운영 `/`, `/yearly`, `/terms`, `/privacy`, `/refund`에서 모두 표시된다. 최신 해석 근거·정확한 월운 기간·쉬운 말투·귀여운 표정·주제별 메시지 묶음 및 로그인 버튼 표시 보완도 포함한다. 기존 리포트 데이터를 삭제하거나 유료 모델로 재생성하지 않았다.
+- Node 22 운영 빌드/TypeScript 통과. 전체 lint는 오류 0, 기존 경고 16이다. `saju:spike`, `saju:compare`, 추가 사실·코퍼스·개인화·가독성·표정·표시 검사를 통과했다. compare의 기존 입춘 정책 차이 1건은 유지한다.
+- 주요 회귀: 리포트 복구 117, API 보안 151, 실제 격리 Firestore 81, 취소/권한 대조 43, 로컬 비로그인 접근 12, 결제 클라이언트 17, 운세 요청 클라이언트 14, 결제 모드 18, 로그인 제한 42, 조회 제한 25 PASS. 실제 DB 검사는 합성 문서만 사용하고 정리를 확인했다. Firebase preflight와 의존성·비밀키 검사도 통과했다.
+- 로컬 최초 빌드/네트워크 검사는 실행 환경 제한으로 중단됐고, 빌드 캐시를 분리한 뒤 필요한 권한으로 재실행해 성공했다. 실제 Firebase CLI 소스 압축 279개 파일에서 로컬 환경 파일·개인키·캐시가 제외됨을 확인했다. `.env.example`에는 검사한 예시만 들어간다.
+- 배포 도구가 추가한 runtime의 `roles/firebase.sdkAdminServiceAgent`만 제거했다. 필요한 기존 역할, Secret Manager 참조 6개, 운영 테스트 플래그 없음, 공개 Cloud Run invoker 없음이 확인됐다. 직접 서버 주소 2개는 익명 403, www는 대표 도메인으로 이동한다.
+- 운영 도메인 HTTP 보안 85 PASS. 실제 결제·취소나 유료 LLM 호출은 이번 배포 검사의 범위에 포함하지 않았다. KCP 카드사 최종 승인과 실제 거래 웹훅은 별도 확인해야 한다.
+- **판매 차단 유지:** `businessDetailsVerified=false`, `POLICY_EFFECTIVE_DATE=null`. 개인정보 위탁/국외 이전·보관/삭제 운영 절차, 고객센터 번호의 PG 수용 여부, 백업/복구·만료 데이터 정리(F4/F5)를 완료한 것으로 간주하지 않는다.
+
 ### Firebase App Hosting 배포 (2026-10-17)
 
 - 프로젝트 `dabom-10a35`, backend `dabom`, 리전 `asia-east1`(대만). Firestore 서울 리전은 유지한다.
