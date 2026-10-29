@@ -1,3 +1,5 @@
+import { PROFILE_NOTICE_VERSION, profileNoticeText } from "../src/lib/privacy/profile-use";
+const privacyNotice = { version: PROFILE_NOTICE_VERSION, self: true as const, text: profileNoticeText, acceptedAt: new Date().toISOString() };
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { birthDateEligibilityError, MINIMUM_AGE_MESSAGE } from "../src/lib/saju/age-policy";
@@ -12,8 +14,8 @@ let passed = 0;
 function check(name: string, value: unknown) { assert.ok(value, name); passed++; console.log(`PASS ${name}`); }
 const now = new Date("2026-10-28T00:00:00Z");
 const birth = (birthDate: string, calendar: "solar" | "lunar" = "solar", isLeapMonth = false) => ({ birthDate, calendar, isLeapMonth });
-const input = { name: "합성 검사", relationship: "SELF", gender: "female", ...birth("1995-05-20"), birthTime: "20:20" };
-const adult = { id: "profile-fixture", userId: "fixture-owner", birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false };
+const input = { notice: { version: PROFILE_NOTICE_VERSION, self: true }, name: "합성 검사", relationship: "SELF", gender: "female", ...birth("1995-05-20"), birthTime: "20:20" };
+const adult = { id: "profile-fixture", userId: "fixture-owner", relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false };
 const child = { ...adult, birthDate: new Date(`${new Date().getUTCFullYear() - 5}-01-01T00:00:00Z`) };
 
 async function main() {

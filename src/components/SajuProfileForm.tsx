@@ -1,9 +1,12 @@
 "use client";
 
+import { overseasNoticeSummary } from "@/lib/privacy/overseas-notice";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { RetroTitleBar } from "@/components/RetroWindow";
-import { RELATIONSHIPS, profileInputSchema, type Relationship } from "@/lib/saju/profile-input";
+import { profileInputSchema } from "@/lib/saju/profile-input";
+import { PROFILE_NOTICE_VERSION, profileNoticeText } from "@/lib/privacy/profile-use";
 import { ExistingFortuneNotice } from "@/components/ExistingFortuneNotice";
 import { BirthDateInput, BirthTimeInput } from "@/components/BirthDateTimeInput";
 import { PROFILE_DRAFT_KEY as DRAFT_KEY, restoreProfileDraft } from "@/lib/profile-draft";
@@ -14,7 +17,8 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
   const router = useRouter();
   const isDevelopment = process.env.NODE_ENV === "development";
   const [name, setName] = useState(isDevelopment ? "최혜지" : "");
-  const [relationship, setRelationship] = useState<Relationship>("SELF");
+  const relationship = "SELF" as const;
+  const [noticeConfirmed, setNoticeConfirmed] = useState(false);
   const [gender, setGender] = useState(isDevelopment ? "female" : "");
   const [birthDate, setBirthDate] = useState(isDevelopment ? "1995-05-20" : "");
   const [birthTime, setBirthTime] = useState(isDevelopment ? "20:20" : "");
@@ -65,7 +69,8 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
         if (!stored) return;
         const input = restoreProfileDraft(stored, accountId);
         if (!input) { sessionStorage.removeItem(DRAFT_KEY); return; }
-        setName(input.name); setRelationship(input.relationship); setGender(input.gender);
+        if (input.relationship !== "SELF") { sessionStorage.removeItem(DRAFT_KEY); return; }
+        setName(input.name); setGender(input.gender);
         setBirthDate(input.birthDate); setBirthTime(input.birthTime ?? ""); setTimeUnknown(!input.birthTime);
         setCalendar(input.calendar); setIsLeapMonth(input.isLeapMonth);
       } catch { /* Storage may be disabled; the form remains usable. */ }
@@ -87,7 +92,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
 
   function startNewQuery() {
     dismissDuplicate();
-    setName(""); setRelationship("SELF"); setGender("");
+    setName(""); setGender(""); setNoticeConfirmed(false);
     setBirthDate(""); setBirthTime(""); setTimeUnknown(false);
     setCalendar("solar"); setIsLeapMonth(false); setError(null);
   }
@@ -121,8 +126,8 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     event.preventDefault();
     if (submissionInFlight.current) return;
     setError(null);
-    if (!inputReady) {
-      setError(birthDateError ?? "이름, 성별, 생년월일과 태어난 시각을 입력해 주세요.");
+    if (!inputReady || !noticeConfirmed) {
+      setError(birthDateError ?? (!noticeConfirmed ? "본인 정보와 개인정보 처리 안내를 확인해줘." : "이름, 성별, 생년월일과 태어난 시각을 입력해 주세요."));
       return;
     }
     submissionInFlight.current = true;
@@ -132,7 +137,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     setPending(true);
     try {
       const input = { name, relationship, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth };
-      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal });
+      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, notice: { version: PROFILE_NOTICE_VERSION, self: noticeConfirmed } }), signal });
       const data = await response.json();
       if (controller.signal.aborted) return;
       if (response.status === 401) {
@@ -157,17 +162,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     <>
       <form onSubmit={submit} className="retro-form" aria-busy={pending} aria-describedby={error ? "profile-error" : undefined}>
         <fieldset className="retro-form-panel" disabled={pending} aria-label="운세 입력 정보">
-          <fieldset className="retro-choice-field">
-            <legend>누구의 운세?</legend>
-            <div className="retro-choice-options retro-relationship-options">
-              {RELATIONSHIPS.map(option => (
-                <label className="retro-choice" key={option.value}>
-                  <input type="radio" name="relationship" value={option.value} checked={relationship === option.value} onChange={() => setRelationship(option.value)} />
-                  {option.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <p className="retro-form-help">만 14세 이상인 본인의 정보만 입력해줘.<br />같은 이름·생년월일로 받은 올해 운세는 내 운세함에서 다시 볼 수 있어.</p>
           <div className="retro-field">
             <label htmlFor="name">이름</label>
             <input ref={nameInput} className="retro-input" id="name" name="name" autoComplete="name" maxLength={40} value={name} onChange={event => setName(event.target.value)} placeholder="예: 김다봄" required />
@@ -187,7 +182,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
             <label htmlFor="birthDate">생년월일</label>
             <div>
               <BirthDateInput value={birthDate} lunar={calendar === "lunar"} onChange={setBirthDate} describedBy={`birth-age-help${birthDateError ? " birth-age-error" : ""}`} invalid={Boolean(birthDateError)} />
-              <p id="birth-age-help" className="retro-form-help">만 14세 이상인 사람의 정보만 입력해줘.<br />가족·친구도 같아. 음력은 양력으로 바꾼 생일로 확인해.</p>
+              <p id="birth-age-help" className="retro-form-help">만 14세 이상부터 신청할 수 있어.<br />음력은 양력으로 바꾼 생일로 확인해.</p>
               {birthDateError && <p id="birth-age-error" className="retro-error" role="status">{birthDateError}</p>}
             </div>
           </div>
@@ -217,8 +212,14 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
             </div>
           </div>
         </fieldset>
+        <fieldset className="commerce-consents" disabled={pending}>
+          <legend>정보를 보내기 전에 확인해줘</legend>
+          <p className="retro-form-help">이름·성별·생년월일·달력 기준으로 운세를 만들고 운세함에 보관해. 출생 시각은 몰라도 괜찮아. 삭제 요청은 고객센터에서 할 수 있어.</p>
+          <p className="retro-form-help">{overseasNoticeSummary.profile} <Link href="/privacy#overseas" target="_blank" rel="noopener">국외 처리 국가·항목·기간·거부 방법 보기 ↗</Link></p>
+          <label className="retro-checkbox"><input type="checkbox" required checked={noticeConfirmed} onChange={event => setNoticeConfirmed(event.target.checked)} />{profileNoticeText}</label>
+        </fieldset>
         {error && <p id="profile-error" className="retro-error" role="alert">{error}</p>}
-        <button type="submit" className="retro-button" disabled={pending || duplicateOpen || !inputReady}>
+        <button type="submit" className="retro-button" disabled={pending || duplicateOpen || !inputReady || !noticeConfirmed}>
           {pending ? "메시지를 준비하는 중…" : "운세 메시지 받기"}
         </button>
         <p className="retro-caption">이제 다봄이 올해의 흐름을 읽어줄게.</p>

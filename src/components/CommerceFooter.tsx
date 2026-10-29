@@ -16,5 +16,6 @@ export function CommerceFooter() {
     <p>통신판매업 신고번호: {merchant.mailOrderRegistration || "확인 중 · 정식 판매 준비 중"}</p>
     <p>고객 문의 <a href={`tel:${merchant.phone}`}>{merchant.phone}</a><br />
       <a href={`mailto:${merchant.email}`}>{merchant.email}</a></p>
+    <p>이메일 문의는 선택 사항이며 해외에서도 처리될 수 있어요.<br /><Link href="/privacy#overseas-email">이메일 처리 안내</Link> · 전화·온라인 접수도 가능해요.</p>
   </footer>;
 }

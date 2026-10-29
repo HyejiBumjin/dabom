@@ -8,25 +8,37 @@ import { canReadSajuReport } from "@/lib/saju/account";
 import { allowsDevelopmentReports } from "@/lib/portone/payment-mode";
 import { requireVerifiedPayment } from "@/lib/portone/entitlement";
 import { assertProfileAge } from "./profile-age";
+import { profileNoticeSchema, profileNoticeText, profileUseError, SELF_ONLY_MESSAGE, PROFILE_NOTICE_MESSAGE } from "@/lib/privacy/profile-use";
+import { RequestSecurityError } from "@/lib/security/request";
 
 const reportMetadata = () => ({ productCode: SAJU_PRODUCT_CODE, promptVersion: getReportPrompt().version, model: getConfiguredReportModel() });
 export function profileBirthKey(input: ProfileInput) {
   return createHash("sha256").update(JSON.stringify([input.gender, input.birthDate, input.birthTime, input.calendar, input.calendar === "lunar" && input.isLeapMonth])).digest("hex");
 }
 export async function findExistingSajuReport(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore, development = allowsDevelopmentReports()) {
-  const profileId = await db.profileId(userId, profileBirthKey(input));
-  const report = await db.getReportWithAccess(db.reportId(profileId, SAJU_PRODUCT_CODE));
-  return report && canReadSajuReport(report, { id: userId }, development) ? { id: report.id, sajuProfileId: profileId } : null;
+  const profiles = await db.findInputProfiles({ userId, name: input.name, birthKey: profileBirthKey(input), birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth });
+  let pending: { id: string; sajuProfileId: string } | null = null;
+  for (const profile of profiles) {
+    const report = await db.getReportWithAccess(db.reportId(profile.id, SAJU_PRODUCT_CODE));
+    if (!report || !canReadSajuReport(report, { id: userId }, development)) continue;
+    const result = { id: report.id, sajuProfileId: profile.id };
+    if (report.status === "COMPLETED") return result;
+    if (!profileUseError(report.sajuProfile)) pending ??= result;
+  }
+  return pending;
 }
-export async function saveSajuProfile(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore) {
+export async function saveSajuProfile(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore, notice?: unknown) {
   if (!userId) throw new Error("LOGIN_REQUIRED");
   assertProfileAge({ birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth });
+  if (input.relationship !== "SELF") throw new RequestSecurityError(400, SELF_ONLY_MESSAGE);
+  const acknowledgment = profileNoticeSchema.safeParse(notice);
+  if (!acknowledgment.success) throw new RequestSecurityError(400, PROFILE_NOTICE_MESSAGE);
   const account = await db.getAccount(userId);
   if (!account) throw new Error("ACCOUNT_UNAVAILABLE");
   const birthKey = profileBirthKey(input);
-  const existing = await db.getProfile(await db.profileId(userId, birthKey));
+  const existing = await db.findInputProfile({ userId, name: input.name, birthKey, birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth });
   const myeongsik = existing?.myeongsik ?? new KoreanPolicyAdapter().calculate({ ...input, birthTime: input.birthTime ?? "12:00", birthTimeKnown: Boolean(input.birthTime) });
-  return db.saveProfile({ userId, birthKey, name: input.name, relationship: input.relationship, gender: input.gender === "male" ? "MALE" : "FEMALE", birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), birthTime: input.birthTime, isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth, myeongsik }, account.dataEpoch ?? "legacy");
+  return db.saveProfile({ userId, birthKey, name: input.name, relationship: "SELF", gender: input.gender === "male" ? "MALE" : "FEMALE", birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), birthTime: input.birthTime, isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth, myeongsik, privacyNotice: { ...acknowledgment.data, acceptedAt: new Date().toISOString(), text: profileNoticeText } }, account.dataEpoch ?? "legacy");
 }
 export function ensureSajuReport(userId: string, profileId: string, orderId?: string, db: FirebaseStore = firebaseStore) {
   return db.ensureReport(userId, profileId, reportMetadata(), orderId);

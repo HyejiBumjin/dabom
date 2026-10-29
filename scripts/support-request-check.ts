@@ -31,6 +31,8 @@ check("rejected requests never create a ticket",created===0);
 const response=await POST(request());check("authenticated explicit request accepted",response.status===201&&created===1);
 check("receipt response is private and no-store",response.headers.get("cache-control")==="private, no-store");
 check("response only exposes a receipt number",JSON.stringify(await response.json())==='{"requestId":"support_fixture"}');
+check("processing-stop requests are accepted separately from deletion", (await POST(request({kind:"PRIVACY_STOP",requestKey:randomUUID()}))).status===201);
+check("processing-stop cannot smuggle a third party identity", (await POST(request({kind:"PRIVACY_STOP",requestKey:randomUUID(),userId:"victim"}))).status===400);
 console.log(`Support endpoint: ${passed} passed; no customer data, mail, deletion or payment calls.`);
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

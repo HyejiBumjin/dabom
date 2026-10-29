@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { firebaseStore, stableId } from "@/lib/firebase/store";
 import { env } from "@/lib/env";
 import { requireSajuAccount, canReadSajuReport } from "@/lib/saju/account";
-import { SAJU_PRODUCT_CODE, relationshipLabel } from "@/lib/saju/profile-input";
+import { SAJU_PRODUCT_CODE } from "@/lib/saju/profile-input";
 import { ensureSajuReport } from "@/lib/saju/library-service";
 import { SajuCheckout } from "@/components/SajuCheckout";
 import { RetroPage, RetroWindow } from "@/components/RetroWindow";
@@ -13,7 +13,7 @@ import { isCommerceReady, YEARLY_PRICE } from "@/lib/commerce/policy";
 import { AccountPrivacyBoundary } from "@/components/AccountPrivacyBoundary";
 import { isPaymentTestMode } from "@/lib/portone/payment-mode";
 import { requireReportEntitlement, requireVerifiedPayment } from "@/lib/portone/entitlement";
-import { storedProfileAgeError } from "@/lib/saju/profile-age";
+import { storedProfileUseError } from "@/lib/saju/profile-age";
 
 export default async function SajuCheckoutPage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = await params;
@@ -21,7 +21,7 @@ export default async function SajuCheckoutPage({ params }: { params: Promise<{ p
   const account = await requireSajuAccount(returnPath);
   const profile = await firebaseStore.getProfile(profileId);
   if (!profile || profile.userId !== account.id) notFound();
-  const ageError = storedProfileAgeError(profile);
+  const ageError = storedProfileUseError(profile);
   const existing = await firebaseStore.getReportWithAccess(firebaseStore.reportId(profile.id, SAJU_PRODUCT_CODE));
   if (existing && (!ageError || existing.status === "COMPLETED") && canReadSajuReport(existing, account)) {
     await requireReportEntitlement(existing, account.id, "read");
@@ -42,9 +42,9 @@ export default async function SajuCheckoutPage({ params }: { params: Promise<{ p
         <Link className="retro-back-link" href="/saju/library">← 내 운세함</Link>
         <h1 className="retro-heading retro-checkout-heading">{profile.name}님,<br />올해는 어떤 한 해가 될까?</h1>
         <div className="retro-library-card">
-          <p>{relationshipLabel(profile.relationship)} · {profile.gender === "FEMALE" ? "여성" : "남성"}</p>
+          <p>{profile.gender === "FEMALE" ? "여성" : "남성"}</p>
           <p>{profile.birthDate.toISOString().slice(0,10)} · {profile.isLunar ? `음력${profile.isLeapMonth ? " (윤달)" : ""}` : "양력"} · {profile.birthTime ?? "시각 모름"}</p>
-          <p className="retro-checkout-copy">대상 정보를 한 번 더 확인해줘.<br />같은 계정·출생 정보·연도의 운세는<br />내 운세함에서 추가 결제 없이 다시 읽어.</p>
+          <p className="retro-checkout-copy">대상 정보를 한 번 더 확인해줘.<br />같은 계정·이름·생년월일·연도의 운세는<br />내 운세함에서 추가 결제 없이 다시 읽어.</p>
         </div>
         <p className="commerce-order-total">2026 올해 운세 1건 <strong>{YEARLY_PRICE.toLocaleString("ko-KR")}원</strong></p>
         {ageError ? <><p className="retro-error" role="alert">{ageError}</p><Link className="retro-button" href="/saju">입력 화면으로 돌아가기</Link><p className="retro-form-help">이미 결제한 주문이나 삭제할 정보가 있다면 <Link href="/support">환불 · 개인정보 요청</Link>에서 알려줘.</p></> : <SajuCheckout profileId={profile.id} paymentCustomerId={stableId("portone-customer", account.id).slice(0, 32)} price={YEARLY_PRICE} available={available} testMode={testMode} />}

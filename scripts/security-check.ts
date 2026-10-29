@@ -1,3 +1,5 @@
+import { PROFILE_NOTICE_VERSION, profileNoticeText } from "../src/lib/privacy/profile-use";
+const privacyNotice = { version: PROFILE_NOTICE_VERSION, self: true as const, text: profileNoticeText, acceptedAt: new Date().toISOString() };
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { createRequire } from "node:module";
@@ -43,7 +45,7 @@ const portonePath = require.resolve("../src/lib/portone/server");
 require.cache[portonePath]!.exports = { ...require(portonePath), getPortOnePayment: async () => { paymentCalls++; return parsePortOnePayment(provider, provider.id, "store-test"); } };
 const { verifySajuPayment } = require("../src/lib/saju/library-service") as typeof import("../src/lib/saju/library-service");
 const { POLICY_VERSION, recordCheckoutConsent } = require("../src/lib/commerce/policy") as typeof import("../src/lib/commerce/policy");
-const input = { name: "검사 인물", relationship: "SELF", gender: "female", birthDate: "1995-05-20", birthTime: "20:20", calendar: "solar", isLeapMonth: false };
+const input = { notice: { version: PROFILE_NOTICE_VERSION, self: true }, name: "검사 인물", relationship: "SELF", gender: "female", birthDate: "1995-05-20", birthTime: "20:20", calendar: "solar", isLeapMonth: false };
 const provider = { id: "saju_test-payment", storeId: "store-test", channel: { key: "channel-test", type: "LIVE" }, amount: { total: 3900, cancelled: 0 }, currency: "KRW", status: "PAID" };
 let paymentStatus = "READY";
 let profileOwner: string | null = "A";
@@ -56,7 +58,7 @@ let reportCount = 0;
 let cancelBetweenReadAndWrite = false;
 const order = () => ({ id: "order-fixture", merchantUid: provider.id, userId: "A", amount: 3900, status: paymentStatus, paidAt: null, product: { id: "product-fixture", price: 3900, code: "yearly_2026", active: true }, sajuProfileId: "profile-fixture", sajuProfile: { userId: profileOwner } });
 store.consumeRateLimit = async () => !rateBlocked;
-store.getProfile = (async () => ({ id: "profile-fixture", userId: profileOwner, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false })) as never;
+store.getProfile = (async () => ({ id: "profile-fixture", userId: profileOwner, relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false })) as never;
 store.getProduct = (async () => order().product) as never;
 store.getOrder = (async () => {
   const found = { ...order(), productCode: "yearly_2026" };

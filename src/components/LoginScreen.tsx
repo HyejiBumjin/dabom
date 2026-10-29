@@ -1,5 +1,6 @@
 "use client";
 
+import { overseasNoticeSummary } from "@/lib/privacy/overseas-notice";
 import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -23,6 +24,7 @@ function LoginContent({ loginReady }: { loginReady: boolean }) {
     <section className="retro-login">
         <LoginHeader />
         <p className="retro-login-copy">받은 운세는 내 운세함에 저장돼.</p>
+        <p className="retro-form-help">{overseasNoticeSummary.login} <Link href="/privacy#overseas">국외 처리와 개인정보 안내</Link></p>
         {error && (
           <p className="retro-error" role="alert">
             {error === "no_code" && "로그인 연결이 끊겼어. 카카오로 다시 시작해줘."}

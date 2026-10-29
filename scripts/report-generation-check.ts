@@ -1,3 +1,5 @@
+import { PROFILE_NOTICE_VERSION, profileNoticeText } from "../src/lib/privacy/profile-use";
+const privacyNotice = { version: PROFILE_NOTICE_VERSION, self: true as const, text: profileNoticeText, acceptedAt: new Date().toISOString() };
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -89,7 +91,7 @@ async function main() {
     Date.now = () => originals.now() + timeOffset;
     console.warn = (...args: unknown[]) => { warnings.push(args); };
     // Legacy documents can retain removed fields; they must never steer new reports.
-    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "fixture-owner", order: null, status: completedAtStart ? "COMPLETED" : stored ? "FAILED" : "PENDING", content: stored, promptVersion: storedPromptVersion, model: storedModel, focusTopics: ["money", "relationships"], sajuProfile: { userId: "fixture-owner", name: readerName, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false, focusTopics: ["mind"], myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "fixture-owner", order: null, status: completedAtStart ? "COMPLETED" : stored ? "FAILED" : "PENDING", content: stored, promptVersion: storedPromptVersion, model: storedModel, focusTopics: ["money", "relationships"], sajuProfile: { userId: "fixture-owner", name: readerName, relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false, focusTopics: ["mind"], myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
     store.claimReport = (async (_id: string, data: { promptVersion: string; model: string }) => { claims.push(data); return claimCount ? "fixture-lease" : null; }) as unknown as typeof originals.claim;
     store.updateReport = (async (_id: string, _lease: string, data: Update) => { updates.push(structuredClone(data)); }) as unknown as typeof originals.update;
     Responses.prototype.create = (async (raw: unknown) => {
@@ -533,7 +535,7 @@ async function main() {
     const { POST } = require("../src/app/api/saju/reports/[reportId]/generate/route") as typeof import("../src/app/api/saju/reports/[reportId]/generate/route");
     const { POST: createReport } = require("../src/app/api/saju/profiles/[profileId]/reports/route") as typeof import("../src/app/api/saju/profiles/[profileId]/reports/route");
     store.consumeRateLimit = (async () => true) as never;
-    store.getProfile = (async () => ({ id: "profile-fixture", userId: "reader-account", birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false })) as unknown as typeof originals.findProfile;
+    store.getProfile = (async () => ({ id: "profile-fixture", userId: "reader-account", relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false })) as unknown as typeof originals.findProfile;
     store.getReportWithAccess = (async () => null) as unknown as typeof originals.find;
     store.ensureReport = (async (_uid: string, _id: string, metadata: typeof creations[number]) => { creations.push(metadata); return { id: "default-message-report" }; }) as unknown as typeof originals.upsertReport;
     const createdResponse = await createReport(new Request("http://localhost/api/saju/profiles/profile-fixture/reports", { method: "POST" }), { params: Promise.resolve({ profileId: "profile-fixture" }) });
@@ -564,7 +566,7 @@ async function main() {
     let generationResponse = await POST(new Request("http://localhost/api/saju/reports/fixture/generate", { method: "POST" }), { params: Promise.resolve({ reportId: "fixture" }) });
     assert.equal(generationResponse.status, 200);
     assert.equal((await generationResponse.json()).status, "COMPLETED");
-    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "reader-account", status: "FAILED", content: null, sajuProfile: { userId: "reader-account", name: readerName, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false, myeongsik: {} }, order: null })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "reader-account", status: "FAILED", content: null, sajuProfile: { userId: "reader-account", name: readerName, relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false, myeongsik: {} }, order: null })) as unknown as typeof originals.find;
     generationResponse = await POST(new Request("http://localhost/api/saju/reports/fixture/generate", { method: "POST" }), { params: Promise.resolve({ reportId: "fixture" }) });
     assert.equal(generationResponse.status, 503);
     assert.equal((await generationResponse.json()).error, PUBLIC_REPORT_FAILURE_MESSAGE);

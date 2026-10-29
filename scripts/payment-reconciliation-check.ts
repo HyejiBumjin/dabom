@@ -1,3 +1,5 @@
+import { PROFILE_NOTICE_VERSION, profileNoticeText } from "../src/lib/privacy/profile-use";
+const privacyNotice = { version: PROFILE_NOTICE_VERSION, self: true as const, text: profileNoticeText, acceptedAt: new Date().toISOString() };
 import assert from "node:assert/strict";
 import { randomUUID, createHmac } from "node:crypto";
 import { createRequire } from "node:module";
@@ -55,7 +57,7 @@ async function refresh(orderId: string, age = 0) {
 }
 async function seed(name: string, age = 0, completed = true) {
   const profileId = `profile_${name}`, orderId = `saju_${name}`;
-  await store.collection("profiles").doc(profileId).create({ userId: owner, name: "합성", myeongsikJson: "{}", birthDate: new Date("1995-05-20"), createdAt: new Date() });
+  await store.collection("profiles").doc(profileId).create({ userId: owner, name: "합성", myeongsikJson: "{}", relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20"), createdAt: new Date() });
   await store.collection("orders").doc(orderId).create({ userId: owner, sajuProfileId: profileId, productCode: metadata.productCode, productId: metadata.productCode, merchantUid: orderId, status: "READY", amount: 3900, createdAt: new Date(), paidAt: null, paidAmount: null, pgTxId: null });
   const report = await store.fulfillOrder(owner, orderId, payment(orderId), metadata);
   if (completed) await store.collection("reports").doc(report.id).update({ status: "COMPLETED", contentJson: '{"paragraphs":["synthetic-private-content"]}', firstDeliveredAt: new Date() });

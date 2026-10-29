@@ -3,7 +3,7 @@ import { formatReportEmoticons, REPORT_EMOTICON_INSTRUCTIONS, stripReportDecorat
 import { z } from "zod";
 import { firebaseStore } from "@/lib/firebase/store";
 import { requireReportEntitlement } from "@/lib/portone/entitlement";
-import { assertProfileAge } from "@/lib/saju/profile-age";
+import { assertProfileUse } from "@/lib/saju/profile-age";
 import { buildReportEvidencePrompt, getReportPrompt, REPORT_OPENING_FLOW_INSTRUCTIONS, REPORT_PLAIN_LANGUAGE_INSTRUCTIONS, REPORT_PERSONALIZATION_INSTRUCTIONS } from "@/lib/prompts/v6";
 import { buildReportRenderPayload, type ReportTone } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
@@ -165,7 +165,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
   const deadline = Date.now() + MAX_RENDER_TIME_MS;
   const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || report.status === "COMPLETED") return;
-  assertProfileAge(report.sajuProfile);
+  assertProfileUse(report.sajuProfile);
   // Check the provider immediately before claiming work, including non-HTTP callers.
   await requireReportEntitlement(report, report.userId, "generate");
   const prompt = getReportPrompt(options.tone ?? DEFAULT_REPORT_TONE);

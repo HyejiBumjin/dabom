@@ -7,12 +7,15 @@ import { canReadDevelopmentPreview, type DevelopmentPreviewAccess } from "@/lib/
 import { allowsDevelopmentReports, paymentCollectionPrefix } from "@/lib/portone/payment-mode";
 import { recordCheckoutConsent, type CheckoutConsentRecord } from "@/lib/commerce/policy";
 import { assertProfileAge } from "@/lib/saju/profile-age";
+import { profileIdentityParts, sameProfileIdentity } from "@/lib/saju/profile-identity";
+import { profileUseError, type ProfileNoticeRecord } from "@/lib/privacy/profile-use";
+import { RequestSecurityError } from "@/lib/security/request";
 import { READ_ACCOUNT_LIMIT, READ_LEASE_SIZE, READ_WINDOW_MS } from "@/lib/security/read-rate-limit";
 import { LIBRARY_PAGE_SIZE, LIBRARY_REPORT_LIMIT, libraryFilter, parseLibraryCursor, type LibraryFilter } from "@/lib/saju/library-page";
 import { isPaymentReadFresh, isPaymentGenerationFresh, PAYMENT_CHECK_LEASE_MS, PAYMENT_CHECK_RETRY_MS, type PaymentVerification, type PaymentCheckOutcome } from "@/lib/portone/verification-policy";
 
 export type Account = { id: string; kakaoId: string; nickname: string; email: string | null; createdAt: Date; dataEpoch?: string; deletionPending?: boolean };
-export type Profile = { id: string; userId: string; birthKey: string; name: string; relationship: Relationship; gender: "MALE" | "FEMALE"; birthDate: Date; birthTime: string | null; isLunar: boolean; isLeapMonth: boolean; myeongsik: unknown; createdAt: Date };
+export type Profile = { id: string; userId: string; birthKey: string; name: string; relationship: Relationship; gender: "MALE" | "FEMALE"; birthDate: Date; birthTime: string | null; isLunar: boolean; isLeapMonth: boolean; myeongsik: unknown; createdAt: Date; privacyNotice?: ProfileNoticeRecord };
 export type Product = { id: string; code: string; name: string; price: number; active: boolean };
 export type Order = PaymentVerification & { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date; checkoutConsent?: CheckoutConsentRecord };
 export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date; developmentPreviewAccess?: DevelopmentPreviewAccess; firstDeliveredAt?: Date; firstOpenedAt?: Date };
@@ -22,6 +25,7 @@ export type NewReport = Pick<Report, "promptVersion" | "model" | "productCode">;
 type LibraryProfileRecord = Pick<Profile, "id" | "userId" | "name" | "relationship" | "birthDate" | "birthTime" | "isLunar" | "createdAt">;
 type LibraryReportRecord = Pick<Report, "id" | "userId" | "sajuProfileId" | "productCode" | "status" | "orderId" | "createdAt" | "developmentPreviewAccess">;
 type LibraryOrderRecord = Pick<Order, "id" | "userId" | "sajuProfileId" | "productCode" | "status">;
+type ProfileIdentityRecord = Pick<Profile, "id" | "userId" | "name" | "birthKey" | "birthDate" | "isLunar" | "isLeapMonth" | "createdAt">;
 export const stableId = (...parts: string[]) => createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 const validId = (id: string) => /^[A-Za-z0-9_-]{1,128}$/.test(id);
 
@@ -81,6 +85,25 @@ export class FirebaseStore {
     });
   }
   getProfile(id: string) { return this.read<Profile>("profiles", id); }
+  async findInputProfiles(data: Pick<Profile, "userId" | "name" | "birthKey" | "birthDate" | "isLunar" | "isLeapMonth">, tx?: Transaction) {
+    // Owner-only metadata search also finds legacy IDs without migrating paid
+    // reports. Bound reads; never silently skip older data and create a charge.
+    const query = this.collection("profiles").where("userId", "==", data.userId).select("userId", "name", "birthKey", "birthDate", "isLunar", "isLeapMonth", "createdAt").limit(201);
+    const page = await (tx ? tx.get(query) : query.get());
+    if (page.size > 200) throw new RequestSecurityError(409, "저장된 정보가 많아 확인이 필요해. 고객센터로 알려줘.");
+    const matches = page.docs.map(doc => decode<ProfileIdentityRecord>(doc)!).filter(profile => sameProfileIdentity(profile, data) || profile.birthKey === data.birthKey);
+    matches.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+    return matches;
+  }
+  async findInputProfile(data: Pick<Profile, "userId" | "name" | "birthKey" | "birthDate" | "isLunar" | "isLeapMonth">, tx?: Transaction) {
+    const matches = await this.findInputProfiles(data, tx);
+    return matches.length ? this.read<Profile>("profiles", matches[0].id, tx) : null;
+  }
+  assertProfileUse(profile: Profile) {
+    assertProfileAge(profile);
+    const error = profileUseError(profile);
+    if (error) throw new RequestSecurityError(409, error);
+  }
   getProduct(code: string) { return this.read<Product>("products", code); }
   getOrder(id: string) { return this.read<Order>("orders", id); }
   getReport(id: string) { return this.read<Report>("reports", id); }
@@ -106,14 +129,16 @@ export class FirebaseStore {
     return { ...report, sajuProfile: profile, order: linked };
   }
   async saveProfile(data: Omit<Profile, "id" | "createdAt">, expectedEpoch: string) {
-    assertProfileAge(data);
+    this.assertProfileUse(data as Profile);
     return this.transaction(async tx => {
       const account = await this.requireActiveAccount(data.userId, tx);
       if ((account.dataEpoch ?? "legacy") !== expectedEpoch) throw new Error("ACCOUNT_CHANGED");
-      const id = account.dataEpoch ? stableId(data.userId, data.birthKey, account.dataEpoch) : stableId(data.userId, data.birthKey);
+      const match = await this.findInputProfile(data, tx);
+      const id = match?.id ?? stableId(data.userId, "self-identity-v1", ...profileIdentityParts(data), expectedEpoch);
       const previous = await this.read<Profile>("profiles", id, tx);
       if (previous && previous.userId !== data.userId) throw new Error("PROFILE_OWNER_MISMATCH");
-      if (previous) tx.update(this.collection("profiles").doc(id), { name: data.name, relationship: data.relationship });
+      if (previous && previous.relationship !== "SELF") throw new RequestSecurityError(409, "기존 타인 정보는 본인 정보로 바꿀 수 없어. 고객센터에서 확인해줘.");
+      if (previous) tx.update(this.collection("profiles").doc(id), { name: data.name, privacyNotice: !profileUseError(previous) ? previous.privacyNotice : data.privacyNotice });
       else tx.create(this.collection("profiles").doc(id), encode({ ...data, createdAt: new Date() }));
       return { profileId: id, existing: Boolean(previous) };
     });
@@ -132,7 +157,7 @@ export class FirebaseStore {
       const id = this.reportId(profileId, metadata.productCode);
       const existing = await this.read<Report>("reports", id, tx);
       if (existing && (existing.userId !== userId || existing.sajuProfileId !== profileId)) throw new Error("REPORT_OWNER_MISMATCH");
-      if (existing?.status !== "COMPLETED") assertProfileAge(profile);
+      if (existing?.status !== "COMPLETED") this.assertProfileUse(profile);
       const report = existing ?? this.newReport(userId, profileId, metadata, orderId);
       if (!existing) tx.create(this.collection("reports").doc(id), encode(report));
       else if (orderId && existing.orderId !== orderId) tx.update(this.collection("reports").doc(id), { orderId });
@@ -144,10 +169,19 @@ export class FirebaseStore {
       await this.requireActiveAccount(userId, tx);
       const profile = await this.read<Profile>("profiles", profileId, tx);
       if (!profile || profile.userId !== userId) throw new Error("PROFILE_NOT_FOUND");
-      assertProfileAge(profile);
+      this.assertProfileUse(profile);
       const product = await this.read<Product>("products", metadata.productCode, tx);
       if (!product || !product.active || !Number.isSafeInteger(product.price) || product.price <= 0) throw new Error("PRODUCT_UNAVAILABLE");
       const id = this.orderId(userId, profileId, product.code);
+      // Older releases could create separate profiles when only the birth time
+      // changed. A crafted checkout against a second old ID must not charge twice.
+      for (const match of await this.findInputProfiles(profile, tx)) {
+        if (match.id === profileId) continue;
+        const otherOrder = await this.read<Order>("orders", this.orderId(userId, match.id, product.code), tx);
+        if (otherOrder && otherOrder.userId === userId && otherOrder.sajuProfileId === match.id && otherOrder.productCode === product.code) {
+          throw new RequestSecurityError(409, "같은 이름·생년월일의 주문이 이미 있어. 내 운세함에서 기존 주문을 확인해줘.");
+        }
+      }
       const existing = await this.read<Order>("orders", id, tx);
       if (existing && (existing.userId !== userId || existing.sajuProfileId !== profileId || existing.productCode !== product.code)) throw new Error("ORDER_NOT_FOUND");
       if (existing?.status === "CANCELLED") throw new Error("ORDER_CANCELLED");
@@ -301,7 +335,7 @@ export class FirebaseStore {
       const profile = await this.read<Profile>("profiles", report.sajuProfileId, tx);
       const order = report.orderId ? await this.read<Order>("orders", report.orderId, tx) : null;
       if (!profile || profile.userId !== userId || !development && (!order || order.status !== "PAID" || order.userId !== userId || order.sajuProfileId !== profile.id || order.productCode !== report.productCode)) throw new Error("PAYMENT_REQUIRED");
-      assertProfileAge(profile);
+      this.assertProfileUse(profile);
       if (order && !isPaymentGenerationFresh(order)) throw new Error("PAYMENT_RECHECK_REQUIRED");
       // Recover an interrupted request after the serverless request budget expires.
       if (report.status === "GENERATING" && report.generationStartedAt && Date.now() - report.generationStartedAt.getTime() < 120_000) return null;

@@ -1,7 +1,7 @@
 import { Lunar } from "lunar-javascript";
 
 export const MINIMUM_REPORT_AGE = 14;
-export const MINIMUM_AGE_MESSAGE = "만 14세 이상인 사람의 운세만 받을 수 있어. 가족·친구의 정보도 같은 기준이야.";
+export const MINIMUM_AGE_MESSAGE = "만 14세 이상인 본인의 운세만 받을 수 있어.";
 export const INVALID_BIRTH_DATE_MESSAGE = "생년월일과 양력·음력·윤달 여부를 다시 확인해줘.";
 type BirthInput = { birthDate: string; calendar: "solar" | "lunar"; isLeapMonth: boolean };
 

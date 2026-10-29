@@ -50,7 +50,8 @@
     "privacy:requests": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-requests.ts",
     "support:check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/support-request-check.ts",
     "privacy:recovery": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-recovery.ts",
-    "privacy:recovery-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-recovery-check.ts"
+    "privacy:recovery-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-recovery-check.ts",
+    "privacy:profile-check": "node --require ./scripts/testing/server-only.cjs --import tsx scripts/privacy-profile-use-check.ts"
   },
   "dependencies": {
     "@portone/browser-sdk": "^0.1.3",

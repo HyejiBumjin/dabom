@@ -1,3 +1,4 @@
+import { PROFILE_NOTICE_VERSION } from "../src/lib/privacy/profile-use";
 import { accountScope } from "../src/lib/account-scope";
 import { restoreProfileDraft } from "../src/lib/profile-draft";
 import assert from "node:assert/strict";
@@ -48,7 +49,7 @@ async function main() {
     await store.saveAccount(uid, "98765001", "합성");
     await store.saveAccount(other, "98765002", "다른 사람");
     await store.collection("sessions").doc("synthetic_session").set({ uid, expiresAt: Timestamp.fromMillis(Date.now() + 10000) });
-    await saveSajuProfile(other, input, store);
+    await saveSajuProfile(other, input, store, { version: PROFILE_NOTICE_VERSION, self: true });
   }
   const store = stores[0];
   check("forged account and missing deletion consent rejected", !serviceRequestSchema.safeParse({kind:"ACCOUNT_DELETE",requestKey:caseKey,deletionAcknowledged:true,userId:other}).success && !serviceRequestSchema.safeParse({kind:"ACCOUNT_DELETE",requestKey:caseKey}).success);
@@ -57,7 +58,7 @@ async function main() {
   await assert.rejects(() => createServiceRequest(store, other, {kind:"REFUND", requestKey:randomUUID(),orderId:"saju_foreign"})); check("foreign refund order is rejected", true);
   await assert.rejects(() => eraseAccount(stores, auth, uid, `unverified_${randomUUID()}`)); check("operator cannot erase without authenticated deletion request", true);
   await store.collection("products").doc(meta.productCode).create({ id: meta.productCode, code: meta.productCode, name: "합성 상품", price: 3900, active: true });
-  const profile = await saveSajuProfile(uid, input, store);
+  const profile = await saveSajuProfile(uid, input, store, { version: PROFILE_NOTICE_VERSION, self: true });
   const oldAccount = (await store.getAccount(uid))!;
   const originalProfile = (await store.getProfile(profile.profileId))!;
   const order = await store.prepareOrder(uid, profile.profileId, meta, { version: POLICY_VERSION, terms: true, digitalContent: true });
@@ -86,7 +87,7 @@ async function main() {
   const archive = (await store.collection("legalRecords").doc(order.orderId).get()).data()!;
   check("consent version and amount preserved", archive.consents[0].version === POLICY_VERSION && archive.amount === 3900);
   const rejoined = await store.saveAccount(uid, "98765001", "새 가입");
-  const freshProfile = await saveSajuProfile(uid, input, store);
+  const freshProfile = await saveSajuProfile(uid, input, store, { version: PROFILE_NOTICE_VERSION, self: true });
   check("rejoin invalidates old browser identity and birth draft", accountScope(oldAccount) !== accountScope(rejoined) && restoreProfileDraft(JSON.stringify({accountId:accountScope(oldAccount),input}),accountScope(rejoined)) === null);
   check("rejoin has fresh profile and provider payment IDs", rejoined.dataEpoch !== oldAccount.dataEpoch && freshProfile.profileId !== profile.profileId && store.orderId(uid, freshProfile.profileId, meta.productCode) !== order.orderId);
   await assert.rejects(() => store.saveProfile(originalProfile, oldAccount.dataEpoch!)); check("old account epoch cannot write after rejoin", true);

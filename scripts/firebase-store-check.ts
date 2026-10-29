@@ -1,3 +1,4 @@
+import { PROFILE_NOTICE_VERSION } from "../src/lib/privacy/profile-use";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
@@ -32,16 +33,26 @@ async function main() {
   await store.saveAccount("kakao_10001", "10001", "합성 사용자");
   await store.saveAccount("kakao_10002", "10002", "합성 사용자 2");
   await store.collection("products").doc(metadata.productCode).create({ ...metadata, code: metadata.productCode, name: "합성 상품", active: true, price: 3900 });
-  const profiles = await Promise.all(Array.from({length: 4}, () => saveSajuProfile("kakao_10001", input, store)));
+  const profiles = await Promise.all(Array.from({length: 4}, () => saveSajuProfile("kakao_10001", input, store, { version: PROFILE_NOTICE_VERSION, self: true })));
   const profileId = profiles[0].profileId;
   check("concurrent identical profile writes create one document", new Set(profiles.map(p => p.profileId)).size === 1 && profiles.filter(p => !p.existing).length === 1);
-  const other = await saveSajuProfile("kakao_10002", input, store);
+  const other = await saveSajuProfile("kakao_10002", input, store, { version: PROFILE_NOTICE_VERSION, self: true });
   check("identical birthdays are isolated by account", other.profileId !== profileId);
-  const renamed = await saveSajuProfile("kakao_10001", { ...input, name: "바뀐 표시 이름", relationship: "FAMILY" }, store);
-  check("name/relationship edit reuses birth profile", renamed.profileId === profileId && (await store.getProfile(profileId))?.name === "바뀐 표시 이름");
+  const changedTime = await saveSajuProfile("kakao_10001", { ...input, birthTime: "07:00" }, store, { version: PROFILE_NOTICE_VERSION, self: true });
+  check("same name and birthday cannot create a second profile by changing time", changedTime.profileId === profileId && changedTime.existing);
+  for (const notice of [undefined, {}, { version: "old", self: true }, { version: PROFILE_NOTICE_VERSION, self: false }, { version: PROFILE_NOTICE_VERSION, self: true, acceptedAt: "2000-01-01" }]) {
+    await rejects("missing/stale/forged subject notice rejected", () => saveSajuProfile("kakao_10001", input, store, notice));
+  }
+  await rejects("family input cannot be relabelled as self by the service", () => saveSajuProfile("kakao_10001", { ...input, relationship: "FAMILY" }, store, { version: PROFILE_NOTICE_VERSION, self: true }));
+  await store.saveAccount("kakao_10003", "10003", "동시 중복 검사");
+  const variants = await Promise.all(["07:00", "20:20", null].map(birthTime => saveSajuProfile("kakao_10003", { ...input, birthTime }, store, { version: PROFILE_NOTICE_VERSION, self: true })));
+  check("concurrent different-time first submissions create one identity", new Set(variants.map(p => p.profileId)).size === 1 && variants.filter(p => !p.existing).length === 1);
+  const renamed = await saveSajuProfile("kakao_10001", { ...input, name: "바뀐 표시 이름" }, store, { version: PROFILE_NOTICE_VERSION, self: true });
+  check("display name edit reuses birth profile", renamed.profileId === profileId && (await store.getProfile(profileId))?.name === "바뀐 표시 이름");
   check("calendar and unknown time affect birth identity", profileBirthKey(input) !== profileBirthKey({ ...input, birthTime: null }) && profileBirthKey(input) !== profileBirthKey({ ...input, calendar: "lunar" }));
   check("unsafe document paths do not resolve", await store.getProfile("../users/owner") === null);
   const profile = await store.getProfile(profileId);
+  check("server records subject notice text and date", profile?.privacyNotice?.self && profile.privacyNotice.version === PROFILE_NOTICE_VERSION && Number.isFinite(Date.parse(profile.privacyNotice.acceptedAt)));
   check("calculation JSON and date round trip", profile?.birthDate instanceof Date && typeof profile.myeongsik === "object");
   // Stored preferences from the retired topic selector must not affect new purchases.
   await store.collection("profiles").doc(profileId).update({ focusTopics: ["career"] });
@@ -92,6 +103,15 @@ async function main() {
   await Promise.all(Array.from({ length: 4 }, () => store.markReportReceipt("kakao_10001", reportId, "opened")));
   check("repeat opening preserves first timestamp", (await store.getReport(reportId))!.firstOpenedAt!.getTime() === firstReceipt.firstOpenedAt!.getTime());
   check("completed generation is idempotent", await store.claimReport(reportId, {}, "kakao_10001", false) === null);
+  const legacyDuplicateId = "synthetic_older_duplicate";
+  await store.collection("profiles").doc(legacyDuplicateId).create({
+    ...(await store.collection("profiles").doc(profileId).get()).data(),
+    birthTime: "07:00", birthKey: profileBirthKey({ ...input, birthTime: "07:00" }), createdAt: Timestamp.fromMillis(1_000),
+  });
+  check("older empty duplicate never hides a completed paid report", (await findExistingSajuReport("kakao_10001", { ...input, name: "바뀐 표시 이름", birthTime: null }, store, false))?.id === reportId);
+  await rejects("crafted checkout of an old duplicate cannot charge again", () => store.prepareOrder("kakao_10001", legacyDuplicateId, metadata, consent));
+  check("blocked duplicate leaves no second order", !(await store.getOrder(store.orderId("kakao_10001", legacyDuplicateId, metadata.productCode))));
+  await store.collection("profiles").doc(legacyDuplicateId).delete();
   check("library exposes only own paid reports", (await store.listLibrary("kakao_10001", false))[0].reports.length === 1 && (await store.listLibrary("kakao_10002", false))[0].reports.length === 0);
   await Promise.allSettled([store.cancelOrder("kakao_10001", orderId), store.fulfillOrder("kakao_10001", orderId, payment, metadata)]);
   check("cancellation wins confirmation race", (await store.getOrder(orderId))?.status === "CANCELLED");

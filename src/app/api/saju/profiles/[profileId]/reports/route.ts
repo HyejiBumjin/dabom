@@ -6,7 +6,7 @@ import { ensureSajuReport } from "@/lib/saju/library-service";
 import { guardedMutation } from "@/lib/security/request";
 import { enforceAccountRateLimit } from "@/lib/security/rate-limit";
 import { allowsDevelopmentReports } from "@/lib/portone/payment-mode";
-import { assertProfileAge } from "@/lib/saju/profile-age";
+import { assertProfileUse } from "@/lib/saju/profile-age";
 
 export async function POST(request: Request, { params }: { params: Promise<{ profileId: string }> }) {
   return guardedMutation(request, async () => {
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   await enforceAccountRateLimit(account.id, "report-create", 20, 3_600_000);
 
   const existing = await firebaseStore.getReportWithAccess(firebaseStore.reportId(profile.id, SAJU_PRODUCT_CODE));
-  if (existing?.status !== "COMPLETED") assertProfileAge(profile);
+  if (existing?.status !== "COMPLETED") assertProfileUse(profile);
   if (existing && canReadSajuReport(existing, account)) return NextResponse.json({ reportId: existing.id, existing: true });
 
   if (!allowsDevelopmentReports()) return NextResponse.json({ error: "처음 받는 올해 운세는 결제가 필요해.", checkoutUrl: `/saju/profiles/${profileId}/checkout` }, { status: 402 });

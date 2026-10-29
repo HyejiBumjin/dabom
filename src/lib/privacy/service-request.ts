@@ -5,6 +5,7 @@ import { FirebaseStore, stableId } from "@/lib/firebase/store";
 export const serviceRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ACCOUNT_DELETE"), requestKey: z.uuid(), deletionAcknowledged: z.literal(true) }).strict(),
   z.object({ kind: z.literal("REFUND"), requestKey: z.uuid(), orderId: z.string().regex(/^saju_[A-Za-z0-9_-]{1,75}$/).optional() }).strict(),
+  z.object({ kind: z.literal("PRIVACY_STOP"), requestKey: z.uuid() }).strict(),
 ]);
 export async function createServiceRequest(store: FirebaseStore, uid: string, input: unknown) {
   const data = serviceRequestSchema.parse(input);

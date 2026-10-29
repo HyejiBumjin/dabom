@@ -9,6 +9,6 @@ export function restoreProfileDraft(raw: string | null, accountId: string) {
     const saved = JSON.parse(raw) as { accountId?: unknown; input?: unknown } | null;
     if (!saved || saved.accountId !== accountId) return null;
     const parsed = profileInputSchema.safeParse(saved.input);
-    return parsed.success ? parsed.data : null;
+    return parsed.success && parsed.data.relationship === "SELF" ? parsed.data : null;
   } catch { return null; }
 }

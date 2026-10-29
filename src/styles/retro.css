@@ -110,6 +110,15 @@
 .commerce-details > div { margin-bottom: 22px; }
 .commerce-details dt { margin-bottom: 5px; font-weight: 650; }
 .commerce-muted { font-size: 13px; color: #635b7e; line-height: 1.8; }
+.privacy-jump-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 24px 0; font-size: 14px; }
+.privacy-jump-links a { display: inline-flex; align-items: center; min-height: 36px; }
+.privacy-transfer { margin: 28px 0; padding: 20px 0; border-top: 1px solid #d5cee9; scroll-margin-top: 24px; }
+.privacy-transfer h3, .privacy-subheading { margin: 0 0 20px; font-size: 17px; font-weight: 650; line-height: 1.6; }
+.privacy-subheading { margin-top: 28px; scroll-margin-top: 24px; }
+.privacy-transfer .commerce-details { margin: 0; }
+.commerce-page .privacy-source-links { margin-top: 16px; font-size: 13px; }
+.commerce-page .privacy-source-links li { margin: 6px 0; }
+.commerce-page ol { padding-left: 22px; list-style: decimal; }
 .commerce-sample .retro-bubble { margin: 20px 0; padding: 18px; white-space: pre-line; font-size: 15px; line-height: 1.9; }
 .commerce-order-total { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 24px 0; font-size: 16px; }
 .commerce-consents { margin: 24px 0; text-align: left; }
