@@ -13,14 +13,15 @@ import { RequestSecurityError } from "@/lib/security/request";
 import { READ_ACCOUNT_LIMIT, READ_LEASE_SIZE, READ_WINDOW_MS } from "@/lib/security/read-rate-limit";
 import { LIBRARY_PAGE_SIZE, LIBRARY_REPORT_LIMIT, libraryFilter, parseLibraryCursor, type LibraryFilter } from "@/lib/saju/library-page";
 import { isPaymentReadFresh, isPaymentGenerationFresh, PAYMENT_CHECK_LEASE_MS, PAYMENT_CHECK_RETRY_MS, type PaymentVerification, type PaymentCheckOutcome } from "@/lib/portone/verification-policy";
+import { REPORT_GENERATION_LEASE_MS, type ReportGenerationDiagnostics } from "@/lib/llm/report-runtime-policy";
 
 export type Account = { id: string; kakaoId: string; nickname: string; email: string | null; createdAt: Date; dataEpoch?: string; deletionPending?: boolean };
 export type Profile = { id: string; userId: string; birthKey: string; name: string; relationship: Relationship; gender: "MALE" | "FEMALE"; birthDate: Date; birthTime: string | null; isLunar: boolean; isLeapMonth: boolean; myeongsik: unknown; createdAt: Date; privacyNotice?: ProfileNoticeRecord };
 export type Product = { id: string; code: string; name: string; price: number; active: boolean };
 export type Order = PaymentVerification & { id: string; userId: string; productId: string; productCode: string; sajuProfileId: string; merchantUid: string; status: "READY" | "PAID" | "FAILED" | "CANCELLED"; amount: number; paidAmount: number | null; paidAt: Date | null; pgTxId: string | null; createdAt: Date; checkoutConsent?: CheckoutConsentRecord };
-export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date; developmentPreviewAccess?: DevelopmentPreviewAccess; firstDeliveredAt?: Date; firstOpenedAt?: Date };
+export type Report = { id: string; userId: string; orderId: string | null; sajuProfileId: string; productCode: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: unknown; promptVersion: string; model: string; retryCount: number; lastError: string | null; createdAt: Date; completedAt: Date | null; generationId?: string; generationStartedAt?: Date; renderCheckpointJson?: string | null; generationDiagnostics?: ReportGenerationDiagnostics; developmentPreviewAccess?: DevelopmentPreviewAccess; firstDeliveredAt?: Date; firstOpenedAt?: Date };
 export type ReportWithAccess = Report & { sajuProfile: Profile; order: Order | null };
-export type ReportPatch = Partial<Pick<Report, "status" | "content" | "retryCount" | "lastError" | "completedAt" | "promptVersion" | "model">>;
+export type ReportPatch = Partial<Pick<Report, "status" | "content" | "retryCount" | "lastError" | "completedAt" | "promptVersion" | "model" | "renderCheckpointJson" | "generationDiagnostics">>;
 export type NewReport = Pick<Report, "promptVersion" | "model" | "productCode">;
 type LibraryProfileRecord = Pick<Profile, "id" | "userId" | "name" | "relationship" | "birthDate" | "birthTime" | "isLunar" | "createdAt">;
 type LibraryReportRecord = Pick<Report, "id" | "userId" | "sajuProfileId" | "productCode" | "status" | "orderId" | "createdAt" | "developmentPreviewAccess">;
@@ -138,7 +139,7 @@ export class FirebaseStore {
       const previous = await this.read<Profile>("profiles", id, tx);
       if (previous && previous.userId !== data.userId) throw new Error("PROFILE_OWNER_MISMATCH");
       if (previous && previous.relationship !== "SELF") throw new RequestSecurityError(409, "기존 타인 정보는 본인 정보로 바꿀 수 없어. 고객센터에서 확인해줘.");
-      if (previous) tx.update(this.collection("profiles").doc(id), { name: data.name, privacyNotice: !profileUseError(previous) ? previous.privacyNotice : data.privacyNotice });
+      if (previous) tx.update(this.collection("profiles").doc(id), { name: data.name });
       else tx.create(this.collection("profiles").doc(id), encode({ ...data, createdAt: new Date() }));
       return { profileId: id, existing: Boolean(previous) };
     });
@@ -338,7 +339,7 @@ export class FirebaseStore {
       this.assertProfileUse(profile);
       if (order && !isPaymentGenerationFresh(order)) throw new Error("PAYMENT_RECHECK_REQUIRED");
       // Recover an interrupted request after the serverless request budget expires.
-      if (report.status === "GENERATING" && report.generationStartedAt && Date.now() - report.generationStartedAt.getTime() < 120_000) return null;
+      if (report.status === "GENERATING" && report.generationStartedAt && Date.now() - report.generationStartedAt.getTime() < REPORT_GENERATION_LEASE_MS) return null;
       const generationId = randomUUID();
       tx.update(this.collection("reports").doc(id), encode({ ...patch, status: "GENERATING", generationId, generationStartedAt: new Date() }));
       return generationId;

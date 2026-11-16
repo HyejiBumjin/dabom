@@ -186,6 +186,40 @@ async function main() {
   for (const origin of ["https://evil.test", "null", "https://dabom.test.evil.test", "https://dabom.test@evil.test"]) check(`cross-origin blocked ${origin}`, (await guardedMutation(request("/x", {}, { origin }), async () => new Response("unsafe"))).status === 403);
   check("cross-site fetch metadata denied", (await guardedMutation(request("/x", {}, { "sec-fetch-site": "cross-site" }), async () => new Response())).status === 403);
   assertSameOrigin(request("/x")); check("same-origin allowed", true);
+  // Regression: Next dev normalizes request.url to its wildcard listener when
+  // phones use the explicitly configured LAN address. This is not permission
+  // to trust arbitrary Host/forwarded headers or other local ports.
+  const originalOriginEnvironment = { NODE_ENV: testEnv.NODE_ENV, DABOM_HOSTING: testEnv.DABOM_HOSTING, VERCEL: testEnv.VERCEL };
+  const originProbe = async (url: string, origin: string, headers: Record<string, string> = {}) =>
+    (await guardedMutation(new Request(url, { method: "POST", headers: { origin, "sec-fetch-site": "same-origin", ...headers } }), async () => new Response("safe"))).status;
+  try {
+    testEnv.NODE_ENV = "development";
+    delete testEnv.DABOM_HOSTING;
+    delete testEnv.VERCEL;
+    for (const bind of ["0.0.0.0", "[::]", "localhost", "127.0.0.1", "[::1]"]) {
+      for (const host of ["localhost", "127.0.0.1", "[::1]"]) check(`local listener ${bind} accepts loopback ${host}`, await originProbe(`http://${bind}:3000/api/profiles`, `http://${host}:3000`) === 200);
+    }
+    for (const origin of ["http://localhost:3001", "https://localhost:3000", "http://localhost.evil.test:3000", "http://10.0.0.184:3000", "http://0.0.0.0:3000", "http://[::]:3000", "null", "https://evil.test"]) {
+      check(`dev origin remains bounded: ${origin}`, await originProbe("http://0.0.0.0:3000/api/profiles", origin, { host: new URL(origin === "null" ? "http://evil.test" : origin).host, "x-forwarded-host": "localhost:3000", "x-forwarded-proto": "http" }) === 403);
+    }
+    check("configured application origin stays allowed with a wildcard listener", await originProbe("http://0.0.0.0:3000/api/profiles", "https://dabom.test") === 200);
+    check("same-site metadata cannot authorize a different port", await originProbe("http://0.0.0.0:3000/api/profiles", "http://localhost:3001", { "sec-fetch-site": "same-site" }) === 403);
+    check("cross-site metadata still blocks an allowed local origin", await originProbe("http://0.0.0.0:3000/api/profiles", "http://localhost:3000", { "sec-fetch-site": "cross-site" }) === 403);
+    check("public request URL cannot unlock local origins", await originProbe("https://dabom.test/api/profiles", "http://localhost:3000") === 403);
+    check("HTTPS listener allows its exact protocol and port", await originProbe("https://0.0.0.0:3443/api/profiles", "https://localhost:3443") === 200);
+    check("HTTPS listener rejects a downgrade", await originProbe("https://0.0.0.0:3443/api/profiles", "http://localhost:3443") === 403);
+    for (const flag of ["DABOM_HOSTING", "VERCEL"]) {
+      testEnv[flag] = "1";
+      check(`${flag} disables local development origins`, await originProbe("http://0.0.0.0:3000/api/profiles", "http://localhost:3000") === 403);
+      delete testEnv[flag];
+    }
+    testEnv.NODE_ENV = "production";
+    check("production does not inherit the loopback exception", await originProbe("http://0.0.0.0:3000/api/profiles", "http://localhost:3000") === 403);
+  } finally {
+    for (const [key, value] of Object.entries(originalOriginEnvironment)) {
+      if (value === undefined) delete testEnv[key]; else testEnv[key] = value;
+    }
+  }
   for (const birthDate of ["0000-01-01", "9999-01-01", "2025-02-29", "2026-02-31", "2026-13-01", "1995-05-20 OR 1=1"]) check(`invalid birth rejected ${birthDate}`, !profileInputSchema.safeParse({ ...input, birthDate }).success);
   for (const field of [{ name: "a".repeat(41) }, { name: "abc\u202Edef" }, { birthTime: "24:00" }, { gender: "admin" }, { relationship: "ADMIN" }]) check("invalid profile field rejected", !profileInputSchema.safeParse({ ...input, ...field }).success);
   check("stale clients cannot persist interest selections", !("focusTopics" in profileInputSchema.parse({ ...input, focusTopics: ["career"] })));

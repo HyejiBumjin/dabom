@@ -1,3 +1,6 @@
+import { stem, hiddenStemsByBranch, tenGod } from "@/lib/saju/myeongri-rules";
+import { extractAdvancedMyeongri, type AdvancedMyeongri } from "@/lib/saju/advanced-myeongri";
+import { extractMyeongriSynthesis, type MyeongriSynthesis } from "./myeongri-synthesis";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import { buildReportMonthPeriods, type ReportMonthPeriod } from "@/lib/saju/report-months";
 
@@ -40,12 +43,15 @@ export interface NatalTenGodEvidence {
 }
 
 export interface ReportFacts {
+  advanced: AdvancedMyeongri;
+  synthesis: MyeongriSynthesis;
   targetYear: number;
   dayMaster: string;
   annualGanZhi: string;
   annualTenGod: string;
   natalMonthTenGod: string;
   natalMonthMainTenGod: string;
+  natalDayMainTenGod: string;
   natalTenGodEvidence: NatalTenGodEvidence[];
   daYunGanZhi: string;
   daYunTenGod: string;
@@ -68,34 +74,10 @@ export interface ReportFacts {
   facts: SajuFact[];
 }
 
-type Element = "wood" | "fire" | "earth" | "metal" | "water";
-const stem: Record<string, { element: Element; yang: boolean }> = {
-  甲: { element: "wood", yang: true }, 乙: { element: "wood", yang: false }, 丙: { element: "fire", yang: true }, 丁: { element: "fire", yang: false },
-  戊: { element: "earth", yang: true }, 己: { element: "earth", yang: false }, 庚: { element: "metal", yang: true }, 辛: { element: "metal", yang: false },
-  壬: { element: "water", yang: true }, 癸: { element: "water", yang: false },
-};
-const produces: Record<Element, Element> = { wood: "fire", fire: "earth", earth: "metal", metal: "water", water: "wood" };
-const controls: Record<Element, Element> = { wood: "earth", fire: "metal", earth: "water", metal: "wood", water: "fire" };
-const hiddenStemsByBranch: Record<string, string[]> = {
-  子: ["癸"], 丑: ["己", "癸", "辛"], 寅: ["甲", "丙", "戊"], 卯: ["乙"], 辰: ["戊", "乙", "癸"], 巳: ["丙", "戊", "庚"],
-  午: ["丁", "己"], 未: ["己", "丁", "乙"], 申: ["庚", "壬", "戊"], 酉: ["辛"], 戌: ["戊", "辛", "丁"], 亥: ["壬", "甲"],
-};
 const clashSet = new Set(["子午", "午子", "丑未", "未丑", "寅申", "申寅", "卯酉", "酉卯", "辰戌", "戌辰", "巳亥", "亥巳"]);
 const combinationSet = new Set(["子丑", "丑子", "寅亥", "亥寅", "卯戌", "戌卯", "辰酉", "酉辰", "巳申", "申巳", "午未", "未午"]);
 const godGroup: Record<string, NonNullable<ReportFacts["dominantTenGodGroup"]>> = { 比肩: "비겁", 劫财: "비겁", 食神: "식상", 伤官: "식상", 偏财: "재성", 正财: "재성", 偏官: "관성", 七杀: "관성", 正官: "관성", 偏印: "인성", 正印: "인성" };
 
-function tenGod(dayStem: string, compareStem: string) {
-  const day = stem[dayStem];
-  const compare = stem[compareStem];
-  if (!day || !compare) return null;
-  const samePolarity = day.yang === compare.yang;
-  if (day.element === compare.element) return samePolarity ? "비견" : "겁재";
-  if (produces[day.element] === compare.element) return samePolarity ? "식신" : "상관";
-  if (controls[day.element] === compare.element) return samePolarity ? "편재" : "정재";
-  if (controls[compare.element] === day.element) return samePolarity ? "편관" : "정관";
-  if (produces[compare.element] === day.element) return samePolarity ? "편인" : "정인";
-  return null;
-}
 
 function activeDaYun(myeongsik: Myeongsik) {
   return myeongsik.fortune.daYun.find((period) => period.startYear <= myeongsik.fortune.targetYear && myeongsik.fortune.targetYear <= period.endYear);
@@ -147,13 +129,19 @@ function natalRelations(myeongsik: Myeongsik): BranchRelationFact[] {
 }
 
 /**
- * Pick at most three distinct periods across the whole fortune year. This is
- * deliberately independent of Date.now(): saved charts select the same
- * evidence when revisited. Renderers may mark each period past/current/future.
- * Relation-kind coverage wins first, so clashes cannot suppress combinations.
+ * With an explicit reading date, prefer the current and remaining periods.
+ * No ambient clock: the same chart and reading date always select the same
+ * evidence. Without a date, retain the full-year extraction used by fixtures.
  */
-function selectRepresentativeMonths(calendar: MonthlyCalendarFact[]): MonthlyRelationMonth[] {
-  const candidates = calendar.filter((month) => month.relations.some((relation) => relation.relation !== "overlap"));
+function selectRepresentativeMonths(calendar: MonthlyCalendarFact[], asOf?: Date): MonthlyRelationMonth[] {
+  const instant = asOf?.getTime();
+  if (instant !== undefined && !Number.isFinite(instant)) throw new Error("리포트 기준 시각이 올바르지 않습니다.");
+  const remaining = instant === undefined ? [] : calendar.filter(month => Date.parse(month.endAt) > instant);
+  // After the fortune year has ended, keep a clearly retrospective selection.
+  // A period without a branch relation still has its calculated monthly god.
+  const relevant = (months: MonthlyCalendarFact[]) => months.filter(month => month.relations.some(relation => relation.relation !== "overlap"));
+  const beforeYear = instant !== undefined && calendar.length > 0 && instant < Date.parse(calendar[0].startAt);
+  const candidates = remaining.length ? beforeYear && relevant(remaining).length >= 3 ? relevant(remaining) : remaining : relevant(calendar);
   const count = Math.min(3, candidates.length);
   if (!count) return [];
   let best: MonthlyCalendarFact[] = [];
@@ -162,7 +150,9 @@ function selectRepresentativeMonths(calendar: MonthlyCalendarFact[]): MonthlyRel
     const kinds = new Set(months.flatMap((month) => month.relations.filter((relation) => relation.relation !== "overlap").map((relation) => relation.relation)));
     const ordinals = months.map((month) => month.ordinal);
     const gaps = ordinals.slice(1).map((ordinal, index) => ordinal - ordinals[index]);
-    return [kinds.size, new Set(months.map(month => month.stemTenGod)).size, new Set(ordinals.map((ordinal) => Math.floor((ordinal - 1) / 4))).size, gaps.length ? Math.min(...gaps) : 0, (ordinals.at(-1) ?? 0) - ordinals[0], new Set(months.flatMap((month) => month.relations.map((relation) => relation.targetPillar))).size];
+    const includesCurrent = instant !== undefined && months.some(month => Date.parse(month.startAt) <= instant && instant < Date.parse(month.endAt));
+    const inCalendarYear = instant === undefined || beforeYear ? 0 : months.filter(month => month.calendarYear === new Date(instant + 9 * 60 * 60 * 1000).getUTCFullYear()).length;
+    return [Number(includesCurrent), inCalendarYear, kinds.size, new Set(months.map(month => month.stemTenGod)).size, new Set(ordinals.map((ordinal) => Math.floor((ordinal - 1) / 4))).size, gaps.length ? Math.min(...gaps) : 0, (ordinals.at(-1) ?? 0) - ordinals[0], new Set(months.flatMap((month) => month.relations.map((relation) => relation.targetPillar))).size];
   };
   const choose = (start: number, selected: MonthlyCalendarFact[]) => {
     if (selected.length === count) {
@@ -175,11 +165,11 @@ function selectRepresentativeMonths(calendar: MonthlyCalendarFact[]): MonthlyRel
     for (let index = start; index <= candidates.length - (count - selected.length); index += 1) choose(index + 1, [...selected, candidates[index]]);
   };
   choose(0, []);
-  return best.map((month) => ({ ...month, against: month.relations.find((relation) => relation.relation !== "overlap")!.targetBranch }));
+  return best.map((month) => ({ ...month, against: month.relations.find((relation) => relation.relation !== "overlap")?.targetBranch ?? "" }));
 }
 
 /** Deterministic feature extraction. No interpretation prose is created here. */
-export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
+export function extractReportFacts(myeongsik: Myeongsik, options: { asOf?: Date } = {}): ReportFacts {
   const targetYear = myeongsik.fortune.targetYear;
   const annual = myeongsik.fortune.yearly.find((item) => item.year === targetYear);
   const daYun = activeDaYun(myeongsik);
@@ -193,6 +183,8 @@ export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
   const natalMonthMainStem = hiddenStemsByBranch[natalMonth.earthlyBranch]?.[0];
   const natalMonthTenGod = tenGod(myeongsik.dayMaster, natalMonth.heavenlyStem) ?? "미확인";
   const natalMonthMainTenGod = tenGod(myeongsik.dayMaster, natalMonthMainStem ?? "") ?? "미확인";
+  const natalDayMainStem = hiddenStemsByBranch[myeongsik.pillars.day.earthlyBranch]?.[0];
+  const natalDayMainTenGod = tenGod(myeongsik.dayMaster, natalDayMainStem ?? "") ?? "미확인";
   const natalGodEvidence = natalTenGodEvidence(myeongsik);
   const daYunTenGod = tenGod(myeongsik.dayMaster, daYunStem) ?? "미확인";
   const daYunHiddenTenGods = (hiddenStemsByBranch[daYunBranch] ?? []).flatMap((hidden) => {
@@ -224,7 +216,7 @@ export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
   // its complete relation list and the selected periods cover both kinds.
   const monthlyRelation: MonthlyRelation = monthlyCalendar.some((month) => month.relations.some((relation) => relation.relation === "clash")) ? "clash"
     : monthlyCalendar.some((month) => month.relations.some((relation) => relation.relation === "combination")) ? "combination" : "none";
-  const monthlyRelationMonths = selectRepresentativeMonths(monthlyCalendar);
+  const monthlyRelationMonths = selectRepresentativeMonths(monthlyCalendar, options.asOf);
   const hasNatalClash = natalBranchRelations.some((relation) => relation.relation === "clash");
   const hasAnnualClash = annualBranchRelations.some((relation) => relation.relation === "clash");
   const hasAnnualCombination = annualBranchRelations.some((relation) => relation.relation === "combination");
@@ -247,6 +239,7 @@ export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
     { id: "annual-ten-god", type: "ten-god", value: annualTenGod, basis: `${annual.ganZhi} 세운 천간 ${annualStem} ↔ 일간 ${myeongsik.dayMaster}`, timeScope: `${targetYear}년 세운` },
     { id: "natal-month-ten-god", type: "ten-god", value: natalMonthTenGod, basis: `원국 월간 ${natalMonth.heavenlyStem} ↔ 일간 ${myeongsik.dayMaster}`, timeScope: "태어난 명식" },
     { id: "natal-month-main-ten-god", type: "ten-god", value: natalMonthMainTenGod, basis: `원국 월지 ${natalMonth.earthlyBranch}의 본기 지장간 ${natalMonthMainStem ?? "미확인"} ↔ 일간 ${myeongsik.dayMaster}`, timeScope: "태어난 명식" },
+    { id: "natal-day-main-ten-god", type: "ten-god", value: natalDayMainTenGod, basis: `원국 일지 ${myeongsik.pillars.day.earthlyBranch}의 본기 지장간 ${natalDayMainStem ?? "미확인"} ↔ 일간 ${myeongsik.dayMaster}`, timeScope: "태어난 명식; 관계에서 읽을 보조 관점이며 연애 상태나 배우자 판정이 아님" },
     { id: "da-yun-ten-god", type: "fortune", value: daYunTenGod, basis: `${daYun.ganZhi} 대운 천간 ${daYunStem} ↔ 일간 ${myeongsik.dayMaster}`, timeScope: `${daYun.startYear}–${daYun.endYear}년 대운` },
     { id: "career-pattern", type: "structure", value: careerPattern, basis: `${daYun.ganZhi} 대운 지장간의 십신: ${daYunHiddenTenGods.join("·") || "없음"}`, timeScope: `${daYun.startYear}–${daYun.endYear}년 대운` },
   ];
@@ -272,5 +265,7 @@ export function extractReportFacts(myeongsik: Myeongsik): ReportFacts {
   if (daYunNatalRelation !== "none") facts.push({ id: "da-yun-branch-relation", type: "fortune", value: daYunNatalRelation, basis: daYunBranchRelations.map((relation) => `${daYun.ganZhi}의 ${relation.sourceBranch} ↔ ${relation.targetPillar} ${relation.targetBranch} ${relation.relation}`).join(" · "), timeScope: `${daYun.startYear}–${daYun.endYear}년 대운` });
   facts.push({ id: "annual-da-yun-theme", type: "structure", value: annualDaYunTheme, basis: `${annual.ganZhi} 세운 ${annualTenGod} + ${daYun.ganZhi} 대운 ${daYunTenGod}`, timeScope: `${targetYear}년과 현재 대운의 교차` });
 
-  return { targetYear, dayMaster: myeongsik.dayMaster, annualGanZhi: annual.ganZhi, annualTenGod, natalMonthTenGod, natalMonthMainTenGod, natalTenGodEvidence: natalGodEvidence, daYunGanZhi: daYun.ganZhi, daYunTenGod, daYunHiddenTenGods, dominantTenGodGroup, mentalInteraction, monthlyRelation, monthlyRelationMonths, monthlyCalendar, natalBranchRelations, annualBranchRelations, daYunBranchRelations, hasNatalClash, hasAnnualClash, hasAnnualCombination, hasRepeatedNatalBranch, daYunNatalRelation, annualDaYunTheme, careerPattern, facts };
+  const advanced = extractAdvancedMyeongri(myeongsik);
+  const synthesis = extractMyeongriSynthesis(myeongsik, advanced);
+  return { advanced, synthesis, targetYear, dayMaster: myeongsik.dayMaster, annualGanZhi: annual.ganZhi, annualTenGod, natalMonthTenGod, natalMonthMainTenGod, natalDayMainTenGod, natalTenGodEvidence: natalGodEvidence, daYunGanZhi: daYun.ganZhi, daYunTenGod, daYunHiddenTenGods, dominantTenGodGroup, mentalInteraction, monthlyRelation, monthlyRelationMonths, monthlyCalendar, natalBranchRelations, annualBranchRelations, daYunBranchRelations, hasNatalClash, hasAnnualClash, hasAnnualCombination, hasRepeatedNatalBranch, daYunNatalRelation, annualDaYunTheme, careerPattern, facts };
 }

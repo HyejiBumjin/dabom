@@ -8,6 +8,7 @@ import { MessageReport } from "@/components/MessageReport";
 import { ReportPreparing } from "@/components/RetroWindow";
 import { ReportErrorState } from "@/components/ReportErrorState";
 import { ReportAccessError, retryAfterSeconds } from "@/lib/report-access-error";
+import { REPORT_CLIENT_TIMEOUT_MS } from "@/lib/llm/report-runtime-policy";
 
 interface ReportResponse { id: string; status: "PENDING" | "GENERATING" | "COMPLETED" | "FAILED"; content: ReportContent | null; lastError: string | null; recordOpening?: boolean }
 
@@ -20,7 +21,7 @@ export function EssayReportView({ reportId }: { reportId: string }) {
   const [accessDenied, setAccessDenied] = useState(false);
   const openedReceiptSent = useRef(false);
   const requestReport = useCallback(async (url: string, options?: RequestInit) => {
-    const response = await fetch(url, { ...options, signal: AbortSignal.timeout(options?.method === "POST" ? 65_000 : 15_000) });
+    const response = await fetch(url, { ...options, signal: AbortSignal.timeout(options?.method === "POST" ? REPORT_CLIENT_TIMEOUT_MS : 15_000) });
     if (response.status === 401) {
       setLoginRequired(true);
       queryClient.removeQueries({ queryKey: ["saju-report", reportId] });

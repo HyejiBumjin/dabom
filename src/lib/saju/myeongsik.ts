@@ -43,6 +43,7 @@ export interface Myeongsik {
     yearly: Array<{ year: number; ganZhi: string }>;
     monthly: Array<{ ordinal: number; ganZhi: string }>;
   };
+  /** Legacy v1 placeholder. The report layer derives versioned rules in ReportFacts.advanced.shinsal. */
   shinsal: {
     status: "pending-korean-rule-table";
     items: [];

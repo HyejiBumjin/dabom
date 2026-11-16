@@ -1,12 +1,9 @@
 "use client";
 
-import { overseasNoticeSummary } from "@/lib/privacy/overseas-notice";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { RetroTitleBar } from "@/components/RetroWindow";
 import { profileInputSchema } from "@/lib/saju/profile-input";
-import { PROFILE_NOTICE_VERSION, profileNoticeText } from "@/lib/privacy/profile-use";
 import { ExistingFortuneNotice } from "@/components/ExistingFortuneNotice";
 import { BirthDateInput, BirthTimeInput } from "@/components/BirthDateTimeInput";
 import { PROFILE_DRAFT_KEY as DRAFT_KEY, restoreProfileDraft } from "@/lib/profile-draft";
@@ -18,7 +15,6 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
   const isDevelopment = process.env.NODE_ENV === "development";
   const [name, setName] = useState(isDevelopment ? "최혜지" : "");
   const relationship = "SELF" as const;
-  const [noticeConfirmed, setNoticeConfirmed] = useState(false);
   const [gender, setGender] = useState(isDevelopment ? "female" : "");
   const [birthDate, setBirthDate] = useState(isDevelopment ? "1995-05-20" : "");
   const [birthTime, setBirthTime] = useState(isDevelopment ? "20:20" : "");
@@ -92,7 +88,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
 
   function startNewQuery() {
     dismissDuplicate();
-    setName(""); setGender(""); setNoticeConfirmed(false);
+    setName(""); setGender("");
     setBirthDate(""); setBirthTime(""); setTimeUnknown(false);
     setCalendar("solar"); setIsLeapMonth(false); setError(null);
   }
@@ -126,8 +122,8 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     event.preventDefault();
     if (submissionInFlight.current) return;
     setError(null);
-    if (!inputReady || !noticeConfirmed) {
-      setError(birthDateError ?? (!noticeConfirmed ? "본인 정보와 개인정보 처리 안내를 확인해줘." : "이름, 성별, 생년월일과 태어난 시각을 입력해 주세요."));
+    if (!inputReady) {
+      setError(birthDateError ?? "이름, 성별, 생년월일과 태어난 시각을 입력해 주세요.");
       return;
     }
     submissionInFlight.current = true;
@@ -137,7 +133,7 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
     setPending(true);
     try {
       const input = { name, relationship, gender, birthDate, birthTime: timeUnknown ? null : birthTime, calendar, isLeapMonth };
-      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, notice: { version: PROFILE_NOTICE_VERSION, self: noticeConfirmed } }), signal });
+      const response = await fetch("/api/saju/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal });
       const data = await response.json();
       if (controller.signal.aborted) return;
       if (response.status === 401) {
@@ -212,14 +208,8 @@ export function SajuProfileForm({ accountId }: { accountId: string }) {
             </div>
           </div>
         </fieldset>
-        <fieldset className="commerce-consents" disabled={pending}>
-          <legend>정보를 보내기 전에 확인해줘</legend>
-          <p className="retro-form-help">이름·성별·생년월일·달력 기준으로 운세를 만들고 운세함에 보관해. 출생 시각은 몰라도 괜찮아. 삭제 요청은 고객센터에서 할 수 있어.</p>
-          <p className="retro-form-help">{overseasNoticeSummary.profile} <Link href="/privacy#overseas" target="_blank" rel="noopener">국외 처리 국가·항목·기간·거부 방법 보기 ↗</Link></p>
-          <label className="retro-checkbox"><input type="checkbox" required checked={noticeConfirmed} onChange={event => setNoticeConfirmed(event.target.checked)} />{profileNoticeText}</label>
-        </fieldset>
         {error && <p id="profile-error" className="retro-error" role="alert">{error}</p>}
-        <button type="submit" className="retro-button" disabled={pending || duplicateOpen || !inputReady || !noticeConfirmed}>
+        <button type="submit" className="retro-button" disabled={pending || duplicateOpen || !inputReady}>
           {pending ? "메시지를 준비하는 중…" : "운세 메시지 받기"}
         </button>
         <p className="retro-caption">이제 다봄이 올해의 흐름을 읽어줄게.</p>

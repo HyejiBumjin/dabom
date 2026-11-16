@@ -1,3 +1,4 @@
+import { checkObservationContract } from "./testing/report-observations";
 import assert from "node:assert/strict";
 import { KoreanPolicyAdapter } from "../src/lib/saju/korean-policy-adapter";
 import { extractReportFacts, type ReportFacts } from "../src/lib/saju/report-facts";
@@ -86,26 +87,13 @@ check("same annual god receives different real decisions from distinct natal and
   assert.deepEqual(before.mental, changedCareer.mental, "A cycle change contaminated the personal pace evidence");
 });
 
-check("each live section receives a different question and traceable approved fragment IDs", () => {
-  const context = buildReportRenderPayload(chart, "genz");
-  const grounds = new Set(context.reportFacts.facts.map(item => item.id));
+check("live topics receive distinct questions and computed observations, never archived readings", () => {
+  const context = buildReportRenderPayload(chart, "genz", new Date("2026-01-01T00:00:00Z"));
   assert.equal(new Set(context.payload.sections.map(section => section.reading_question)).size, 6);
-  for (const section of context.payload.sections) {
-    assert(section.reading_question && section.distinct_focus);
-    assert(section.avoid_repeating.length > 0);
-    const source = context.selected.sections.find(item => item.id === section.id)!;
-    assert.deepEqual(section.fragments.map(fragment => fragment.id), source.fragments.map(fragment => fragment.id));
-    for (const fragment of section.fragments) {
-      assert(fragment.grounds.every(ground => grounds.has(ground)), `${fragment.id}: an invented grounding fact entered the renderer`);
-      if (source.fragments.find(item => item.id === fragment.id)?.expansion) {
-        assert(fragment.expansion?.repetition_guard, `${fragment.id}: renderer lost its repetition boundary`);
-      }
-    }
-  }
-  for (const sectionId of ["yearly", "career", "mental"]) {
-    const section = context.selected.sections.find(item => item.id === sectionId)!;
-    assert(!section.fragments.some(fragment => /^F-ANNUAL-(?!NATAL-)|^F-INTERACTION-|^F-MENTAL-DEFAULT|^F-NATAL-MONTH-MAIN-ANNUAL-/u.test(fragment.id)), `${sectionId}: generic duplicate evidence survived personalized selection`);
-  }
+  checkObservationContract(context);
+  const archived = evidence(context.reportFacts);
+  const input = JSON.stringify(context.payload);
+  for (const fragment of [...archived.yearly, ...archived.career, ...archived.mental]) assert(!input.includes(fragment.translation));
 });
 
 check("an unavailable natal support cannot be promoted into a personalized career claim", () => {
@@ -137,8 +125,8 @@ check("actual visible natal support changes the work reading and disappears when
     assert(!without.career[0].grounds.includes("natal-god-정인"));
     assert(!without.career[0].mechanism.includes("정인"), "Removed support remains in the interpretation");
     assert.notEqual(semantics(without.career[0]), semantics(actual.career[0]), "Only the evidence label changed; the work decision stayed the same");
-    assert.notEqual(without.sectionMetadata.career.question, actual.sectionMetadata.career.question);
-    assert.notEqual(without.sectionMetadata.career.distinctFocus, actual.sectionMetadata.career.distinctFocus);
+    assert.equal(without.sectionMetadata.career.question, actual.sectionMetadata.career.question, "Optional work support must not displace the money question");
+    assert.equal(without.sectionMetadata.career.distinctFocus, actual.sectionMetadata.career.distinctFocus);
     assert.deepEqual(without.yearly, actual.yearly, "Removing work support rewrote an unrelated section");
     assert.deepEqual(without.mental, actual.mental, "Removing work support rewrote an unrelated section");
   }
@@ -146,7 +134,7 @@ check("actual visible natal support changes the work reading and disappears when
   unknownHour.input.birthTimeKnown = false;
   const unknown = evidence(extractReportFacts(unknownHour));
   assert(!unknown.career[0].grounds.includes("natal-god-정인"), "Unknown hour still activates visible hour support");
-  assert.notEqual(unknown.sectionMetadata.career.question, actual.sectionMetadata.career.question);
+  assert.equal(unknown.sectionMetadata.career.question, actual.sectionMetadata.career.question);
 });
 
 check("opposite-polarity gods in the same family retain their own direction", () => {
@@ -158,23 +146,15 @@ check("opposite-polarity gods in the same family retain their own direction", ()
   }
 });
 
-check("monthly relationship explanations use their own god and remain distinct even for the same relation", () => {
-  const context = buildReportRenderPayload(chart, "genz");
-  const relation = context.selected.sections.find(section => section.id === "relation")!;
-  const combinations = relation.fragments.filter(fragment => fragment.id.endsWith("-combination"));
-  assert(combinations.length >= 2, "Fixture must exercise two combination months");
-  assert(new Set(combinations.map(semantics)).size > 1, "Different combination months repeat the same generic advice");
+check("monthly observations preserve their own gods and ordering without shared canned explanations", () => {
+  const context = buildReportRenderPayload(chart, "genz", new Date("2026-01-01T00:00:00Z"));
+  checkObservationContract(context);
   for (const month of context.reportFacts.monthlyRelationMonths) {
-    const matches = relation.fragments.filter(fragment => fragment.id.startsWith(`F-TIMING-${month.ordinal}-`));
-    assert(matches.length);
-    for (const fragment of matches) {
-      assert(fragment.grounds.includes(`monthly-${month.ordinal}-ten-god`));
-      assert(fragment.mechanism.includes(month.stemTenGod));
-    }
+    const period = context.payload.yearly_context.timing.find(item => item.month === month.displayLabel)!;
+    assert.equal(period.stem_ten_god, month.stemTenGod);
   }
-  const reordered = structuredClone(chart);
-  reordered.fortune.monthly.reverse();
-  assert.deepEqual(extractReportFacts(reordered), facts, "Stored array ordering changed personalized month selection");
+  const reordered = structuredClone(chart); reordered.fortune.monthly.reverse();
+  assert.deepEqual(extractReportFacts(reordered), facts);
 });
 
 check("unknown birth hour never contributes a natal presence or personalized reading", () => {

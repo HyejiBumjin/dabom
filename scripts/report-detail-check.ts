@@ -5,6 +5,7 @@ import { buildReportMonthPeriods } from "../src/lib/saju/report-months";
 import { TEN_GOD_MEANINGS } from "../src/lib/saju/report-detail-corpus";
 import { getReportPrompt } from "../src/lib/prompts/v6";
 import { MAX_REPORT_EMOTICONS, REPORT_EMOTICON_INSTRUCTIONS, REPORT_EMOTICON_RANGE } from "../src/lib/report-emoticons";
+import { checkObservationContract } from "./testing/report-observations";
 import type { Myeongsik } from "../src/lib/saju/myeongsik";
 
 // End-to-end evidence assembly only: no persistence, accounts or model requests.
@@ -20,50 +21,20 @@ function check(name: string, run: () => void) {
   console.log(`PASS ${name}`);
 }
 
-function checkGrounds(context: Context) {
-  const ids = context.reportFacts.facts.map(fact => fact.id);
-  assert.equal(new Set(ids).size, ids.length, "Fact IDs must remain unambiguous");
-  for (const section of context.selected.sections) {
-    assert.equal(new Set(section.fragments.map(fragment => fragment.id)).size, section.fragments.length, `${section.id}: duplicate evidence`);
-    const serialized = context.payload.sections.find(item => item.id === section.id)!;
-    assert.deepEqual(serialized.fragments.map(fragment => fragment.grounds), section.fragments.map(fragment => fragment.grounds));
-    for (const fragment of section.fragments) {
-      assert.equal(fragment.status, "approved");
-      for (const ground of fragment.grounds) assert(ids.includes(ground), `${section.id}/${fragment.id}: missing ${ground}`);
-    }
-  }
-  assert.deepEqual(context.payload.facts, context.reportFacts.facts);
-}
-
+function checkGrounds(context: Context) { checkObservationContract(context); }
 function checkMonthPairs(context: Context) {
-  const relation = context.selected.sections.find(section => section.id === "relation")!;
-  const serialized = context.payload.sections.find(section => section.id === "relation")!;
-  const expected: string[] = [];
   for (const month of context.reportFacts.monthlyRelationMonths) {
-    for (const kind of ["clash", "combination"] as const) {
-      const targets = month.relations.filter(item => item.relation === kind);
-      if (!targets.length) continue;
-      const ground = `monthly-${month.ordinal}-${kind}`;
-      const godGround = `monthly-${month.ordinal}-ten-god`;
-      expected.push(ground, godGround);
-      const fragment = relation.fragments.find(item => item.grounds.includes(ground));
-      assert(fragment, `${month.displayLabel}: missing ${kind}`);
-      assert.deepEqual([...fragment.grounds].sort(), [ground, godGround].sort(), "A monthly interpretation must connect only its own god and relation evidence");
-      assert(fragment.mechanism.includes(month.displayLabel));
-      assert(fragment.mechanism.includes(month.stemTenGod), "Monthly interpretation lost its own stem's meaning");
-      assert.equal(context.reportFacts.facts.find(item => item.id === godGround)?.value, month.stemTenGod);
-      assert(fragment.expansion?.decisionRule, "A monthly interpretation needs a concrete selection principle");
-      const fact = context.reportFacts.facts.find(item => item.id === ground)!;
-      assert.equal(fact.value, kind);
-      for (const target of targets) assert(fact.basis.includes(`${target.targetPillar} ${target.targetBranch} ${kind === "clash" ? "충" : "합"}`));
-      assert(!fact.basis.includes(kind === "clash" ? " 합" : " 충"), "A monthly fact contains the opposite relation");
+    const observations = context.payload.observations;
+    const period = observations.find(item => item.id === `monthly-${month.ordinal}`)!;
+    assert(period);
+    const owner = context.payload.sections.find(section => section.primary_evidence_ids.includes(period.id))!;
+    const expected = context.reportFacts.advanced.relations.filter(relation => relation.scope === "monthly" && relation.members.some(member => member.ordinal === month.ordinal));
+    for (const relation of expected) {
+      const actual = observations.find(item => item.id === relation.id)!;
+      assert.deepEqual(actual.value, relation);
+      assert(owner.primary_evidence_ids.includes(actual.id), "A monthly relation escaped its period owner");
     }
-  }
-  if (expected.length) assert.deepEqual(relation.fragments.flatMap(fragment => fragment.grounds).sort(), expected.sort());
-  assert.deepEqual(serialized.required_timing_terms, context.reportFacts.monthlyRelationMonths.map(month => month.displayLabel));
-  for (const section of context.payload.sections.filter(section => section.id !== "relation")) {
-    assert.deepEqual(section.required_timing_terms, []);
-    assert.deepEqual(section.prohibited_terms, serialized.required_timing_terms);
+    assert.deepEqual(context.payload.yearly_context.timing[(period.value as { timing_index: number }).timing_index].stem_ten_god, month.stemTenGod);
   }
 }
 
@@ -74,25 +45,16 @@ check("60 real charts cover every day master and keep distinct natal/year eviden
     const birthDate = new Date(Date.UTC(1995, 4, 20 + offset)).toISOString().slice(0, 10);
     const calculated = adapter.calculate({ birthDate, birthTime: "20:20", gender: offset % 2 ? "male" : "female", calendar: "solar" });
     const context = buildReportRenderPayload(calculated, "genz");
-    const { reportFacts, payload, selected } = context;
+    const { reportFacts, payload } = context;
     dayMasters.add(reportFacts.dayMaster);
     annualGods.add(reportFacts.annualTenGod);
-    const essence = selected.sections.find(section => section.id === "essence")!;
-    assert(essence.fragments.some(fragment => fragment.grounds.includes("day-master")));
-    assert(essence.fragments.some(fragment => fragment.grounds.includes("annual-ten-god")));
-    for (const [sectionId, natalGround, god] of [
-      ["yearly", "natal-month-main-ten-god", reportFacts.natalMonthMainTenGod],
-      ["career", "da-yun-ten-god", reportFacts.daYunTenGod],
-      ["mental", "natal-month-ten-god", reportFacts.natalMonthTenGod],
-    ] as const) {
-      const section = selected.sections.find(item => item.id === sectionId)!;
-      const combined = section.fragments.find(fragment => fragment.grounds.includes(natalGround) && fragment.grounds.includes("annual-ten-god"));
-      assert(combined, `${birthDate}/${sectionId}: personalized pair was crowded out`);
-      assert(combined.mechanism.includes(god), `${sectionId}: background ten god missing`);
-      assert(combined.mechanism.includes(reportFacts.annualTenGod), `${sectionId}: annual ten god missing`);
+    const essence = payload.sections.find(section => section.id === "essence")!;
+    assert(essence.primary_evidence_ids.includes("natal-day-master"));
+    assert(essence.context_evidence_ids.includes("annual-pillar"));
+    assert.deepEqual(payload.observations.find(item => item.id === "natal-month-gods")!.value, { visible: reportFacts.natalMonthTenGod, mainHidden: reportFacts.natalMonthMainTenGod });
+    for (const [id, value] of [["annual-pillar", reportFacts.annualTenGod], ["active-da-yun", reportFacts.daYunTenGod]]) {
+      assert.equal((payload.observations.find(item => item.id === id)!.value as { stemTenGod: string }).stemTenGod, value);
     }
-    assert.equal(payload.structural_context.natal_month_stem_ten_god, reportFacts.natalMonthTenGod);
-    assert.equal(payload.structural_context.natal_month_main_ten_god, reportFacts.natalMonthMainTenGod);
     const requiredGods = [...new Set([reportFacts.natalMonthTenGod, reportFacts.natalMonthMainTenGod, reportFacts.annualTenGod, reportFacts.daYunTenGod, ...reportFacts.monthlyRelationMonths.map(month => month.stemTenGod)])];
     const actualGods = new Set([...requiredGods, ...reportFacts.natalTenGodEvidence.map(item => item.tenGod)]);
     const godDefinitions = payload.terminology.filter(term => term.term in TEN_GOD_MEANINGS);
@@ -101,7 +63,7 @@ check("60 real charts cover every day master and keep distinct natal/year eviden
     for (const { term } of godDefinitions) assert(actualGods.has(term), `Uncalculated ten god entered the glossary: ${term}`);
     for (const { term, meaning } of godDefinitions) {
       assert(meaning, `${term}: no reader-facing explanation`);
-      assert(!/기능|자원|기준|조율|관점|범위|여지|올해|세운|대운/u.test(meaning), `${term}: internal jargon or timing leaked into the plain-language definition`);
+      assert(!/올해|너는|해야|좋아/u.test(meaning), `${term}: a canned prediction entered the definition`);
     }
     checkGrounds(context);
     checkMonthPairs(context);
@@ -117,9 +79,9 @@ check("both annual combination and clash survive corpus ranking and payload asse
   mixed.pillars.year.earthlyBranch = "子";
   mixed.pillars.month.earthlyBranch = "未";
   const context = buildReportRenderPayload(mixed);
-  const annual = context.selected.sections.find(section => section.id === "yearly")!.fragments;
+  const annual = context.payload.observations.filter(item => item.scope === "annual" && item.kind === "branch-relation");
   for (const kind of ["clash", "combination"]) {
-    assert(annual.some(fragment => fragment.grounds.includes(`annual-branch-${kind}`)));
+    assert(annual.some(item => (item.value as { kind: string }).kind === kind));
     assert.equal(context.reportFacts.facts.find(fact => fact.id === `annual-branch-${kind}`)?.value, `annual-${kind}`);
   }
   checkGrounds(context);
@@ -134,10 +96,10 @@ check("one monthly period keeps separate clash/combination evidence and all targ
   mixed.fortune.monthly = [mixed.fortune.monthly[0]];
   const context = buildReportRenderPayload(mixed);
   assert.equal(context.payload.yearly_context.timing.length, 1);
-  assert.deepEqual(context.payload.yearly_context.timing[0].relations.map(item => [item.targetPillar, item.relation]), [
+  assert.deepEqual(context.reportFacts.monthlyRelationMonths[0].relations.map(item => [item.targetPillar, item.relation]), [
     ["year", "clash"], ["month", "combination"], ["day", "combination"], ["hour", "overlap"],
   ]);
-  assert.deepEqual(context.selected.sections.find(section => section.id === "relation")!.fragments.map(fragment => fragment.id).sort(), ["F-TIMING-1-clash", "F-TIMING-1-combination"]);
+  assert(context.payload.observations.some(item => item.scope === "monthly" && item.kind === "branch-relation"));
   checkGrounds(context);
   checkMonthPairs(context);
 });
@@ -189,10 +151,8 @@ check("unknown birth time cannot add hour-based evidence to any rendered section
   const before = buildReportRenderPayload(unknown);
   unknown.pillars.hour = { ganZhi: "壬子", heavenlyStem: "壬", earthlyBranch: "子", hiddenStems: ["癸"], stemTenGod: "伤官", hiddenTenGods: Array(12).fill("伤官"), elementPair: "水水" };
   const after = buildReportRenderPayload(unknown);
-  assert.deepEqual(after.selected, before.selected);
-  assert.deepEqual(after.payload.structural_context, before.payload.structural_context);
   assert.deepEqual(after.payload.sections, before.payload.sections);
-  assert.deepEqual(after.payload.facts, before.payload.facts);
+  assert.deepEqual(after.payload.observations, before.payload.observations);
   checkGrounds(after);
 });
 
@@ -203,15 +163,9 @@ check("detail does not reintroduce authored scenes or change 7–9 emoticons and
   assert(payload.style.speech.includes("전체 7~9개"));
   assert(payload.constraints.includes(REPORT_EMOTICON_INSTRUCTIONS));
   assert(getReportPrompt("genz").instructions.includes(REPORT_EMOTICON_INSTRUCTIONS));
-  assert.deepEqual(payload.sections.map(section => section.paragraph_length.target), [230, 330, 330, 330, 330, 230]);
-  assert(payload.sections.find(section => section.id === "summary")!.fragments.length === 0);
-  for (const section of payload.sections) for (const fragment of section.fragments) {
-    assert(!Object.hasOwn(fragment, "concreteScene"));
-    assert(!Object.hasOwn(fragment, "concrete_scene"));
-    if (fragment.expansion) {
-      assert.deepEqual(Object.keys(fragment.expansion).filter(key => key !== "repetition_guard").sort(), ["decision_rule", "mechanism_steps"]);
-    }
-  }
+  assert.deepEqual(payload.sections.map(section => section.paragraph_length.target), [230, 330, 380, 360, 330, 230]);
+  assert.equal(payload.sections.find(section => section.id === "summary")!.primary_evidence_ids.length, 0);
+  checkObservationContract({ payload, reportFacts: buildReportRenderPayload(chart).reportFacts });
   assert.equal(JSON.stringify(chart), originalChart, "Rendering mutated the stored chart");
 });
 

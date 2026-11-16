@@ -1,4 +1,3 @@
-import { PROFILE_NOTICE_VERSION } from "../src/lib/privacy/profile-use";
 import { accountScope } from "../src/lib/account-scope";
 import { restoreProfileDraft } from "../src/lib/profile-draft";
 import assert from "node:assert/strict";
@@ -35,7 +34,7 @@ const auth = {
 };
 async function main() {
   const now = new Date("2026-10-28T12:00:00Z");
-  const paid = legalOrderRecord("order", { userId: uid, name: "SECRET_NAME", birthDate: "SECRET_BIRTH", status: "PAID", amount: 3900, paidAt: Timestamp.fromDate(new Date("2026-10-01")), createdAt: Timestamp.fromDate(new Date("2026-09-30")) }, [{ acceptedAt: "2026-09-30", profileId: "SECRET_PROFILE", version: "old" }], [{ firstDeliveredAt: Timestamp.fromDate(new Date("2026-10-02")), contentJson: "SECRET_BODY", myeongsikJson: "SECRET_CHART" }], now);
+  const paid = legalOrderRecord("order", { userId: uid, name: "SECRET_NAME", birthDate: "SECRET_BIRTH", status: "PAID", amount: 3900, paidAt: Timestamp.fromDate(new Date("2026-10-01")), createdAt: Timestamp.fromDate(new Date("2026-09-30")) }, [{ acceptedAt: "2026-09-30", profileId: "SECRET_PROFILE", version: "old" }], [{ firstDeliveredAt: Timestamp.fromDate(new Date("2026-10-02")), contentJson: "SECRET_BODY", myeongsikJson: "SECRET_CHART", renderCheckpointJson: "SECRET_DRAFT" }], now);
   check("legal archive excludes name/birth/profile/chart/body", !JSON.stringify(paid).includes("SECRET"));
   check("5 years starts at latest supply event, not deletion date", paid.purgeAt?.toISOString() === "2031-10-02T00:00:00.000Z");
   const held = legalOrderRecord("order", { userId: uid, createdAt: new Date("2026-10-01"), legalHold: true }, [], [], now);
@@ -49,7 +48,7 @@ async function main() {
     await store.saveAccount(uid, "98765001", "합성");
     await store.saveAccount(other, "98765002", "다른 사람");
     await store.collection("sessions").doc("synthetic_session").set({ uid, expiresAt: Timestamp.fromMillis(Date.now() + 10000) });
-    await saveSajuProfile(other, input, store, { version: PROFILE_NOTICE_VERSION, self: true });
+    await saveSajuProfile(other, input, store);
   }
   const store = stores[0];
   check("forged account and missing deletion consent rejected", !serviceRequestSchema.safeParse({kind:"ACCOUNT_DELETE",requestKey:caseKey,deletionAcknowledged:true,userId:other}).success && !serviceRequestSchema.safeParse({kind:"ACCOUNT_DELETE",requestKey:caseKey}).success);
@@ -58,7 +57,7 @@ async function main() {
   await assert.rejects(() => createServiceRequest(store, other, {kind:"REFUND", requestKey:randomUUID(),orderId:"saju_foreign"})); check("foreign refund order is rejected", true);
   await assert.rejects(() => eraseAccount(stores, auth, uid, `unverified_${randomUUID()}`)); check("operator cannot erase without authenticated deletion request", true);
   await store.collection("products").doc(meta.productCode).create({ id: meta.productCode, code: meta.productCode, name: "합성 상품", price: 3900, active: true });
-  const profile = await saveSajuProfile(uid, input, store, { version: PROFILE_NOTICE_VERSION, self: true });
+  const profile = await saveSajuProfile(uid, input, store);
   const oldAccount = (await store.getAccount(uid))!;
   const originalProfile = (await store.getProfile(profile.profileId))!;
   const order = await store.prepareOrder(uid, profile.profileId, meta, { version: POLICY_VERSION, terms: true, digitalContent: true });
@@ -66,6 +65,7 @@ async function main() {
   const report = await store.fulfillOrder(uid, order.orderId, { id: order.orderId, amount: 3900, status: "PAID", currency: "KRW" }, meta);
   const lease = await store.claimReport(report.id, {}, uid, false);
   assert.ok(lease);
+  await store.updateReport(report.id, lease, { renderCheckpointJson: "SECRET_UNFINISHED_DRAFT" });
   const before = await accountDeletionPlan(stores, uid);
   check("dry-run counts only the requested account and changes nothing", before[0].counts.profiles === 1 && before[0].counts.orders === 1 && authCalls.length === 0);
   await assert.rejects(() => eraseAccount(stores, auth, "../users", caseId)); check("unsafe identity cannot enter deletion", true);
@@ -82,12 +82,13 @@ async function main() {
   await eraseAccount(stores, auth, uid, caseId);
   const after = await accountDeletionPlan(stores, uid);
   check("retry completes deletion in live and payment-test namespaces", after.every(p => !p.accountPresent && p.sessions === 0 && Object.values(p.counts).every(c => c === 0)));
+  check("private generation checkpoint is deleted with its report", !(await store.collection("reports").doc(report.id).get()).exists);
   check("other user's data remains", (await store.getAccount(other)) !== null && (await accountDeletionPlan(stores, other)).every(p => p.counts.profiles === 1));
   check("closed case has 3-year expiry and no content", (await store.collection("privacyJobs").doc(caseId).get()).get("purgeAt") instanceof Timestamp);
   const archive = (await store.collection("legalRecords").doc(order.orderId).get()).data()!;
   check("consent version and amount preserved", archive.consents[0].version === POLICY_VERSION && archive.amount === 3900);
   const rejoined = await store.saveAccount(uid, "98765001", "새 가입");
-  const freshProfile = await saveSajuProfile(uid, input, store, { version: PROFILE_NOTICE_VERSION, self: true });
+  const freshProfile = await saveSajuProfile(uid, input, store);
   check("rejoin invalidates old browser identity and birth draft", accountScope(oldAccount) !== accountScope(rejoined) && restoreProfileDraft(JSON.stringify({accountId:accountScope(oldAccount),input}),accountScope(rejoined)) === null);
   check("rejoin has fresh profile and provider payment IDs", rejoined.dataEpoch !== oldAccount.dataEpoch && freshProfile.profileId !== profile.profileId && store.orderId(uid, freshProfile.profileId, meta.productCode) !== order.orderId);
   await assert.rejects(() => store.saveProfile(originalProfile, oldAccount.dataEpoch!)); check("old account epoch cannot write after rejoin", true);

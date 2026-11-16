@@ -8,7 +8,7 @@ import { renderToStaticMarkup as renderStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Responses } from "openai/resources/responses/responses";
-import { firebaseStore as store } from "../src/lib/firebase/store";
+import { firebaseStore as store, type ReportPatch } from "../src/lib/firebase/store";
 import { generateReport } from "../src/lib/llm/report-generator";
 import { ANNUAL_OPENING, containsReaderName, countReportCharacters, FORMAL_REPORT_ENDING, hasInlineTermExplanation, hasReportTimingTerm, MESSAGE_CLOSING_LENGTH, normalizeReportParagraph, repairRepeatedAnnualOpenings, REPORT_PARAGRAPH_LENGTHS } from "../src/lib/llm/report-rules";
 import { splitReportMessages } from "../src/lib/report-message-layout";
@@ -17,18 +17,22 @@ import { DEFAULT_REPORT_MODEL, DEFAULT_REPORT_TONE, getConfiguredReportModel } f
 import { PUBLIC_REPORT_FAILURE_MESSAGE } from "../src/lib/llm/report-messages";
 import { KoreanPolicyAdapter } from "../src/lib/saju/korean-policy-adapter";
 import { GENZ_REPORT_PROMPT_VERSION, REPORT_PROMPT_VERSION, WARM_REPORT_PROMPT_VERSION, REPORT_PLAIN_LANGUAGE_INSTRUCTIONS, REPORT_TEXT_INTEGRITY_INSTRUCTIONS, getReportPrompt, getStoredReportTone } from "../src/lib/prompts/v6";
+import { checkObservationContract } from "./testing/report-observations";
+import { fixtureEvidenceUses } from "./testing/report-evidence-fixture";
+import type { EvidenceUse } from "../src/lib/llm/report-evidence-review";
 import { buildReportRenderPayload, type ReportTone } from "../src/lib/saju/report-payload";
 import { EssayReportView } from "../src/components/EssayReportView";
 import type { ReportContent } from "../src/lib/llm/types";
+import { REPORT_CLIENT_TIMEOUT_MS, REPORT_GENERATION_LEASE_MS, REPORT_RENDER_BUDGET_MS } from "../src/lib/llm/report-runtime-policy";
 import { ReportAccessError } from "../src/lib/report-access-error";
 
 // Every DB method is mocked; the driver must never borrow real credentials.
 process.env.DATABASE_URL = "postgresql://USER:PASSWORD@127.0.0.1:1/synthetic";
 
-type Draft = { sections: Array<{ section_id: string; paragraph: string }> };
+type Draft = { sections: Array<{ section_id: string; paragraph: string; evidence_uses?: EvidenceUse[] }> };
 const mockRouter = { bfcacheId: "report-check", back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {} };
 const renderToStaticMarkup = (element: Parameters<typeof renderStaticMarkup>[0]) => renderStaticMarkup(createElement(AppRouterContext.Provider, { value: mockRouter }, element));
-type Update = { status?: string; content?: ReportContent; lastError?: string | null };
+type Update = Omit<ReportPatch, "content"> & { content?: ReportContent };
 type RenderRequest = { model: string; reasoning?: { effort: string }; max_output_tokens: number; input: Array<{ content: string }>; text: { format: { schema: { properties: { sections: { items: { properties: { section_id: { enum: string[] } } } } } } } } };
 
 const fixture = JSON.parse(fs.readFileSync("scripts/fixtures/report-style-draft.json", "utf8")) as { paragraphs: string[] };
@@ -53,11 +57,14 @@ let invalidCalculation = false;
 let storedPromptVersion = REPORT_PROMPT_VERSION;
 let storedModel = DEFAULT_REPORT_MODEL;
 let tests = 0;
+let readingClock = "2026-01-01T00:00:00Z";
+let savedCheckpoint: string | null = null;
+let providerResult: Record<string, unknown> = {};
 
 const originals = { create: Responses.prototype.create, find: store.getReportWithAccess, claim: store.claimReport, update: store.updateReport, now: Date.now, warn: console.warn, apiKey: process.env.OPENAI_API_KEY, findProfile: store.getProfile, upsertReport: store.ensureReport, nodeEnv: process.env.NODE_ENV, queryRaw: store.consumeRateLimit };
 const testEnvironment = process.env as Record<string, string | undefined>;
 
-async function scenario(name: string, options: { change?: (draft: Draft) => void; response?: typeof reply; resume?: boolean; timeout?: boolean; claim?: number; alreadyComplete?: boolean; invalidCalculation?: boolean; tone?: ReportTone; model?: string; storedPromptVersion?: string; storedModel?: string } = {}) {
+async function scenario(name: string, options: { change?: (draft: Draft) => void; response?: typeof reply; resume?: boolean; timeout?: boolean; claim?: number; alreadyComplete?: boolean; invalidCalculation?: boolean; tone?: ReportTone; model?: string; storedPromptVersion?: string; storedModel?: string; clock?: string; snapshot?: string; checkpoint?: string; providerResult?: Record<string, unknown> } = {}) {
   const voiceFixture = structuredClone(valid);
   if (options.tone === "genz" || getStoredReportTone(options.storedPromptVersion) === "genz") {
     voiceFixture.sections[2].paragraph = voiceFixture.sections[2].paragraph.replace("중요하단다", "중요하거든");
@@ -69,8 +76,14 @@ async function scenario(name: string, options: { change?: (draft: Draft) => void
   claims.length = 0;
   warnings.length = 0;
   timeOffset = 0;
-  stored = options.resume ? { paragraphs: source.sections.map(section => section.paragraph), meta: { charCount: 0, beats: [], termsUsed: [] } } : null;
+  readingClock = options.clock ?? "2026-01-01T00:00:00Z";
+  const fixturePayload = buildReportRenderPayload(myeongsik, options.tone ?? "genz", new Date(options.snapshot ?? readingClock)).payload;
+  stored = options.resume ? { paragraphs: source.sections.map(section => section.paragraph), meta: { charCount: 0, beats: [], termsUsed: [], readingAsOf: options.snapshot,
+    evidenceUses: source.sections.map(section => ({ sectionId: section.section_id, uses: section.evidence_uses ?? fixtureEvidenceUses(section.section_id, section.paragraph, fixturePayload) })),
+  } } : null;
   advanceTime = options.timeout ?? false;
+  savedCheckpoint = options.checkpoint ?? null;
+  providerResult = options.providerResult ?? {};
   claimCount = options.claim ?? 1;
   completedAtStart = options.alreadyComplete ?? false;
   invalidCalculation = options.invalidCalculation ?? false;
@@ -88,10 +101,10 @@ async function main() {
   process.env.OPENAI_API_KEY = "test-key-no-network";
   testEnvironment.NODE_ENV = "development";
   try {
-    Date.now = () => originals.now() + timeOffset;
+    Date.now = () => Date.parse(readingClock) + timeOffset;
     console.warn = (...args: unknown[]) => { warnings.push(args); };
     // Legacy documents can retain removed fields; they must never steer new reports.
-    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "fixture-owner", order: null, status: completedAtStart ? "COMPLETED" : stored ? "FAILED" : "PENDING", content: stored, promptVersion: storedPromptVersion, model: storedModel, focusTopics: ["money", "relationships"], sajuProfile: { userId: "fixture-owner", name: readerName, relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false, focusTopics: ["mind"], myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
+    store.getReportWithAccess = (async () => ({ id: "fixture", userId: "fixture-owner", order: null, status: completedAtStart ? "COMPLETED" : stored || savedCheckpoint ? "FAILED" : "PENDING", content: stored, renderCheckpointJson: savedCheckpoint, promptVersion: storedPromptVersion, model: storedModel, focusTopics: ["money", "relationships"], sajuProfile: { userId: "fixture-owner", name: readerName, relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false, focusTopics: ["mind"], myeongsik: invalidCalculation ? {} : myeongsik } })) as unknown as typeof originals.find;
     store.claimReport = (async (_id: string, data: { promptVersion: string; model: string }) => { claims.push(data); return claimCount ? "fixture-lease" : null; }) as unknown as typeof originals.claim;
     store.updateReport = (async (_id: string, _lease: string, data: Update) => { updates.push(structuredClone(data)); }) as unknown as typeof originals.update;
     Responses.prototype.create = (async (raw: unknown) => {
@@ -99,9 +112,12 @@ async function main() {
       requests.push(request);
       assert(!JSON.stringify(request.input).includes(readerName), "Full name leaked to the model");
       assert(!JSON.stringify(request.input).includes(readerName.slice(1)), "Given name leaked to the model");
+      const evidence = JSON.parse(request.input[1].content);
+      assert(Array.isArray(evidence.observations));
+      for (const field of ["fortune_reading", "primary_interpretation", "decision_rule", '"translation"', '"fragments"']) assert(!JSON.stringify(request.input).includes(field), `Canned reading leaked into initial/repair request: ${field}`);
       const response = reply(request.text.format.schema.properties.sections.items.properties.section_id.enum, requests.length);
-      if (advanceTime) timeOffset = 60_000;
-      return { output_text: JSON.stringify(response) };
+      if (advanceTime) timeOffset = REPORT_RENDER_BUDGET_MS + 1;
+      return { status: "completed", output_text: JSON.stringify({ sections: response.sections.map(section => ({ ...section, evidence_uses: section.evidence_uses ?? fixtureEvidenceUses(section.section_id, section.paragraph, evidence) })) }), ...providerResult };
     }) as unknown as typeof originals.create;
 
     let result = await scenario("automatic-opening-repair", { change: draft => {
@@ -120,7 +136,58 @@ async function main() {
     assert.equal(result.lastError, null);
     assert(updates.some(update => update.content && !update.status), "Usable draft wasn't persisted before the repair");
     assert.deepEqual(result.content?.paragraphs, source.sections.map(section => section.paragraph));
-    assert.equal(warnings.length, 1);
+    assert.equal(warnings.filter(entry => String(entry[0]).includes("Published content-validated draft")).length, 1);
+
+    for (const [label, uses] of [
+      ["missing-evidence-uses", []],
+      ["forged-evidence-id", [{ evidence_id: "invented-source", excerpt: "여러 해에 걸친 배경을 읽는 운" }]],
+      ["forged-excerpt", [{ evidence_id: "active-da-yun", excerpt: "이 구절은 실제 본문에 존재하지 않아" }, { evidence_id: "annual-pillar", excerpt: "올해 맡은 역할을 설명하는 정관이야" }]],
+    ] as Array<[string, EvidenceUse[]]>) {
+      result = await scenario(label, { change: draft => { draft.sections[3].evidence_uses = uses; } });
+      assert.equal(result?.status, "COMPLETED");
+      assert.equal(requests.length, 2);
+      assert(result.content!.meta.evidenceUses!.find(item => item.sectionId === "career")!.uses.length >= 2);
+      result = await scenario(`${label}-cannot-bypass-on-style-recovery`, { change: draft => { draft.sections[3].evidence_uses = uses; }, response: repeatResponse });
+      assert.equal(result?.status, "FAILED");
+      assert.equal(requests.length, 5);
+      assert(!updates.some(update => update.content), "Unverifiable evidence entered the recovery cache");
+    }
+
+    result = await scenario("prefer-specific-content-over-fewer-format-issues", {
+      change: draft => { draft.sections[1].paragraph += " 상황이 달라질 수 있어. 기회가 생길 수 있어. 마음도 바뀔 수 있어."; },
+      response: (requested, attempt) => {
+        if (attempt === 1) return repeatResponse(requested);
+        return { sections: valid.sections.filter(section => requested.includes(section.section_id)).map(section => ({ ...section,
+          paragraph: section.section_id === "yearly" ? section.paragraph + " 일 거야. 해보자." : section.paragraph,
+        })) };
+      },
+    });
+    assert.equal(result?.status, "COMPLETED");
+    assert(!result.content!.paragraphs[1].includes("상황이 달라질 수 있어"));
+    assert.equal(result.content!.meta.editorialReview?.status, "needs-review");
+    assert.equal(result.content!.meta.editorialReview?.specificityIssueCount, 0);
+    assert.equal(requests.length, 2, "Quality repair exceeded its bounded budget");
+
+    result = await scenario("off-topic-is-bounded-style-repair", { change: draft => {
+      draft.sections[3].paragraph = "2월 4일~3월 5일에는 여러 해의 배경인 대운을 함께 읽어. " + "가까운 사람과 생각을 주고받으며 서로 다른 마음을 알아가는 흐름이야. 익숙한 사이에서도 새로운 취향을 발견하는 순간에는 서로를 바라보는 모습이 달라져. ".repeat(3);
+    }, response: repeatResponse });
+    assert.equal(result?.status, "COMPLETED", "An editorial topic issue must not block delivery forever");
+    assert.equal(requests.length, 2);
+    assert(requests[1].input.at(-1)?.content.includes("일과 돈 주제에서 벗어났습니다"));
+    assert(requests[1].input.at(-1)?.content.includes("content_contract"));
+
+    result = await scenario("advice-heavy-report-is-bounded-style-repair", { change: draft => {
+      draft.sections[3].paragraph += " 받을 돈을 확인해. 더 드는 비용도 따져봐.";
+    }, response: repeatResponse });
+    assert.equal(result?.status, "COMPLETED", "Advice density must not block paid delivery indefinitely");
+    assert.equal(requests.length, 2);
+    assert(requests[1].input.at(-1)?.content.includes("행동 조언이 여러 문장"));
+    assert(requests[1].input.at(-1)?.content.includes("계산 근거"));
+
+    result = await scenario("resume-keeps-reading-date-across-boundary", { resume: true, clock: "2026-10-29T00:00:00Z", snapshot: "2026-01-01T00:00:00.000Z" });
+    assert.equal(result?.status, "COMPLETED");
+    assert.equal(requests.length, 0, "A validated draft must not change its selected periods on resume");
+    assert.equal(result.content?.meta.readingAsOf, "2026-01-01T00:00:00.000Z");
 
     result = await scenario("repair-api-timeout", { change: uneditableOpening, response: (requested, attempt) => {
       if (attempt > 1) {
@@ -135,6 +202,57 @@ async function main() {
     result = await scenario("repair-time-budget", { change: uneditableOpening, response: repeatResponse, timeout: true });
     assert.equal(result?.status, "COMPLETED");
     assert.equal(requests.length, 1);
+
+    result = await scenario("slow-first-draft-can-still-repair", { change: draft => { draft.sections[0].paragraph = draft.sections[0].paragraph.replaceAll("정관", "역할"); }, response: (requested, attempt) => {
+      if (attempt === 1) timeOffset = 60_000;
+      return { sections: (attempt === 1 ? source : valid).sections.filter(section => requested.includes(section.section_id)) };
+    } });
+    assert.equal(result?.status, "COMPLETED");
+    assert.equal(requests.length, 2, "A 45-second deadline still prevents repairing the first draft");
+    assert.deepEqual(result.generationDiagnostics?.attempts.map(item => item.outcome), ["validation", "completed"]);
+
+    result = await scenario("deadline-preserves-cause-and-private-checkpoint", { change: draft => { draft.sections[0].paragraph = draft.sections[0].paragraph.replaceAll("정관", "역할"); }, response: repeatResponse, timeout: true });
+    assert.equal(result?.status, "FAILED");
+    assert.equal(result.content, undefined, "An unvalidated checkpoint became public report content");
+    assert(result.lastError?.includes("시간이 초과"));
+    assert(result.lastError?.includes("essence:"), "Timeout erased the original validation cause");
+    assert.equal(result.generationDiagnostics?.stopReason, "budget");
+    assert.equal(result.generationDiagnostics?.attempts.length, 1);
+    const checkpoint = result.renderCheckpointJson!;
+    assert.equal(JSON.parse(checkpoint).draft.sections.length, 6);
+    assert(!JSON.stringify(result.generationDiagnostics).includes(source.sections[0].paragraph));
+
+    result = await scenario("checkpoint-resumes-only-failed-section", { checkpoint, clock: "2026-11-02T00:00:00Z", response: requested => ({ sections: valid.sections.filter(section => requested.includes(section.section_id)) }) });
+    assert.equal(result?.status, "COMPLETED");
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0].text.format.schema.properties.sections.items.properties.section_id.enum, ["essence"]);
+    assert.equal(result.content?.meta.readingAsOf, "2026-01-01T00:00:00.000Z");
+    assert.equal(result.renderCheckpointJson, null);
+
+    for (const outdated of ["old-prompt", "different-model", "malformed"]) {
+      const changed = JSON.parse(checkpoint);
+      if (outdated === "old-prompt") changed.promptVersion = "old-version";
+      if (outdated === "different-model") changed.model = "different-model";
+      result = await scenario(`ignore-${outdated}-checkpoint`, { checkpoint: outdated === "malformed" ? "not JSON" : JSON.stringify(changed) });
+      assert.equal(result?.status, "COMPLETED");
+      assert.deepEqual(requests[0].text.format.schema.properties.sections.items.properties.section_id.enum, ids);
+    }
+
+    for (const [label, providerResult] of [
+      ["token-limit", { status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, usage: { input_tokens: 9000, output_tokens: 4800 } }],
+      ["refusal", { output: [{ type: "message", content: [{ type: "refusal", refusal: "private refusal" }] }] }],
+      ["empty-output", { output_text: "" }],
+    ] as const) {
+      result = await scenario(label, { providerResult });
+      assert.equal(result?.status, "FAILED");
+      assert.equal(requests.length, 1, "The same provider failure was retried with identical settings");
+      assert.equal(result.generationDiagnostics?.stopReason, "provider");
+      assert.equal(result.renderCheckpointJson, null);
+    }
+    result = await scenario("network-error-stops-immediate-paid-retries", { response: () => { throw new Error("Simulated transport failure"); } });
+    assert.equal(result?.status, "FAILED");
+    assert.equal(requests.length, 1);
+    assert(result.lastError?.includes("Simulated transport failure"));
 
     result = await scenario("worse-rewrite-keeps-best", { change: uneditableOpening, response: (requested, attempt) => {
       const response = repeatResponse(requested);
@@ -168,10 +286,12 @@ async function main() {
       ["missing-annual-evidence", (draft: Draft) => { draft.sections[0].paragraph = draft.sections[0].paragraph.replace(/정관|병오/gu, "역할"); }],
       ["missing-natal-mental-evidence", (draft: Draft) => { draft.sections[4].paragraph = draft.sections[4].paragraph.replaceAll("비견", "생각"); }],
       ["missing-month", (draft: Draft) => { draft.sections[2].paragraph = draft.sections[2].paragraph.replaceAll("11월 7일~12월 7일", "가을"); }],
-      ["wrong-period-day", (draft: Draft) => { draft.sections[2].paragraph = draft.sections[2].paragraph.replaceAll("2월 4일~3월 5일", "2월 5일~3월 5일"); }],
-      ["wrong-period-year", (draft: Draft) => { draft.sections[2].paragraph = draft.sections[2].paragraph.replaceAll("2월 4일~3월 5일", "2027년 2월 4일~3월 5일"); }],
+      ["wrong-period-day", (draft: Draft) => { draft.sections[3].paragraph = draft.sections[3].paragraph.replaceAll("2월 4일~3월 5일", "2월 5일~3월 5일"); }],
+      ["wrong-period-year", (draft: Draft) => { draft.sections[3].paragraph = draft.sections[3].paragraph.replaceAll("2월 4일~3월 5일", "2027년 2월 4일~3월 5일"); }],
       ["name-leak", (draft: Draft) => { draft.sections[0].paragraph = `${readerName}, ${draft.sections[0].paragraph}`; }],
       ["given-name-leak", (draft: Draft) => { draft.sections[0].paragraph = `${readerName.slice(1)}야, ${draft.sections[0].paragraph}`; }],
+      ["unsupported-life-stage", (draft: Draft) => { draft.sections[1].paragraph += " 새 일을 키우는 단계(장생)를 읽어."; }],
+      ["life-stage-health-invention", (draft: Draft) => { draft.sections[4].paragraph += " 안으로 모으는 단계(병)라 올해 아플 수 있어."; }],
       ["hanja-leak", (draft: Draft) => { draft.sections[0].paragraph += " 辛"; }],
       ["incomplete-body", (draft: Draft) => { draft.sections[0].paragraph = "너는 신금이고 올해 정관의 영향을 받아."; }],
       ["missing-section", (draft: Draft) => { draft.sections.pop(); }],
@@ -190,7 +310,7 @@ async function main() {
     assert.deepEqual(result.content?.paragraphs.slice(0, 5), fixture.paragraphs.slice(0, 5));
     assert(!result.content?.paragraphs.join("").includes("কাজে"));
     assert(requests[0].input[0].content.includes(REPORT_TEXT_INTEGRITY_INSTRUCTIONS));
-    assert(requests[1].input.at(-1)?.content.includes(REPORT_TEXT_INTEGRITY_INSTRUCTIONS));
+    assert(requests[1].input.some(input => input.content.includes(REPORT_TEXT_INTEGRITY_INSTRUCTIONS)));
 
     result = await scenario("mixed-language-cannot-publish-through-style-fallback", { change: corruptSummary, response: repeatResponse });
     assert.equal(result?.status, "FAILED");
@@ -199,7 +319,7 @@ async function main() {
 
     result = await scenario("provider-fails-without-draft", { response: () => { throw new Error("Simulated provider failure"); } });
     assert.equal(result?.status, "FAILED");
-    assert.equal(requests.length, 5);
+    assert.equal(requests.length, 1);
     assert(!updates.some(update => update.content));
 
     result = await scenario("resume-without-model-call", { resume: true });
@@ -213,12 +333,13 @@ async function main() {
     assert.equal(getReportPrompt().version, REPORT_PROMPT_VERSION);
     assert.equal(getReportPrompt().tone, "genz");
     const genzPayload = buildReportRenderPayload(myeongsik, "genz");
+    checkObservationContract(genzPayload);
     assert.deepEqual(genzPayload.reportFacts, warmPayload.reportFacts);
     assert.deepEqual(genzPayload.payload.sections.map((section, index) => ({ ...section, paragraph_length: warmPayload.payload.sections[index].paragraph_length, editorial_focus: section.id === "summary" ? warmPayload.payload.sections[index].editorial_focus : section.editorial_focus })), warmPayload.payload.sections);
     assert.equal(warmPayload.payload.style.tone, "warm");
     assert.equal(genzPayload.payload.style.tone, "genz");
     assert.equal(getStoredReportTone("essay-v22-annual-story-genz-tone-test"), "genz");
-    assert(genzPayload.payload.terminology.some(entry => entry.term === "정관" && entry.meaning.includes("약속")));
+    assert(genzPayload.payload.terminology.some(entry => entry.term === "정관" && entry.meaning.includes("일간을 극")));
     assert(!genzPayload.payload.terminology.some(entry => entry.term === "식신"), "Unrelated ten-god interpretation leaked into the glossary");
     assert(genzPayload.payload.terminology.every(entry => !/↔|원국 일지|F-/u.test(entry.meaning)));
     tests += 1;
@@ -239,7 +360,7 @@ async function main() {
     assert(!hasReportTimingTerm("11월과 12월", "1월", 2026));
     tests += 1;
     result = await scenario("equivalent-period-spelling", { change: draft => {
-      draft.sections[2].paragraph = draft.sections[2].paragraph.replace("2월 4일~3월 5일", "2월4일부터 3월5일까지");
+      draft.sections[3].paragraph = draft.sections[3].paragraph.replace("2월 4일~3월 5일", "2월4일부터 3월5일까지");
     } });
     assert.equal(result?.status, "COMPLETED");
     assert.equal(requests.length, 1, "Equivalent date typography caused a paid retry");
@@ -279,7 +400,7 @@ async function main() {
     result = await scenario("genz-explicit-preview", { tone: "genz", model: "gpt-5.4", resume: true, storedPromptVersion: WARM_REPORT_PROMPT_VERSION });
     assert.equal(result?.status, "COMPLETED");
     assert.equal(requests.length, 1, "A warm stored draft was reused for a Gen Z request");
-    assert(requests[0].input[0].content.includes("[Friendly message]"));
+    assert(requests[0].input[0].content.includes(REPORT_EMOTICON_INSTRUCTIONS));
     assert(!requests[0].input[0].content.includes("[Tone and endings]"), "Warm tone instructions still compete with the Gen Z experiment");
     assert.equal(JSON.parse(requests[0].input[1].content).style.tone, "genz");
     assert.equal(claims[0].promptVersion, GENZ_REPORT_PROMPT_VERSION);
@@ -339,7 +460,7 @@ async function main() {
     assert.equal(requests.length, 2);
     assert(hasInlineTermExplanation(result.content!.paragraphs[0], "신금"));
     const repairInstructions = requests[1].input.at(-1)!.content;
-    assert(repairInstructions.includes("큰 주제인 section 하나를 하나의 긴 메시지"));
+    assert(requests[1].input.some(input => input.content.includes("한 주제는 긴 메시지 하나")));
     assert(!/50~100|두 번째 문장 이후|용어 바로 뒤에/u.test(repairInstructions));
     result = await scenario("term-first-style-fallback", { change: termFirstGloss, response: repeatResponse });
     assert.equal(result?.status, "COMPLETED", "A glossary order preference blocked a paid report");
@@ -368,7 +489,7 @@ async function main() {
     assert(!result.content?.paragraphs.join("").includes("🙂"));
     assert.equal(requests.length, 1, "Decoration changes must not trigger another paid request");
     assert(requests[0].input[0].content.includes(REPORT_EMOTICON_INSTRUCTIONS));
-    assert(requests[0].input[1].content.includes(`특수문자 표정·별·하트만 전체 ${REPORT_EMOTICON_RANGE}개`));
+    assert(requests[0].input[1].content.includes(`특수문자 표정은 전체 ${REPORT_EMOTICON_RANGE}개`));
 
     result = await scenario("message-repairs-formal-ending", { tone: "genz", change: draft => { draft.sections[3].paragraph += " 기준이 중요하다."; } });
     assert.equal(result?.status, "COMPLETED");
@@ -379,7 +500,7 @@ async function main() {
     result = await scenario("emoticon-cannot-hide-formal-ending", { tone: "genz", change: draft => { draft.sections[3].paragraph += ` 기준이 중요하다 ${REPORT_EMOTICONS.playful}`; } });
     assert.equal(result?.status, "COMPLETED");
     assert.equal(requests.length, 2);
-    assert(requests[1].input.at(-1)?.content.includes(REPORT_EMOTICON_INSTRUCTIONS));
+    assert(requests[1].input.some(input => input.content.includes(REPORT_EMOTICON_INSTRUCTIONS)));
     assert(!FORMAL_REPORT_ENDING.test(stripReportDecorations(result.content!.paragraphs[3])));
 
     result = await scenario("emoji-cannot-replace-evidence", { tone: "genz", change: draft => { draft.sections[0].paragraph = "🫠".repeat(200); }, response: requested => ({ sections: source.sections.filter(section => requested.includes(section.section_id)) }) });
@@ -393,8 +514,8 @@ async function main() {
     assert.equal(result?.status, "COMPLETED");
     assert.equal(requests.length, 2);
     assert(requests[0].input[0].content.includes(REPORT_PLAIN_LANGUAGE_INSTRUCTIONS));
-    assert(requests[1].input.at(-1)?.content.includes(REPORT_PLAIN_LANGUAGE_INSTRUCTIONS), "Partial repairs lost the plain-language instructions");
-    assert(requests[1].input.at(-1)?.content.includes("쉽고 다정한 친구의 말투를 유지"));
+    assert(requests[1].input.some(input => input.content.includes(REPORT_PLAIN_LANGUAGE_INSTRUCTIONS)), "Partial repairs lost the plain-language instructions");
+    assert(requests[1].input.some(input => input.content.includes("따뜻한 반말")));
     for (const request of requests) {
       const prompt = request.input.map(message => message.content).join("\n");
       assert(!/최소 세 문단에|팩폭을 살리고|킹받는 팩폭을 원한다/u.test(prompt), "Old joke requirements still compete with readable prose");
@@ -411,7 +532,7 @@ async function main() {
       assert.equal(requests.length, 2);
       assert.deepEqual(requests[1].text.format.schema.properties.sections.items.properties.section_id.enum, ["career"]);
       assert(!result.content!.paragraphs[3].includes(text));
-      assert(requests[1].input.at(-1)?.content.includes(REPORT_PLAIN_LANGUAGE_INSTRUCTIONS));
+      assert(requests[1].input.some(input => input.content.includes(REPORT_PLAIN_LANGUAGE_INSTRUCTIONS)));
 
       result = await scenario(`readability-${name}-bounded-fallback`, { change: addIssue, response: repeatResponse });
       assert.equal(result?.status, "COMPLETED", "Readability preferences blocked a content-validated report");
@@ -424,7 +545,8 @@ async function main() {
     }, response: repeatResponse });
     assert.equal(result?.status, "COMPLETED");
     assert(result.content!.paragraphs[5].includes("올해"), "Opening cleanup removed the closing's only annual context");
-    assert.equal(requests.length, 2);
+    assert(!ANNUAL_OPENING.test(result.content!.paragraphs[5]));
+    assert.equal(requests.length, 1, "A cosmetic closing connector must not require another paid request");
 
     const removeAnnualClosing = (draft: Draft) => { draft.sections[5].paragraph = draft.sections[5].paragraph.replaceAll("올해", "이 흐름"); };
     result = await scenario("annual-summary-is-repaired", { change: removeAnnualClosing });
@@ -481,7 +603,7 @@ async function main() {
 
     result = await scenario("genz-retry-retains-tone", { storedPromptVersion: GENZ_REPORT_PROMPT_VERSION, storedModel: "gpt-5.4" });
     assert.equal(result?.status, "COMPLETED");
-    assert(requests[0].input[0].content.includes("[Friendly message]"));
+    assert(requests[0].input[0].content.includes(REPORT_EMOTICON_INSTRUCTIONS));
     assert.equal(claims[0].promptVersion, GENZ_REPORT_PROMPT_VERSION);
     assert.equal(requests[0].model, "gpt-5.4");
     assert.equal(claims[0].model, "gpt-5.4");
@@ -493,7 +615,7 @@ async function main() {
 
     result = await scenario("warm-explicit-comparison", { tone: "warm", storedModel: "gpt-5.4" });
     assert.equal(result?.status, "COMPLETED");
-    assert(!requests[0].input[0].content.includes("[Friendly message]"));
+    assert(!requests[0].input[0].content.includes(REPORT_EMOTICON_INSTRUCTIONS));
     assert.equal(JSON.parse(requests[0].input[1].content).style.tone, "warm");
     assert.equal(claims[0].promptVersion, WARM_REPORT_PROMPT_VERSION);
     assert.equal(requests[0].model, getConfiguredReportModel());
@@ -532,7 +654,11 @@ async function main() {
     require(accountPath);
     require.cache[accountPath]!.exports = { ...require(accountPath), getSajuAccount: async () => ({ id: "reader-account" }) };
     const { GET } = require("../src/app/api/saju/reports/[reportId]/route") as typeof import("../src/app/api/saju/reports/[reportId]/route");
-    const { POST } = require("../src/app/api/saju/reports/[reportId]/generate/route") as typeof import("../src/app/api/saju/reports/[reportId]/generate/route");
+    const { POST, maxDuration } = require("../src/app/api/saju/reports/[reportId]/generate/route") as typeof import("../src/app/api/saju/reports/[reportId]/generate/route");
+    assert(REPORT_RENDER_BUDGET_MS < maxDuration * 1000);
+    assert(maxDuration * 1000 < REPORT_CLIENT_TIMEOUT_MS);
+    assert(REPORT_CLIENT_TIMEOUT_MS < REPORT_GENERATION_LEASE_MS, "A live request could lose its generation lease");
+    tests++;
     const { POST: createReport } = require("../src/app/api/saju/profiles/[profileId]/reports/route") as typeof import("../src/app/api/saju/profiles/[profileId]/reports/route");
     store.consumeRateLimit = (async () => true) as never;
     store.getProfile = (async () => ({ id: "profile-fixture", userId: "reader-account", relationship: "SELF", privacyNotice, birthDate: new Date("1995-05-20T00:00:00Z"), isLunar: false, isLeapMonth: false })) as unknown as typeof originals.findProfile;
@@ -552,11 +678,13 @@ async function main() {
     tests += 2;
 
     for (const status of ["FAILED", "GENERATING", "COMPLETED"]) {
-      store.getReportWithAccess = (async () => ({ id: "fixture", status, content: null, sajuProfile: { userId: "reader-account" }, order: null, lastError: "career: internal validator details and provider configuration" })) as unknown as typeof originals.find;
+      store.getReportWithAccess = (async () => ({ id: "fixture", status, content: null, renderCheckpointJson: "private unfinished draft", generationDiagnostics: { stopReason: "provider" }, sajuProfile: { userId: "reader-account" }, order: null, lastError: "career: internal validator details and provider configuration" })) as unknown as typeof originals.find;
       const response = await GET(new Request("http://localhost/api/saju/reports/fixture"), { params: Promise.resolve({ reportId: "fixture" }) });
       const body = await response.json();
       assert.equal(body.lastError, status === "FAILED" ? PUBLIC_REPORT_FAILURE_MESSAGE : null);
       assert(!JSON.stringify(body).includes("career:"));
+      assert(!("renderCheckpointJson" in body));
+      assert(!("generationDiagnostics" in body));
       tests += 1;
     }
 

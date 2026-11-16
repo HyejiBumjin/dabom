@@ -12,6 +12,7 @@
  */
 import type { CorpusCondition, CorpusFragment } from "@/lib/saju/interpretation-corpus";
 import type { ReportFacts } from "@/lib/saju/report-facts";
+import { buildFinancialReading } from "@/lib/saju/report-topic-corpus";
 
 type GodGroup = "peer" | "output" | "asset" | "authority" | "resource";
 type TenGod = "비견" | "겁재" | "식신" | "상관" | "편재" | "정재" | "편관" | "정관" | "편인" | "정인";
@@ -131,8 +132,8 @@ export const PERSONALIZATION_GOD_FACETS: Record<TenGod, GodFacet> = {
     group: "authority", meaning: "맡은 역할과 정해진 약속을 제대로 지키는 힘",
     annualQuestion: "어떤 일에서 믿고 맡길 만한 사람으로 남을까?",
     sameQuestion: "이미 해낼 줄 아는 일에서 무엇을 더 분명히 보여 줄까?",
-    sameFocus: "원국 본기와 올해 천간이 같은 정관이면 지켜야 할 기준이라는 두 근거가 겹친다. 새 책임을 계속 늘리기보다 익숙한 역할 안에서 믿을 만한 부분을 선명하게 만드는 해석이다.",
-    sameDecision: "하나의 일에서 약속한 수준을 꾸준히 맞추는 쪽을 고른다. 눈에 띄려고 일을 더 받는 것과 이미 맡은 일의 완성도를 높이는 것을 구분한다.",
+    sameFocus: "원국 본기와 올해 천간의 정관은 역할·약속이라는 같은 기능을 가리킨다. 익숙한 일을 지키는 데서 끝내지 않고, 잘해 온 일을 다른 사람도 알아볼 수 있는 결과와 맡을 역할로 연결하는 관점이다. 두 글자만으로 새 도전의 유불리나 실제 평가 결과를 단정하지 않는다.",
+    sameDecision: "새 역할을 제안받는다면 무엇을 해내면 되는지와 내 판단으로 정할 수 있는 일을 함께 본다. 책임과 결정할 권한이 함께 주어지는 경우와 책임만 늘어나는 경우를 구별한다. 이미 한 일도 무엇을 마쳤는지 보여 줄 결과로 남긴다.",
     cycleFocus: "맡긴 일을 믿고 다시 부탁할 수 있는 실적을 쌓는 장기 흐름",
     cycleQuestion: "남이 다시 믿고 맡길 수 있게 무엇을 남길까?",
     cycleDecision: "끝낸 일에서 약속과 실제 결과가 맞았는지를 남긴다. 직함을 얻는 기대보다 맡은 일을 다음에도 같은 수준으로 해낼 방법에 집중한다.",
@@ -342,6 +343,7 @@ export function buildPersonalizedReportEvidence(facts: ReportFacts, version: str
   const careerLink = CYCLE_YEAR_LINKS[annual.facet.group];
   const paceLink = PACE_YEAR_LINKS[annual.facet.group];
   const workSupport = selectWorkSupport(facts, [cycle.name, annual.name]);
+  const money = buildFinancialReading(facts);
   const sectionMetadata: PersonalizedReportEvidence["sectionMetadata"] = {
     yearly: {
       question: yearlyQuestion,
@@ -350,9 +352,9 @@ export function buildPersonalizedReportEvidence(facts: ReportFacts, version: str
       primaryTerms: [...new Set([annual.name, natalMain.name])],
     },
     career: {
-      question: workSupport?.question ?? cycle.facet.cycleQuestion,
-      distinctFocus: workSupport ? `${cycle.facet.cycleFocus}. ${workSupport.focus}` : cycle.facet.cycleFocus,
-      avoidRepeating: ["yearly에서 설명한 책임·선택의 정의를 반복하지 않는다.", "일을 맡을지 말지보다 오래 남는 능력·쓰임·실속 중 배정된 질문을 깊게 설명한다."],
+      question: money.question,
+      distinctFocus: `${money.focus} ${money.annual}`,
+      avoidRepeating: ["yearly에서 설명한 책임·선택의 정의를 반복하지 않는다.", "자료 정리·능력 쌓기만 설명하며 돈 이야기를 생략하지 않는다. 보조적인 원국 근거는 돈의 해석 뒤에 필요할 때만 한 문장으로 쓴다."],
       primaryTerms: [...new Set([cycle.name, annual.name])],
     },
     mental: {
@@ -377,8 +379,8 @@ export function buildPersonalizedReportEvidence(facts: ReportFacts, version: str
     grounds: ["da-yun-ten-god", "annual-ten-god", ...(workSupport ? [`natal-god-${workSupport.name}`] : [])],
     mechanism: `현재 ${facts.daYunGanZhi} 대운 천간의 ${cycle.name}는 ${cycle.facet.meaning}을 여러 해의 일과 돈이라는 관점에서 읽는 근거다. 올해 ${annual.name}의 기능은 ${annual.facet.meaning}이다. ${careerLink.focus}${workSupport ? ` 원국의 실제 천간에서 ${workSupport.name}가 확인되어 ${PERSONALIZATION_GOD_FACETS[workSupport.name].meaning}을 일하는 방법의 보조 근거로 더한다.` : ""}`,
     focus: sectionMetadata.career.distinctFocus,
-    steps: [cycle.facet.cycleFocus, careerLink.focus, ...(workSupport ? [workSupport.focus] : []), `${cycle.name}의 적용: ${cycle.facet.cycleDecision}`],
-    decision: workSupport ? `${workSupport.decision} 이 방법을 ${cycle.facet.cycleFocus}에 적용한다. ${careerLink.decision}` : `${cycle.facet.cycleDecision} 올해 연결점: ${careerLink.decision}`,
+    steps: [money.focus, money.annual, ...(workSupport ? [`보조 근거이며 돈의 주제를 바꾸지 않음: ${workSupport.focus}`] : [])],
+    decision: `${money.decision}${workSupport ? ` 돈의 이야기를 먼저 완결한 뒤 필요할 때만 보탤 방법: ${workSupport.decision}` : ""}`,
     avoid: sectionMetadata.career.avoidRepeating,
   });
   const mental = fragment({

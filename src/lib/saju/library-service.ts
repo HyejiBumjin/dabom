@@ -8,7 +8,7 @@ import { canReadSajuReport } from "@/lib/saju/account";
 import { allowsDevelopmentReports } from "@/lib/portone/payment-mode";
 import { requireVerifiedPayment } from "@/lib/portone/entitlement";
 import { assertProfileAge } from "./profile-age";
-import { profileNoticeSchema, profileNoticeText, profileUseError, SELF_ONLY_MESSAGE, PROFILE_NOTICE_MESSAGE } from "@/lib/privacy/profile-use";
+import { profileUseError, SELF_ONLY_MESSAGE } from "@/lib/privacy/profile-use";
 import { RequestSecurityError } from "@/lib/security/request";
 
 const reportMetadata = () => ({ productCode: SAJU_PRODUCT_CODE, promptVersion: getReportPrompt().version, model: getConfiguredReportModel() });
@@ -27,18 +27,16 @@ export async function findExistingSajuReport(userId: string, input: ProfileInput
   }
   return pending;
 }
-export async function saveSajuProfile(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore, notice?: unknown) {
+export async function saveSajuProfile(userId: string, input: ProfileInput, db: FirebaseStore = firebaseStore) {
   if (!userId) throw new Error("LOGIN_REQUIRED");
   assertProfileAge({ birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth });
   if (input.relationship !== "SELF") throw new RequestSecurityError(400, SELF_ONLY_MESSAGE);
-  const acknowledgment = profileNoticeSchema.safeParse(notice);
-  if (!acknowledgment.success) throw new RequestSecurityError(400, PROFILE_NOTICE_MESSAGE);
   const account = await db.getAccount(userId);
   if (!account) throw new Error("ACCOUNT_UNAVAILABLE");
   const birthKey = profileBirthKey(input);
   const existing = await db.findInputProfile({ userId, name: input.name, birthKey, birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth });
   const myeongsik = existing?.myeongsik ?? new KoreanPolicyAdapter().calculate({ ...input, birthTime: input.birthTime ?? "12:00", birthTimeKnown: Boolean(input.birthTime) });
-  return db.saveProfile({ userId, birthKey, name: input.name, relationship: "SELF", gender: input.gender === "male" ? "MALE" : "FEMALE", birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), birthTime: input.birthTime, isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth, myeongsik, privacyNotice: { ...acknowledgment.data, acceptedAt: new Date().toISOString(), text: profileNoticeText } }, account.dataEpoch ?? "legacy");
+  return db.saveProfile({ userId, birthKey, name: input.name, relationship: "SELF", gender: input.gender === "male" ? "MALE" : "FEMALE", birthDate: new Date(`${input.birthDate}T00:00:00.000Z`), birthTime: input.birthTime, isLunar: input.calendar === "lunar", isLeapMonth: input.isLeapMonth, myeongsik }, account.dataEpoch ?? "legacy");
 }
 export function ensureSajuReport(userId: string, profileId: string, orderId?: string, db: FirebaseStore = firebaseStore) {
   return db.ensureReport(userId, profileId, reportMetadata(), orderId);

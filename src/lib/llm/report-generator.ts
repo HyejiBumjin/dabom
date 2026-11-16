@@ -1,28 +1,48 @@
 import OpenAI from "openai";
-import { formatReportEmoticons, REPORT_EMOTICON_INSTRUCTIONS, stripReportDecorations } from "@/lib/report-emoticons";
+import { formatReportEmoticons, stripReportDecorations } from "@/lib/report-emoticons";
 import { z } from "zod";
 import { firebaseStore } from "@/lib/firebase/store";
 import { requireReportEntitlement } from "@/lib/portone/entitlement";
 import { assertProfileUse } from "@/lib/saju/profile-age";
-import { buildReportEvidencePrompt, getReportPrompt, REPORT_OPENING_FLOW_INSTRUCTIONS, REPORT_PLAIN_LANGUAGE_INSTRUCTIONS, REPORT_PERSONALIZATION_INSTRUCTIONS } from "@/lib/prompts/v6";
+import { buildReportEvidencePrompt, getReportPrompt } from "@/lib/prompts/v6";
 import { buildReportRenderPayload, type ReportTone } from "@/lib/saju/report-payload";
 import type { Myeongsik } from "@/lib/saju/myeongsik";
 import type { ReportContent } from "./types";
 import { DEFAULT_REPORT_TONE, getConfiguredReportModel, getReportModelOptions } from "./report-config";
+import { getAdvancedReportIssues } from "./advanced-report-rules";
+import { getAdviceDensityIssues, getClosingTimelineIssues, getTopicCoverageIssues, hasNearDuplicateExplanation } from "./report-topic-rules";
+import { editorialPenalty, evidenceUseIssues, getSpecificityIssues, repairEvidenceExcerpts } from "./report-evidence-review";
+import { REPORT_MIN_ATTEMPT_MS, REPORT_RENDER_BUDGET_MS, type ReportGenerationDiagnostics } from "./report-runtime-policy";
 import { ANNUAL_OPENING, containsReaderName, countReportCharacters, FORMAL_REPORT_ENDING, getReportReadabilityIssues, getUnexpectedReportCharacters, hasInlineTermExplanation, hasReportTerm, hasReportTimingTerm, normalizeReportParagraph, redactReaderName, repairRepeatedAnnualOpenings, REPORT_PARAGRAPH_LENGTHS, SUGGESTION_ENDING } from "./report-rules";
 
+const evidenceUseSchema = z.object({ evidence_id: z.string().min(1), excerpt: z.string().min(8).max(240) });
 const sectionSchema = z.object({
   section_id: z.string(),
   paragraph: z.preprocess((value) => typeof value === "string" ? normalizeReportParagraph(value) : value, z.string()),
+  evidence_uses: z.array(evidenceUseSchema).max(3),
 });
 const reportSchema = z.object({ sections: z.array(sectionSchema).length(6) });
+const checkpointSchema = z.object({ promptVersion: z.string(), model: z.string(), readingAsOf: z.iso.datetime(), draft: reportSchema });
 type RenderedReport = z.infer<typeof reportSchema>;
 const MIN_PARAGRAPH_LENGTH = Math.min(...Object.values(REPORT_PARAGRAPH_LENGTHS).map((range) => range.min));
 const MAX_PARAGRAPH_LENGTH = Math.max(...Object.values(REPORT_PARAGRAPH_LENGTHS).map((range) => range.max));
 const MAX_RENDER_ATTEMPTS = 5;
 const MAX_STYLE_REPAIR_FAILURES = 2;
-// Leave time for persistence within the API route's 55-second budget.
-const MAX_RENDER_TIME_MS = 45_000;
+
+function readCheckpoint(value: string | null | undefined) {
+  try { return checkpointSchema.safeParse(JSON.parse(value ?? "null")); }
+  catch { return checkpointSchema.safeParse(null); }
+}
+
+class IncompleteReportResponseError extends Error {}
+
+function responseFailure(response: OpenAI.Responses.Response): string | null {
+  if (response.status === "incomplete") return `모델 응답 미완료: ${response.incomplete_details?.reason ?? "unknown"}.`;
+  if (response.status && response.status !== "completed") return `모델 응답 상태: ${response.status}.`;
+  if (response.output?.some(item => item.type === "message" && item.content.some(part => part.type === "refusal"))) return "모델이 리포트 작성을 거절했습니다.";
+  if (!response.output_text?.trim()) return "모델이 빈 응답을 반환했습니다.";
+  return null;
+}
 
 function buildOutputSchema(sectionIds: string[]) {
   return {
@@ -30,11 +50,16 @@ function buildOutputSchema(sectionIds: string[]) {
       sections: {
         type: "array", minItems: sectionIds.length, maxItems: sectionIds.length,
         items: {
-          type: "object", additionalProperties: false, required: ["section_id", "paragraph"], properties: {
+          type: "object", additionalProperties: false, required: ["section_id", "paragraph", "evidence_uses"], properties: {
             section_id: { type: "string", enum: sectionIds },
             // Give the model room to finish a sentence, including message
             // breaks and emoji. Per-section prose limits are validated below.
             paragraph: { type: "string", minLength: MIN_PARAGRAPH_LENGTH, maxLength: MAX_PARAGRAPH_LENGTH * 2 },
+            evidence_uses: { type: "array", maxItems: 3, items: {
+              type: "object", additionalProperties: false, required: ["evidence_id", "excerpt"], properties: {
+                evidence_id: { type: "string" }, excerpt: { type: "string", minLength: 8, maxLength: 240 },
+              },
+            } },
           },
         },
       },
@@ -61,6 +86,7 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
   const expected = context.payload.sections;
   const issues: ValidationIssue[] = [];
   const seenSentences = new Set<string>();
+  const bodyExplanations: string[] = [];
   const explainedTerms = new Set<string>();
   let hasAnnualOpening = false;
   const paragraphs = rendered.sections.map((section, index) => {
@@ -71,9 +97,19 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
       issues.push({ sectionId: expectedSection.id, message: `${expectedSection.id}: ${message}`, severity });
     };
     const style = (message: string) => fail(message, "style");
+    // Grounding failures must never pass the style-only recovery path.
+    for (const issue of evidenceUseIssues(expectedSection, paragraph, section.evidence_uses, context.payload)) fail(issue);
+    for (const issue of getAdvancedReportIssues(paragraph, expectedSection.advanced_terms)) fail(issue);
     const unexpectedCharacters = getUnexpectedReportCharacters(paragraph);
     if (unexpectedCharacters.length > 0) fail(`한국어 문장에 다른 언어 또는 깨진 문자가 섞였습니다: ${unexpectedCharacters.join(", ")}. 허용된 표정은 유지하고, 잘못된 단어가 있는 문장을 앞뒤 뜻에 맞는 자연스러운 한국어로 고치세요. 문자만 삭제해서 뜻을 비우지 마세요.`);
     for (const issue of getReportReadabilityIssues(paragraph)) style(issue);
+    for (const issue of getTopicCoverageIssues(expectedSection.id, paragraph)) style(issue);
+    for (const issue of getAdviceDensityIssues(expectedSection.id, paragraph)) style(issue);
+    for (const issue of getSpecificityIssues(expectedSection.id, paragraph)) style(issue);
+    if (["yearly", "relation", "career", "mental"].includes(expectedSection.id)) {
+      if (bodyExplanations.some(previous => hasNearDuplicateExplanation(previous, paragraph))) style("다른 본문과 긴 설명이 거의 같습니다. 이 메시지의 content_contract와 배정된 근거로 아직 말하지 않은 별개의 흐름을 설명하세요. 표현만 바꾸어 같은 결론을 재사용하지 마세요.");
+      bodyExplanations.push(paragraph);
+    }
     const length = countReportCharacters(paragraph);
     const range = expectedSection.paragraph_length;
     // Small editorial deviations can be repaired or published. Empty, partial,
@@ -93,6 +129,9 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
     if (expectedSection.required_year_terms.length > 0 && !expectedSection.required_year_terms.some((term) => paragraph.includes(term))) fail(`올해 운세로 연결되지 않았습니다. ${expectedSection.required_year_terms.join(" 또는 ")}를 포함하세요.`);
     if (expectedSection.id === "essence" && /[?？]/u.test(paragraph)) style("도입은 나의 성향과 올해 요점을 알려 주는 글입니다. 독자에게 대답을 묻는 질문을 빼고 서술하세요.");
     if (expectedSection.id === "summary") {
+      const yearEnd = context.reportFacts.monthlyCalendar.at(-1)?.endAt;
+      const yearFinished = Boolean(yearEnd && Date.parse(context.payload.as_of.instant) >= Date.parse(yearEnd));
+      for (const issue of getClosingTimelineIssues(paragraph, yearFinished)) style(issue);
       const technicalTerms = expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]);
       if (technicalTerms.some((term) => hasReportTerm(paragraph, term))) style(context.payload.style.tone === "genz"
         ? "마무리에서 명리 용어를 다시 설명하지 마세요. 본문에서 확인된 올해의 흐름을 생활 언어로 요약하고 응원을 전하세요."
@@ -110,7 +149,7 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
     const technicalTerms = [...new Set(expected.flatMap((entry) => [...entry.required_factual_terms, ...entry.required_factual_groups.flat()]).concat(context.payload.terminology.map(entry => entry.term), ["충", "합"]))];
     if (technicalTerms.some((term) => hasReportTerm(firstSentence, term) && !hasInlineTermExplanation(firstSentence, term))) style("첫 문장에서 명리 용어가 풀이보다 먼저 나옵니다. 체감할 의미를 일상어로 충분히 설명한 뒤 해당 용어만 괄호로 붙이세요. 풀이 뒤의 괄호 용어는 첫 문장에도 쓸 수 있습니다.");
     const missingTimingTerms = expectedSection.required_timing_terms.filter((term) => !hasReportTimingTerm(paragraph, term, context.reportFacts.targetYear));
-    if (missingTimingTerms.length > 0) fail(`올해 월운 시점이 빠졌습니다: ${missingTimingTerms.join(", ")}. 이미 지난 달도 계산상 과거 시점으로 짧게 포함하세요.`);
+    if (missingTimingTerms.length > 0) fail(`선정된 월운 시점이 빠졌습니다: ${missingTimingTerms.join(", ")}. 각 기간의 phase에 맞게 설명하고 선정되지 않은 과거 달로 바꾸지 마세요.`);
     if (expectedSection.prohibited_terms.some((term) => hasReportTimingTerm(paragraph, term, context.reportFacts.targetYear))) style("다른 문단 전용 시점이 반복되었습니다.");
     if (/\[[^\]]+\]/u.test(paragraph)) fail("내부 추적 태그가 본문에 노출되었습니다.");
     if (/(?:^|\s)#\s*(?:required|mechanism|translation|concrete\s*scene|yearly\s*[-:]|scene\s*terms?|factual\s*terms?)/imu.test(paragraph)) fail("내부 입력 라벨이 본문에 노출되었습니다.");
@@ -153,16 +192,25 @@ export function validateReport(raw: unknown, context: ReturnType<typeof buildRep
     paragraphs: formatted,
     meta: {
       presentation: context.payload.style.tone === "genz" ? "message" : "letter",
+      synthesisRuleVersion: context.payload.synthesis_context.rule_version,
+      synthesisEvidenceIds: context.payload.synthesis_context.evidence_ids,
+      interpretationRuleVersion: context.payload.advanced_context.rule_version,
+      interpretationEvidenceIds: context.payload.advanced_context.evidence_ids,
+      readingAsOf: context.payload.as_of.instant,
       charCount: [...text].length,
-      beats: context.selected.sections.map((section) => `${section.id}:${section.fragments.map((fragment) => fragment.id).join(",")}`),
+      beats: rendered.sections.map(section => `${section.section_id}:${section.evidence_uses.map(use => use.evidence_id).join(",")}`),
       termsUsed: context.payload.terminology.filter(({ term }) => paragraphs.some(paragraph => hasReportTerm(paragraph, term))).map(({ term, meaning }) => ({ term, gloss: meaning })),
+      readingPlanVersion: context.payload.reading_plan_version,
+      evidenceUses: rendered.sections.map(section => ({ sectionId: section.section_id, uses: section.evidence_uses })),
+      editorialReview: { status: "passed", issueCount: 0, specificityIssueCount: 0 },
     },
   };
 }
 
-/** Facts and approved corpus selection stay outside the LLM. */
+/** Calculation stays in code; the LLM writes interpretations from observations. */
 export async function generateReport(reportId: string, options: { tone?: ReportTone; model?: string } = {}): Promise<void> {
-  const deadline = Date.now() + MAX_RENDER_TIME_MS;
+  const startedAt = Date.now();
+  const deadline = startedAt + REPORT_RENDER_BUDGET_MS;
   const report = await firebaseStore.getReportWithAccess(reportId);
   if (!report || report.status === "COMPLETED") return;
   assertProfileUse(report.sajuProfile);
@@ -176,7 +224,14 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
   if (!claim) return;
 
   try {
-    const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik, prompt.tone);
+    // Resuming a validated draft must keep its month selection across midnight
+    // or a solar-term boundary. A new prompt starts a new reading snapshot.
+    const canResumeDraft = report.promptVersion === prompt.version && report.model === model;
+    const checkpoint = readCheckpoint(canResumeDraft ? report.renderCheckpointJson : null);
+    const resumableCheckpoint = checkpoint.success && checkpoint.data.promptVersion === prompt.version && checkpoint.data.model === model ? checkpoint.data : null;
+    const priorSnapshot = z.object({ meta: z.object({ readingAsOf: z.iso.datetime() }) }).safeParse(canResumeDraft ? report.content : null);
+    const readingAsOf = new Date(resumableCheckpoint?.readingAsOf ?? (priorSnapshot.success ? priorSnapshot.data.meta.readingAsOf : Date.now()));
+    const context = buildReportRenderPayload(report.sajuProfile.myeongsik as unknown as Myeongsik, prompt.tone, readingAsOf);
     // The name is used only by local validation and draft redaction, never as
     // interpretation evidence sent to the model.
     const readerName = report.sajuProfile.name;
@@ -184,17 +239,24 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
     let lastError = "리포트 생성에 실패했습니다.";
     let attemptsUsed = 0;
     let styleRepairFailures = 0;
-    const recovery: { best: { content: ReportContent; styleIssueCount: number } | null } = { best: null };
+    const diagnostics: ReportGenerationDiagnostics = { elapsedMs: 0, stopReason: "attempt-limit", attempts: [] };
+    const currentDiagnostics = () => ({ ...diagnostics, elapsedMs: Math.max(0, Date.now() - startedAt) });
+    const recovery: { best: { content: ReportContent; styleIssueCount: number; penalty: number } | null } = { best: null };
     const complete = async (content: ReportContent) => {
-      await firebaseStore.updateReport(reportId, claim, { status: "COMPLETED", content: content, retryCount: Math.max(0, attemptsUsed - 1), completedAt: new Date(), lastError: null });
+      diagnostics.stopReason = "completed";
+      await firebaseStore.updateReport(reportId, claim, { status: "COMPLETED", content: content, retryCount: Math.max(0, attemptsUsed - 1), completedAt: new Date(), lastError: null, renderCheckpointJson: null, generationDiagnostics: currentDiagnostics() });
     };
     // Updated evidence/date policies must not inherit an older unfinished draft.
     // Completed reports returned above remain unchanged.
-    const canResumeDraft = report.promptVersion === prompt.version;
-    const previousContent = z.object({ paragraphs: z.array(z.string()).length(6) }).safeParse(canResumeDraft ? report.content : null);
+    const previousContent = z.object({ paragraphs: z.array(z.string()).length(6), meta: z.object({
+      evidenceUses: z.array(z.object({ sectionId: z.string(), uses: z.array(evidenceUseSchema).max(3) })).length(6),
+    }) }).safeParse(canResumeDraft ? report.content : null);
+    // A checkpoint is private work in progress, never publishable content. It
+    // passes the complete validator again before display or any API repair.
     let draft: RenderedReport | null = previousContent.success
-      ? { sections: previousContent.data.paragraphs.map((paragraph, index) => ({ section_id: allSectionIds[index], paragraph: normalizeReportParagraph(paragraph) })) }
-      : null;
+      ? { sections: previousContent.data.paragraphs.map((paragraph, index) => ({ section_id: allSectionIds[index], paragraph: normalizeReportParagraph(paragraph), evidence_uses: previousContent.data.meta.evidenceUses.find(item => item.sectionId === allSectionIds[index])?.uses ?? [] })) }
+      : resumableCheckpoint?.draft ?? null;
+    const checkpointJson = () => draft ? JSON.stringify({ promptVersion: prompt.version, model, readingAsOf: readingAsOf.toISOString(), draft }) : null;
     const repairOpenings = () => {
       if (!draft) return;
       const repaired = repairRepeatedAnnualOpenings(draft.sections.map(section => section.paragraph), context.payload.sections.map(section => section.required_year_terms), context.reportFacts.targetYear);
@@ -202,16 +264,25 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
         if (section.section_id === "summary" && prompt.tone === "genz") {
           // The closing needs its year in the first paragraph, not elsewhere.
           const firstParagraph = repaired[index].split(/\n\s*\n/u)[0];
-          if (!["올해", "이번 해", "한 해", `${context.reportFacts.targetYear}년`].some(term => firstParagraph.includes(term))) return section;
+          if (!["올해", "이번 해", "한 해", `${context.reportFacts.targetYear}년`].some(term => firstParagraph.includes(term))) {
+            // Keep the closing's only year marker while varying its opening.
+            // This connector changes no evidence and avoids another model call.
+            return ANNUAL_OPENING.test(section.paragraph) && repaired[index] !== section.paragraph
+              ? { ...section, paragraph: `정리하면, ${section.paragraph}` }
+              : section;
+          }
         }
-        return { ...section, paragraph: repaired[index] };
+        return { ...section, paragraph: repaired[index], evidence_uses: repairEvidenceExcerpts(section.paragraph, repaired[index], section.evidence_uses) };
       }) };
     };
     const preserveUsableDraft = async (error: ReportValidationError) => {
       if (!draft || !error.styleOnly) return;
       const content = validateReport(draft, context, readerName, true);
-      if (!recovery.best || error.issues.length < recovery.best.styleIssueCount) {
-        recovery.best = { content, styleIssueCount: error.issues.length };
+      const penalty = error.issues.reduce((total, issue) => total + editorialPenalty(issue.message), 0);
+      content.meta.editorialReview = { status: "needs-review", issueCount: error.issues.length,
+        specificityIssueCount: error.issues.filter(issue => editorialPenalty(issue.message) > 1).length };
+      if (!recovery.best || penalty < recovery.best.penalty || (penalty === recovery.best.penalty && error.issues.length < recovery.best.styleIssueCount)) {
+        recovery.best = { content, styleIssueCount: error.issues.length, penalty };
         // Keep a complete, content-validated draft before another API request.
         // A failed rewrite must not erase the usable report we already have.
         await firebaseStore.updateReport(reportId, claim, { content: content });
@@ -238,14 +309,19 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
       else await firebaseStore.updateReport(reportId, claim, { status: "FAILED", lastError: "OPENAI_API_KEY가 설정되지 않았습니다." });
       return;
     }
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 50_000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: REPORT_RENDER_BUDGET_MS, maxRetries: 0 });
 
     for (let attempt = 1; attempt <= MAX_RENDER_ATTEMPTS; attempt += 1) {
       const remainingTime = deadline - Date.now();
-      if (remainingTime < 1_000) {
-        lastError = "리포트 준비 시간이 초과되었습니다. 다시 시도해 주세요.";
+      if (remainingTime < REPORT_MIN_ATTEMPT_MS) {
+        diagnostics.stopReason = "budget";
+        // Preserve the original failure: a deadline is the stopping condition,
+        // not an explanation of why a previous draft failed validation.
+        lastError = `리포트 준비 시간이 초과되었습니다. 다시 시도해 주세요.\n직전 원인: ${lastError}`;
         break;
       }
+      const attemptStartedAt = Date.now();
+      const attemptDiagnostic: ReportGenerationDiagnostics["attempts"][number] = { attempt, elapsedMs: 0, outcome: "provider", sections: [...requestedIds] };
       try {
         attemptsUsed = attempt;
         const previousLengths = draft?.sections.map((section) => {
@@ -264,26 +340,33 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
           month_terms: section.required_timing_terms,
           role: section.editorial_focus,
           reading_question: section.reading_question,
-          distinct_focus: section.distinct_focus,
-          avoid_repeating: section.avoid_repeating,
+          content_contract: section.content_contract,
+          primary_evidence_ids: section.primary_evidence_ids,
+          context_evidence_ids: section.context_evidence_ids,
+          anchor_evidence_ids: section.anchor_evidence_ids,
+          reading_plan: section.reading_plan,
         }));
-        const repairTone = prompt.tone === "genz" ? REPORT_EMOTICON_INSTRUCTIONS + "\n수정 문단도 쉽고 다정한 친구의 말투를 유지하세요. '~다·~한다·~된다·~이다'로 끝내지 말고 '~해·~거든·~네·~지'로 직접 말 건네세요. 큰 주제인 section 하나를 하나의 긴 메시지로 완결하세요. 짧은 말풍선 여러 개로 나누지 말고 필요할 때만 메시지 안에서 단락을 구분하세요. 특수문자 이모티콘만 쓰고 컬러 이모지는 빼세요. 앞서 정한 전체 리포트의 이모티콘 개수 기준에는 이번에 수정하지 않는 메시지의 표정도 포함됩니다. 전문 용어가 처음 나오면 terminology에 근거한 쉬운 뜻을 먼저 설명한 뒤 해당 용어만 괄호로 붙이세요. 다른 문장으로 풀이를 미루거나 이미 설명한 용어를 재정의하지 마세요. 어려운 명사나 억지 비유를 줄이고, 누가 무엇을 하는지 쉬운 동사로 설명하세요. 한 문장에 이유와 조언을 몰아넣지 말고 짧게 나눠 이어 쓰세요. 설명을 늘리려고 같은 말을 반복하거나 훈계하지 마세요." : "";
-        const repairClosing = prompt.tone === "genz"
-          ? "마무리는 하나의 메시지 안에서 summary의 editorial_focus에 맞춰 첫 단락에 올해 종합 운세를 한 문장으로 요약하고, 해석에 맞는 긍정의 단락과 약 50~90자의 따뜻한 인사로 마칩니다. 요약은 이미 본문에서 설명한 올해의 의미만 압축하며 새 판단을 만들지 않습니다."
-          : "마무리는 짧은 응원입니다.";
-        const closingReminder = prompt.tone === "genz"
-          ? "summary의 한 문장 요약 뒤에는 본문의 상세 설명과 행동 지시를 반복하지 마세요."
-          : "summary에서 요점과 행동 지시를 반복하지 마세요.";
         const response: OpenAI.Responses.Response = await client.responses.create({
           model, store: false, ...getReportModelOptions(model),
           input: [
             { role: "developer", content: prompt.instructions },
             { role: "user", content: buildReportEvidencePrompt(context.payload) },
-            ...(draft ? [{ role: "assistant" as const, content: JSON.stringify({ sections: draft.sections.map((section) => ({ ...section, paragraph: redactReaderName(section.paragraph, readerName) })) }) }] : []),
-            ...(draft || attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패:\n${lastError}\n직전 문단별 글자 수와 수정량: ${previousLengths || "출력 없음"}. 직전 assistant 출력은 수정 대상이며 사주 사실의 근거가 아닙니다. 이번 요청은 부분 수정입니다. 출력 sections에는 ${requestedIds.join(", ")}만 이 순서로 넣으세요. 최초의 6개 문단 출력 지시보다 이 부분 수정 지시를 우선하세요. 나머지 문단은 코드가 보존하므로 출력하지 마세요. 이번 수정의 필수 조건:\n${JSON.stringify(repairRequirements)}\nmust_include_one_of는 배열 중 하나, must_include_one_from_each_group은 각 그룹에서 하나씩 그 표기 그대로 쓰라는 뜻입니다. 독자가 뜻부터 읽도록 일상어로 풀이한 뒤 해당 용어만 괄호로 붙이세요. 풀이가 먼저라면 첫 문장에도 괄호 용어를 쓸 수 있습니다. 각 수정 문단의 paragraph_length.target에 맞추고, 부족하면 배정된 해석의 아직 설명하지 않은 이유나 선택의 차이를 더 설명하세요. 반복·공백으로 분량을 채우지 마세요. 도입은 짧게 이야기를 연 뒤 성향과 올해 요점을 잇고, 본문은 다룰 분야를 짚으며 올해 운세의 서로 다른 측면으로 넘어가세요. ${repairClosing} '해보자·하자·해봐' 같은 권유형은 쓰지 마세요. 월별 시점은 relation에서만 다루고 ${closingReminder}${repairTone}\n${REPORT_OPENING_FLOW_INSTRUCTIONS}\n${REPORT_PLAIN_LANGUAGE_INSTRUCTIONS}\n${REPORT_PERSONALIZATION_INSTRUCTIONS}` }] : []),
+            ...(draft ? [{ role: "assistant" as const, content: JSON.stringify({ sections: draft.sections.map((section) => ({ ...section, paragraph: redactReaderName(section.paragraph, readerName), evidence_uses: section.evidence_uses.map(use => ({ ...use, excerpt: redactReaderName(use.excerpt, readerName) })) })) }) }] : []),
+            ...(draft || attempt > 1 ? [{ role: "developer" as const, content: `직전 출력 검증 실패:
+${lastError}
+문단별 분량: ${previousLengths || "출력 없음"}. 직전 assistant 출력은 수정 대상이지 계산 사실의 근거가 아닙니다. sections에는 ${requestedIds.join(", ")}만 이 순서로 넣으세요. 최초 여섯 메시지 출력 지시보다 이 부분 수정 지시를 우선합니다. 나머지 메시지는 코드가 보존합니다. 수정 조건:
+${JSON.stringify(repairRequirements)}
+기존 developer의 말투·근거·시점·마무리 규칙을 유지하세요. 부분 수정이어도 전체 초안과 비교해 같은 결론을 반복하지 마세요. 배정된 관찰을 연결해 아직 설명하지 않은 의미를 쓰고, 분량을 맞추려고 기회와 부담이나 행동 조언을 덧붙이지 마세요. 수정된 근거와 결론이 전체 글의 도입·마무리와도 이어져야 합니다.` }] : []),
           ],
-          text: { format: { type: "json_schema", name: "saju_corpus_report", strict: true, schema: buildOutputSchema(requestedIds) } },
+          text: { format: { type: "json_schema", name: "saju_observation_report", strict: true, schema: buildOutputSchema(requestedIds) } },
         }, { timeout: remainingTime });
+        attemptDiagnostic.responseStatus = response.status ?? "completed";
+        if (response.usage) {
+          attemptDiagnostic.inputTokens = response.usage.input_tokens;
+          attemptDiagnostic.outputTokens = response.usage.output_tokens;
+        }
+        const providerFailure = responseFailure(response);
+        if (providerFailure) throw new IncompleteReportResponseError(providerFailure);
         const patch = z.object({ sections: z.array(sectionSchema).length(requestedIds.length) }).parse(JSON.parse(response.output_text));
         if (patch.sections.some((section, index) => section.section_id !== requestedIds[index])) throw new ReportValidationError(requestedIds.map(sectionId => ({ sectionId, message: "수정 대상 문단 ID 또는 순서가 맞지 않습니다.", severity: "blocking" })));
         // Preserve valid prose exactly instead of asking the model to reproduce it.
@@ -295,18 +378,35 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
         }
         repairOpenings();
         const content = validateReport(draft, context, readerName);
+        attemptDiagnostic.outcome = "completed";
+        attemptDiagnostic.elapsedMs = Math.max(0, Date.now() - attemptStartedAt);
+        diagnostics.attempts.push(attemptDiagnostic);
         await complete(content);
         return;
       } catch (error) {
         lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
+        attemptDiagnostic.elapsedMs = Math.max(0, Date.now() - attemptStartedAt);
+        attemptDiagnostic.outcome = error instanceof ReportValidationError ? "validation" : error instanceof z.ZodError || error instanceof SyntaxError ? "schema" : "provider";
+        if (error instanceof ReportValidationError) attemptDiagnostic.issueCount = error.issues.length;
+        if (error instanceof OpenAI.APIError && error.status) attemptDiagnostic.status = error.status;
+        diagnostics.attempts.push(attemptDiagnostic);
+        // No excerpt, prompt, provider error body or personal data in logs.
+        console.warn("[Report] Render attempt failed", { reportId, ...attemptDiagnostic });
         if (error instanceof ReportValidationError) {
           await preserveUsableDraft(error);
           if (error.styleOnly) styleRepairFailures += 1;
         }
         const invalidIds = error instanceof ReportValidationError ? error.sectionIds : allSectionIds;
         requestedIds = draft ? allSectionIds.filter((id) => invalidIds.includes(id)) : allSectionIds;
-        await firebaseStore.updateReport(reportId, claim, { retryCount: attempt, lastError });
+        await firebaseStore.updateReport(reportId, claim, { retryCount: attempt, lastError, renderCheckpointJson: checkpointJson(), generationDiagnostics: currentDiagnostics() });
         if (recovery.best && (styleRepairFailures >= MAX_STYLE_REPAIR_FAILURES || !(error instanceof ReportValidationError) || !error.styleOnly)) break;
+        // Another immediate call cannot fix credentials, quota, an unsupported
+        // request or a truncated response at the same token cap. Network failures
+        // also wait for an explicit retry instead of consuming five paid calls.
+        if (attemptDiagnostic.outcome === "provider") {
+          diagnostics.stopReason = "provider";
+          break;
+        }
       }
     }
     if (recovery.best) {
@@ -314,7 +414,7 @@ export async function generateReport(reportId: string, options: { tone?: ReportT
       await complete(recovery.best.content);
       return;
     }
-    await firebaseStore.updateReport(reportId, claim, { status: "FAILED", lastError });
+    await firebaseStore.updateReport(reportId, claim, { status: "FAILED", lastError, renderCheckpointJson: checkpointJson(), generationDiagnostics: currentDiagnostics() });
   } catch (error) {
     const lastError = error instanceof Error ? error.message : "알 수 없는 생성 오류";
     console.error("[Report] Generation failed", { reportId });

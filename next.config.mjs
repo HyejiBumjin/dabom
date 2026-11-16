@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  // Exact, explicitly configured host for phones on the local Wi-Fi network.
+  ...(process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_APP_URL
+    ? { allowedDevOrigins: [new URL(process.env.NEXT_PUBLIC_APP_URL).hostname] }
+    : {}),
   outputFileTracingIncludes: { "/**": ["./prisma/certs/supabase-ca.crt"] },
   async headers() {
     return [

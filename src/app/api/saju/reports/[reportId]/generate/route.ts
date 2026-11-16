@@ -8,7 +8,7 @@ import { requireReportEntitlement } from "@/lib/portone/entitlement";
 import { enforceAccountRateLimit } from "@/lib/security/rate-limit";
 
 // Generation and editorial repair share a bounded request budget.
-export const maxDuration = 55;
+export const maxDuration = 120;
 
 export async function POST(request: Request, { params }: { params: Promise<{ reportId: string }> }) {
   return guardedMutation(request, async () => {

@@ -96,6 +96,18 @@ async function main() {
   const beforeDb = dbCalls;
   for (let i = 1; i <= 35; i++) await GET(request(`198.51.100.${i}`));
   check("spoofed forwarding headers cannot bypass local protection", dbCalls - beforeDb === 30);
+  testEnv.NODE_ENV = "development";
+  testEnv.NEXT_PUBLIC_APP_URL = "http://10.0.0.184:3000";
+  const counts = [dbCalls, oauthCalls, cookieReads];
+  const local = await GET(new Request("http://localhost:3000/api/auth/login?next=%2Fsaju", { headers: { "x-forwarded-host": "evil.test" } }));
+  check("development login moves to configured phone origin before OAuth", local.headers.get("location") === "http://10.0.0.184:3000/api/auth/login?next=%2Fsaju");
+  check("host correction has no cookie, database or OAuth side effects", JSON.stringify(counts) === JSON.stringify([dbCalls, oauthCalls, cookieReads]) && !local.headers.has("set-cookie") && local.headers.get("cache-control") === "private, no-store");
+  const unsafeNext = await GET(new Request("http://localhost:3000/api/auth/login?next=%2F%2Fevil.test"));
+  check("canonical login sanitizes external return paths", new URL(unsafeNext.headers.get("location")!).searchParams.get("next") === "/");
+  testEnv.VERCEL = "1";
+  const normalizedRequest = new Request("http://0.0.0.0:3000/api/auth/login", { headers: { host: "10.0.0.184:3000", "x-forwarded-for": "192.0.2.25" } });
+  const phoneLogin = await GET(normalizedRequest);
+  check("Next dev bind address normalization does not cause a redirect loop", phoneLogin.headers.get("location") === "https://kauth.kakao.com/oauth/authorize" && phoneLogin.headers.has("set-cookie"));
   console.log(`\n${passed} PASS; no Firestore writes, provider requests or customer data used.`);
 }
 main().catch(error => { console.error(error instanceof assert.AssertionError ? error.message : "Login rate-limit regression failed."); process.exitCode = 1; });

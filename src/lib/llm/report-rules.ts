@@ -7,8 +7,8 @@ export interface ParagraphLength { min: number; target: number; max: number }
 export const REPORT_PARAGRAPH_LENGTHS: Record<ReportDomain, ParagraphLength> = {
   essence: { min: 180, target: 230, max: 280 },
   yearly: { min: 220, target: 330, max: 400 },
-  relation: { min: 220, target: 330, max: 400 },
-  career: { min: 220, target: 330, max: 400 },
+  relation: { min: 220, target: 380, max: 460 },
+  career: { min: 220, target: 360, max: 430 },
   mental: { min: 200, target: 330, max: 400 },
   summary: { min: 100, target: 140, max: 180 },
 };
@@ -101,14 +101,25 @@ function seunTermIndex(text: string) {
   return -1;
 }
 
-export function hasReportTerm(text: string, term: string) {
-  if (term === "세운") return seunTermIndex(text) !== -1;
-  // 충/합 must be used as terms. Words such as 충실/충분/합리적 are
-  // neither evidence nor a technical opening.
-  if (term === "충" || term === "합") {
-    return new RegExp(`(?:^|[\\s\\p{P}])${term}(?=$|[\\s\\p{P}]|은|이|을|과|의|에|으로|이라|라는|도|부터)`, "u").test(text);
+function reportTermIndex(text: string, term: string): number {
+  if (term === "세운") return seunTermIndex(text);
+  let pattern: RegExp | undefined;
+  if (["형", "해", "파"].includes(term)) {
+    pattern = new RegExp(`[（(]\\s*${term}\\s*[）)]|(?:지지의?\\s*|관계인\\s*|명리의\\s*)${term}(?=$|[\\s\\p{P}]|은|가|를|의|로)`, "u");
+  } else if (["장생", "목욕", "관대", "임관", "제왕", "쇠", "병", "사", "묘", "절", "태", "양"].includes(term)) {
+    // Ordinary words (병원·생활·관대한·목욕) are not lifecycle claims.
+    pattern = new RegExp(`[（(]\\s*${term}\\s*[）)]|(?:십이운성(?:의|은)?\\s*|운성(?:의|은)?\\s*)${term}(?=$|[\\s\\p{P}]|은|는|이|가)`, "u");
+  } else if (term === "충" || term === "합") {
+    // Ordinary words (충분·합리적) are not technical mentions.
+    pattern = new RegExp(`(?:^|[\\s\\p{P}])${term}(?=$|[\\s\\p{P}]|은|이|을|과|의|에|으로|이라|라는|도|부터)`, "u");
   }
-  return text.includes(term);
+  if (!pattern) return text.indexOf(term);
+  const match = pattern.exec(text);
+  return match ? match.index + match[0].indexOf(term) : -1;
+}
+
+export function hasReportTerm(text: string, term: string) {
+  return reportTermIndex(text, term) !== -1;
 }
 
 interface ReportDateRange {
@@ -179,7 +190,7 @@ export function getReportReadabilityIssues(paragraph: string): string[] {
 export function hasInlineTermExplanation(paragraph: string, term: string) {
   const block = paragraph.split(/\n+/u).find(message => hasReportTerm(message, term));
   if (!block) return false;
-  const start = term === "세운" ? seunTermIndex(block) : block.indexOf(term);
+  const start = reportTermIndex(block, term);
   const before = block.slice(0, start);
   const after = block.slice(start + term.length);
   // Only the single term belongs in parentheses. A term-first gloss, a list

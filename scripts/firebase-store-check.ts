@@ -1,4 +1,3 @@
-import { PROFILE_NOTICE_VERSION } from "../src/lib/privacy/profile-use";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
@@ -12,6 +11,7 @@ import { canReadSajuReport } from "../src/lib/saju/account";
 import { POLICY_VERSION, checkoutNotices } from "../src/lib/commerce/policy";
 import { READ_ACCOUNT_LIMIT, READ_WINDOW_MS } from "../src/lib/security/read-rate-limit";
 import { LIBRARY_PAGE_SIZE, LIBRARY_REPORT_LIMIT } from "../src/lib/saju/library-page";
+import { REPORT_GENERATION_LEASE_MS } from "../src/lib/llm/report-runtime-policy";
 
 loadEnvConfig(process.cwd(), true);
 const prefix = `test_${randomUUID().replaceAll("-", "")}_`;
@@ -33,26 +33,23 @@ async function main() {
   await store.saveAccount("kakao_10001", "10001", "합성 사용자");
   await store.saveAccount("kakao_10002", "10002", "합성 사용자 2");
   await store.collection("products").doc(metadata.productCode).create({ ...metadata, code: metadata.productCode, name: "합성 상품", active: true, price: 3900 });
-  const profiles = await Promise.all(Array.from({length: 4}, () => saveSajuProfile("kakao_10001", input, store, { version: PROFILE_NOTICE_VERSION, self: true })));
+  const profiles = await Promise.all(Array.from({length: 4}, () => saveSajuProfile("kakao_10001", input, store)));
   const profileId = profiles[0].profileId;
   check("concurrent identical profile writes create one document", new Set(profiles.map(p => p.profileId)).size === 1 && profiles.filter(p => !p.existing).length === 1);
-  const other = await saveSajuProfile("kakao_10002", input, store, { version: PROFILE_NOTICE_VERSION, self: true });
+  const other = await saveSajuProfile("kakao_10002", input, store);
   check("identical birthdays are isolated by account", other.profileId !== profileId);
-  const changedTime = await saveSajuProfile("kakao_10001", { ...input, birthTime: "07:00" }, store, { version: PROFILE_NOTICE_VERSION, self: true });
+  const changedTime = await saveSajuProfile("kakao_10001", { ...input, birthTime: "07:00" }, store);
   check("same name and birthday cannot create a second profile by changing time", changedTime.profileId === profileId && changedTime.existing);
-  for (const notice of [undefined, {}, { version: "old", self: true }, { version: PROFILE_NOTICE_VERSION, self: false }, { version: PROFILE_NOTICE_VERSION, self: true, acceptedAt: "2000-01-01" }]) {
-    await rejects("missing/stale/forged subject notice rejected", () => saveSajuProfile("kakao_10001", input, store, notice));
-  }
-  await rejects("family input cannot be relabelled as self by the service", () => saveSajuProfile("kakao_10001", { ...input, relationship: "FAMILY" }, store, { version: PROFILE_NOTICE_VERSION, self: true }));
+  await rejects("family input cannot be relabelled as self by the service", () => saveSajuProfile("kakao_10001", { ...input, relationship: "FAMILY" }, store));
   await store.saveAccount("kakao_10003", "10003", "동시 중복 검사");
-  const variants = await Promise.all(["07:00", "20:20", null].map(birthTime => saveSajuProfile("kakao_10003", { ...input, birthTime }, store, { version: PROFILE_NOTICE_VERSION, self: true })));
+  const variants = await Promise.all(["07:00", "20:20", null].map(birthTime => saveSajuProfile("kakao_10003", { ...input, birthTime }, store)));
   check("concurrent different-time first submissions create one identity", new Set(variants.map(p => p.profileId)).size === 1 && variants.filter(p => !p.existing).length === 1);
-  const renamed = await saveSajuProfile("kakao_10001", { ...input, name: "바뀐 표시 이름" }, store, { version: PROFILE_NOTICE_VERSION, self: true });
+  const renamed = await saveSajuProfile("kakao_10001", { ...input, name: "바뀐 표시 이름" }, store);
   check("display name edit reuses birth profile", renamed.profileId === profileId && (await store.getProfile(profileId))?.name === "바뀐 표시 이름");
   check("calendar and unknown time affect birth identity", profileBirthKey(input) !== profileBirthKey({ ...input, birthTime: null }) && profileBirthKey(input) !== profileBirthKey({ ...input, calendar: "lunar" }));
   check("unsafe document paths do not resolve", await store.getProfile("../users/owner") === null);
   const profile = await store.getProfile(profileId);
-  check("server records subject notice text and date", profile?.privacyNotice?.self && profile.privacyNotice.version === PROFILE_NOTICE_VERSION && Number.isFinite(Date.parse(profile.privacyNotice.acceptedAt)));
+  check("new profiles do not fabricate checkbox acknowledgements", profile && !Object.hasOwn(profile, "privacyNotice"));
   check("calculation JSON and date round trip", profile?.birthDate instanceof Date && typeof profile.myeongsik === "object");
   // Stored preferences from the retired topic selector must not affect new purchases.
   await store.collection("profiles").doc(profileId).update({ focusTopics: ["career"] });
@@ -87,7 +84,9 @@ async function main() {
   check("concurrent generation has one lease", claims.filter(Boolean).length === 1);
   const lease = claims.find(Boolean)!;
   await rejects("foreign lease cannot overwrite report", () => store.updateReport(reportId, "stolen-lease", {status:"COMPLETED"}));
-  await store.collection("reports").doc(reportId).update({ generationStartedAt: Timestamp.fromMillis(Date.now()-180_000) });
+  await store.collection("reports").doc(reportId).update({ generationStartedAt: Timestamp.fromMillis(Date.now()-90_000) });
+  check("slow render retains its lease beyond the former time budget", await store.claimReport(reportId, {}, "kakao_10001", false) === null);
+  await store.collection("reports").doc(reportId).update({ generationStartedAt: Timestamp.fromMillis(Date.now()-REPORT_GENERATION_LEASE_MS-1_000) });
   const nextLease = await store.claimReport(reportId, {}, "kakao_10001", false);
   check("interrupted generation can recover", nextLease && nextLease !== lease);
   await rejects("stale worker cannot overwrite recovery", () => store.updateReport(reportId, lease, {status:"COMPLETED"}));

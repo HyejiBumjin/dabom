@@ -49,10 +49,10 @@ export default async function SajuProfilePage({ params }: { params: Promise<{ pr
   const calculationAndReportInput = {
     myeongsik,
     report_facts: reportContext.reportFacts,
-    selected_sentence_fragments: reportContext.selected.sections.map((section) => ({
+    selected_calculated_evidence: reportContext.payload.sections.map((section) => ({
       section_id: section.id,
       title: section.title,
-      fragments: section.fragments,
+      evidence_ids: section.primary_evidence_ids,
     })),
     report_render_payload: reportContext.payload,
   };

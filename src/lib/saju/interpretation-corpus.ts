@@ -2,7 +2,7 @@ import { DAY_MASTER_SCRIPT, INTERACTION_SCRIPT, TEN_GOD_GROUP_SCRIPT, type Scrip
 import type { ReportDomain, ReportFacts } from "@/lib/saju/report-facts";
 import { BRANCH_RELATION_MEANINGS, createReportDetailCorpus } from "@/lib/saju/report-detail-corpus";
 
-export const CORPUS_VERSION = "2026.4-personalized";
+export const CORPUS_VERSION = "2026.8-chart-synthesis";
 export const REPORT_OUTLINE: Array<{ id: ReportDomain; title: string }> = [
   { id: "essence", title: "본질과 성향" },
   { id: "yearly", title: "2026년 환경적 흐름" },

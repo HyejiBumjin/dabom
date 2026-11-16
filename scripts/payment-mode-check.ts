@@ -33,7 +33,12 @@ try {
   check("TEST payment accepted only in explicit test mode", parsePortOnePayment(payment, "payment", "store", "channel").status === "PAID");
   assert.throws(() => parsePortOnePayment({ ...payment, channel: { key: "channel", type: "LIVE" } }, "payment", "store", "channel"));
   check("live payment rejected in rehearsal", true);
-  for (const [key, value] of [["NODE_ENV", "production"], ["DABOM_HOSTING", "firebase-app-hosting"], ["VERCEL", "1"], ["NEXT_PUBLIC_APP_URL", "https://dabom-letter.com"], ["NEXT_PUBLIC_APP_URL", "https://localhost.evil.test"], ["DABOM_PAYMENT_TEST_MODE", "yes"]]) {
+  for (const hostname of ["10.0.0.184", "172.16.0.1", "172.31.255.254", "192.168.1.2"]) {
+    env.NEXT_PUBLIC_APP_URL = `http://${hostname}:3000`;
+    check("phone rehearsal on private LAN keeps payment isolation", isPaymentTestMode() && paymentCollectionPrefix() === "payment_test_" && !allowsDevelopmentReports());
+  }
+  env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+  for (const [key, value] of [["NODE_ENV", "production"], ["DABOM_HOSTING", "firebase-app-hosting"], ["VERCEL", "1"], ["NEXT_PUBLIC_APP_URL", "https://dabom-letter.com"], ["NEXT_PUBLIC_APP_URL", "https://localhost.evil.test"], ...["8.8.8.8", "172.15.255.255", "172.32.0.1", "192.169.1.1", "10.0.0.184.evil.test", "0.0.0.0"].map(host => ["NEXT_PUBLIC_APP_URL", `http://${host}:3000`]), ["NEXT_PUBLIC_APP_URL", "ftp://10.0.0.184"], ["DABOM_PAYMENT_TEST_MODE", "yes"]]) {
     const old = env[key]; env[key] = value;
     assert.throws(isPaymentTestMode);
     assert.throws(() => test.collection("orders"));

@@ -11,7 +11,20 @@ export function assertSameOrigin(request: Request) {
   const site = request.headers.get("sec-fetch-site");
   const allowed = new Set([new URL(env.APP_URL).origin]);
   const current = new URL(request.url);
-  if (process.env.NODE_ENV === "development" && ["localhost", "127.0.0.1", "[::1]"].includes(current.hostname)) allowed.add(current.origin);
+  // Next dev binds to 0.0.0.0 for phone testing and normalizes request.url
+  // to that bind address. Browser origins still use localhost/loopback.
+  // Allow only loopback aliases on this listener's protocol and port. Never
+  // derive trusted origins from Host, forwarded headers, or the Origin itself.
+  const loopbackHosts = ["localhost", "127.0.0.1", "[::1]"];
+  if (process.env.NODE_ENV === "development" && !process.env.DABOM_HOSTING && !process.env.VERCEL
+    && ["http:", "https:"].includes(current.protocol)
+    && [...loopbackHosts, "0.0.0.0", "[::]"].includes(current.hostname)) {
+    for (const hostname of loopbackHosts) {
+      const loopback = new URL(current.origin);
+      loopback.hostname = hostname;
+      allowed.add(loopback.origin);
+    }
+  }
   if (site === "cross-site" || (origin !== null && !allowed.has(origin))) {
     throw new RequestSecurityError(403, "허용되지 않은 요청이야.");
   }
