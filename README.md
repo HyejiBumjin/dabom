@@ -76,12 +76,9 @@ http://localhost:3000 에서 확인
 | `/reports/[id]/letter` | 운세 편지 |
 | `/gift/[token]` | 선물 수령 (1회용) |
 
-## Vercel 배포
+## 배포
 
-1. Vercel에 프로젝트 연결
-2. 환경 변수 동일하게 설정
-3. `NEXT_PUBLIC_APP_URL`을 프로덕션 URL로 변경
-4. Supabase/Kakao Redirect URI에 프로덕션 URL 추가
+Firebase App Hosting(`dabom-10a35`, backend `dabom`)으로 배포한다. 설정은 `firebase.json`·`apphosting.yaml`, 현재 운영 상태와 절차는 [`docs/firebase/README.md`](docs/firebase/README.md)에 있다.
 
 ## 보안
 

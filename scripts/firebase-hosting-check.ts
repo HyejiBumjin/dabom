@@ -20,7 +20,7 @@ check("App Hosting explicitly selects keyless credentials for the intended proje
   });
 });
 check("local credential files continue to work", () => assert.equal(firebaseCredentialConfig({ FIREBASE_PROJECT_ID: "dabom-10a35", FIREBASE_ADMIN_CREDENTIALS_FILE: "synthetic-file" }).mode, "service-account"));
-check("Vercel JSON credentials continue to work", () => assert.equal(firebaseCredentialConfig({ FIREBASE_PROJECT_ID: "dabom-10a35", FIREBASE_ADMIN_CREDENTIALS_JSON: "synthetic-json" }).mode, "service-account"));
+check("JSON secret credentials continue to work", () => assert.equal(firebaseCredentialConfig({ FIREBASE_PROJECT_ID: "dabom-10a35", FIREBASE_ADMIN_CREDENTIALS_JSON: "synthetic-json" }).mode, "service-account"));
 for (const [name, override] of Object.entries({
   "missing project": { FIREBASE_PROJECT_ID: "" },
   "unknown mode": { FIREBASE_ADMIN_CREDENTIAL_MODE: "automatic" },

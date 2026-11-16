@@ -4,11 +4,10 @@ import { isIP } from "node:net";
 export const LOGIN_REQUEST_LIMIT = 30;
 export const LOGIN_REQUEST_WINDOW_MS = 600_000;
 
-type LoginProxy = "vercel" | "firebase-app-hosting" | "direct";
+type LoginProxy = "firebase-app-hosting" | "direct";
 
 function loginProxy(): LoginProxy {
-  if (process.env.DABOM_HOSTING === "firebase-app-hosting" && process.env.K_SERVICE === "dabom") return "firebase-app-hosting";
-  return process.env.VERCEL === "1" ? "vercel" : "direct";
+  return process.env.DABOM_HOSTING === "firebase-app-hosting" && process.env.K_SERVICE === "dabom" ? "firebase-app-hosting" : "direct";
 }
 
 /** App Hosting appends client, load balancer, then GFE to any untrusted prefix.
@@ -19,13 +18,10 @@ export function loginClientAddress(request: Pick<Request, "headers">, proxy: Log
   if (proxy === "direct") return "untrusted-client";
   const forwarded = request.headers.get("x-forwarded-for");
   if (!forwarded || forwarded.length > 4096) return "untrusted-client";
-  let address = forwarded.trim();
-  if (proxy === "firebase-app-hosting") {
-    const tail = forwarded.split(",").slice(-3).map(value => value.trim());
-    const allowedBalancers = loadBalancerIps?.split(",").map(value => value.trim()) ?? [];
-    if (tail.length !== 3 || !tail.every(value => value.length <= 45 && isIP(value)) || !allowedBalancers.includes(tail[1])) return "untrusted-client";
-    address = tail[0];
-  }
+  const tail = forwarded.split(",").slice(-3).map(value => value.trim());
+  const allowedBalancers = loadBalancerIps?.split(",").map(value => value.trim()) ?? [];
+  if (tail.length !== 3 || !tail.every(value => value.length <= 45 && isIP(value)) || !allowedBalancers.includes(tail[1])) return "untrusted-client";
+  const address = tail[0];
   if (!address || address.length > 45 || !isIP(address)) return "untrusted-client";
   return isIP(address) === 6 ? new URL(`http://[${address}]`).hostname : address;
 }

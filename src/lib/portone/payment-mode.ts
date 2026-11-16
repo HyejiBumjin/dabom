@@ -14,7 +14,7 @@ export function isPaymentTestMode() {
   if (!value || value === "false") return false;
   if (value !== "true") throw new Error("Invalid payment test mode configuration.");
   const appUrl = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
-  if (process.env.NODE_ENV !== "development" || process.env.DABOM_HOSTING || process.env.VERCEL || !["http:", "https:"].includes(appUrl.protocol) || !isLocalHost(appUrl.hostname)) {
+  if (process.env.NODE_ENV !== "development" || process.env.DABOM_HOSTING || !["http:", "https:"].includes(appUrl.protocol) || !isLocalHost(appUrl.hostname)) {
     throw new Error("Payment test mode is only available on the local development server.");
   }
   return true;

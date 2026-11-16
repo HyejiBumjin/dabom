@@ -4,7 +4,7 @@ import { FirebaseStore, stableId } from "../src/lib/firebase/store";
 import { parsePortOnePayment } from "../src/lib/portone/server";
 
 const env = process.env as Record<string, string | undefined>;
-const keys = ["NODE_ENV", "DABOM_PAYMENT_TEST_MODE", "DABOM_HOSTING", "VERCEL", "NEXT_PUBLIC_APP_URL"];
+const keys = ["NODE_ENV", "DABOM_PAYMENT_TEST_MODE", "DABOM_HOSTING", "NEXT_PUBLIC_APP_URL"];
 const before = Object.fromEntries(keys.map(key => [key, env[key]]));
 let passed = 0;
 const check = (name: string, value: unknown) => { assert.ok(value, name); passed++; console.log(`PASS ${name}`); };
@@ -38,7 +38,7 @@ try {
     check("phone rehearsal on private LAN keeps payment isolation", isPaymentTestMode() && paymentCollectionPrefix() === "payment_test_" && !allowsDevelopmentReports());
   }
   env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
-  for (const [key, value] of [["NODE_ENV", "production"], ["DABOM_HOSTING", "firebase-app-hosting"], ["VERCEL", "1"], ["NEXT_PUBLIC_APP_URL", "https://dabom-letter.com"], ["NEXT_PUBLIC_APP_URL", "https://localhost.evil.test"], ...["8.8.8.8", "172.15.255.255", "172.32.0.1", "192.169.1.1", "10.0.0.184.evil.test", "0.0.0.0"].map(host => ["NEXT_PUBLIC_APP_URL", `http://${host}:3000`]), ["NEXT_PUBLIC_APP_URL", "ftp://10.0.0.184"], ["DABOM_PAYMENT_TEST_MODE", "yes"]]) {
+  for (const [key, value] of [["NODE_ENV", "production"], ["DABOM_HOSTING", "firebase-app-hosting"], ["NEXT_PUBLIC_APP_URL", "https://dabom-letter.com"], ["NEXT_PUBLIC_APP_URL", "https://localhost.evil.test"], ...["8.8.8.8", "172.15.255.255", "172.32.0.1", "192.169.1.1", "10.0.0.184.evil.test", "0.0.0.0"].map(host => ["NEXT_PUBLIC_APP_URL", `http://${host}:3000`]), ["NEXT_PUBLIC_APP_URL", "ftp://10.0.0.184"], ["DABOM_PAYMENT_TEST_MODE", "yes"]]) {
     const old = env[key]; env[key] = value;
     assert.throws(isPaymentTestMode);
     assert.throws(() => test.collection("orders"));

@@ -1,4 +1,7 @@
-# 배포 및 외부 서비스 구성
+# 배포 및 외부 서비스 구성 (이전 Vercel 구성 기록)
+
+> **이 문서는 더 이상 현재 상태가 아니다.** 2026-10-17에 Firebase App Hosting으로 옮기고 `dabom-letter.com` DNS도 전환했다.
+> 현재 배포·도메인·검증 기록은 [`firebase/README.md`](firebase/README.md)를 본다. 아래는 이전 Vercel 시절 기록으로만 남겨 둔다.
 
 **현재 실제로 어떻게 구성되어 있는지**를 기록한 문서다.
 앞으로 무엇을 할지에 대한 계획은 `dev-steps/` 에 있다.

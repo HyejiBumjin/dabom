@@ -45,12 +45,11 @@ npm run saju:compare
 
 ## 로그인 반복 요청 방어 (2026-10-17)
 
-- Vercel `dabom` 프로젝트에 `Dabom login rate limit` 규칙을 활성화했다. `/api/auth/login` 및 끝의 `/` 경로를 IP별 10분당 30회로 제한하며, 초과 요청은 앱/Firestore에 도달하기 전 429로 응답한다. 카카오 콜백, 계정 확인, 리포트 폴링, 결제 웹훅은 이 규칙의 대상이 아니다.
-- 현재 Hobby 플랜을 유지했다. 검토한 규칙은 `scripts/security/login-rate-limit-rule.json`에 보관한다. 변경 시 다른 방화벽 초안이 섞이지 않았는지 확인하고 게시 후 활성 설정을 다시 조회한다. 이 JSON 파일을 커밋하는 것만으로 방화벽 설정이 적용되지는 않는다.
+- 처음에는 Vercel WAF 규칙(IP별 10분당 30회)도 함께 두었으나, App Hosting으로 옮기면서 더는 적용되지 않는다. 2026-11-16에 규칙 JSON(`scripts/security/login-rate-limit-rule.json`)과 관련 검사를 삭제했다. 지금은 아래 앱 내부 제한과 Firestore 공유 제한만 동작한다.
 - 앱에도 같은 제한의 메모리 사전 검사를 추가했다. 초과 요청은 공유 DB 카운터 및 OAuth state 생성 전에 반환하며 `Retry-After`와 `private, no-store`를 설정한다. 메모리에는 최대 10,000개만 보관하고 만료 항목은 다음 요청에서 제거한다. 활성 항목을 밀어내 제한을 초기화하지 않는다.
-- Vercel은 덮어쓴 단일 XFF를 신뢰한다. App Hosting은 `DABOM_HOSTING` 및 Cloud Run `K_SERVICE=dabom` 환경에서만 XFF 끝의 client → load balancer → GFE 세 항목을 해석한다. 실측한 기본 도메인 LB `35.219.200.76`과 커스텀 도메인 LB `35.219.200.50`을 `DABOM_APPHOSTING_LB_IPS`에 지정했다. 임의의 앞부분, X-Real-IP, Fastly-Client-IP는 신뢰하지 않는다. 누락·잘못된 IP·알 수 없는 LB·직접 실행 환경은 공통 버킷으로 제한한다. Google 프록시 구성이 바뀌면 실측 후 허용 목록/해석을 함께 갱신해야 한다.
-- 메모리 제한은 프로세스 재시작 시 초기화되는 보조 방어다. 기존 Firestore의 원자적 공유 제한을 유지한다. Vercel WAF 카운터도 리전별로 적용되므로 IP/리전을 분산한 공격까지 전역 할당량으로 제한한다고 보지 않는다. [Vercel 공식 문서](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting)
-- `npm run security:login-limit`: 모의 요청 75개 중 초과한 45개가 추가 DB/OAuth 호출 0회로 차단되는지, 동시 요청·만료·메모리 상한·헤더 위조·공유 제한·WAF 설정 일치를 검사한다. 실제 로그인이나 DB/결제/모델 API 호출은 없다.
+- App Hosting은 `DABOM_HOSTING` 및 Cloud Run `K_SERVICE=dabom` 환경에서만 XFF 끝의 client → load balancer → GFE 세 항목을 해석한다. 실측한 기본 도메인 LB `35.219.200.76`과 커스텀 도메인 LB `35.219.200.50`을 `DABOM_APPHOSTING_LB_IPS`에 지정했다. 임의의 앞부분, X-Real-IP, Fastly-Client-IP는 신뢰하지 않는다. 누락·잘못된 IP·알 수 없는 LB·직접 실행 환경은 공통 버킷으로 제한한다. Google 프록시 구성이 바뀌면 실측 후 허용 목록/해석을 함께 갱신해야 한다.
+- 메모리 제한은 프로세스 재시작 시 초기화되는 보조 방어다. 기존 Firestore의 원자적 공유 제한을 유지한다.
+- `npm run security:login-limit`: 모의 요청 75개 중 초과한 45개가 추가 DB/OAuth 호출 0회로 차단되는지, 동시 요청·만료·메모리 상한·헤더 위조·공유 제한을 검사한다. 실제 로그인이나 DB/결제/모델 API 호출은 없다.
 
 ## 운영 배포 전
 
@@ -99,7 +98,7 @@ NEXT_PUBLIC_APP_URL=https://dabom-letter.com SECURITY_CHECK_URL=https://dabom--d
 
 #### 관리 자격 증명과 IAM
 
-- `FIREBASE_ADMIN_CREDENTIAL_MODE=application-default`를 명시해 Google 관리 자격 증명을 사용한다. 프로젝트/서명 계정을 검증하며 키 파일·JSON·emulator와 혼합하지 않는다. 장기 Admin 개인키를 업로드하지 않는다. 로컬 키 파일과 Vercel JSON 방식은 계속 지원한다.
+- `FIREBASE_ADMIN_CREDENTIAL_MODE=application-default`를 명시해 Google 관리 자격 증명을 사용한다. 프로젝트/서명 계정을 검증하며 키 파일·JSON·emulator와 혼합하지 않는다. 장기 Admin 개인키를 업로드하지 않는다. 로컬 키 파일과 JSON 비밀 값 방식은 계속 지원한다.
 - 서버 계정: `firebase-app-hosting-compute@dabom-10a35.iam.gserviceaccount.com`.
 - 앱 권한: `roles/datastore.user`, `roles/firebaserules.viewer`, 사용자 정의 `projects/dabom-10a35/roles/dabomAuthServer` (`firebaseauth.users.get`, `firebaseauth.users.create`, `firebaseauth.users.createSession`). 토큰 서명은 자기 서비스 계정 리소스에만 `roles/iam.serviceAccountTokenCreator`를 부여했다.
 - 기본 인프라 역할 `firebaseapphosting.computeRunner`, `storage.objectViewer`, `developerconnect.readTokenAccessor`는 유지한다.

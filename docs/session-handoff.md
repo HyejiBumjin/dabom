@@ -1,5 +1,7 @@
 # 개발 인수인계 — 다음 세션 시작점
 
+> 2026-08-08 시점 기록이다. 이후 배포는 Vercel에서 Firebase App Hosting으로 바뀌었다. 현재 상태는 [`firebase/README.md`](firebase/README.md)를 본다.
+
 최종 갱신: 2026-08-08  
 현재 브랜치: `develop` (원격 `origin/develop`과 동기화됨)
 

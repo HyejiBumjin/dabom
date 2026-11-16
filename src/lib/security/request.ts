@@ -16,7 +16,7 @@ export function assertSameOrigin(request: Request) {
   // Allow only loopback aliases on this listener's protocol and port. Never
   // derive trusted origins from Host, forwarded headers, or the Origin itself.
   const loopbackHosts = ["localhost", "127.0.0.1", "[::1]"];
-  if (process.env.NODE_ENV === "development" && !process.env.DABOM_HOSTING && !process.env.VERCEL
+  if (process.env.NODE_ENV === "development" && !process.env.DABOM_HOSTING
     && ["http:", "https:"].includes(current.protocol)
     && [...loopbackHosts, "0.0.0.0", "[::]"].includes(current.hostname)) {
     for (const hostname of loopbackHosts) {

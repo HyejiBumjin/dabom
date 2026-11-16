@@ -10,7 +10,6 @@ import { parseLibraryCursor, libraryFilter, libraryPageHref } from "../src/lib/s
 const require = createRequire(import.meta.url);
 const testEnv = process.env as Record<string, string | undefined>;
 testEnv.NODE_ENV = "production";
-delete testEnv.VERCEL;
 delete testEnv.K_SERVICE;
 globalThis.fetch = async () => { throw new Error("Unexpected network request"); };
 let passed = 0;

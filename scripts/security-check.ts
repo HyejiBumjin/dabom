@@ -189,13 +189,12 @@ async function main() {
   // Regression: Next dev normalizes request.url to its wildcard listener when
   // phones use the explicitly configured LAN address. This is not permission
   // to trust arbitrary Host/forwarded headers or other local ports.
-  const originalOriginEnvironment = { NODE_ENV: testEnv.NODE_ENV, DABOM_HOSTING: testEnv.DABOM_HOSTING, VERCEL: testEnv.VERCEL };
+  const originalOriginEnvironment = { NODE_ENV: testEnv.NODE_ENV, DABOM_HOSTING: testEnv.DABOM_HOSTING };
   const originProbe = async (url: string, origin: string, headers: Record<string, string> = {}) =>
     (await guardedMutation(new Request(url, { method: "POST", headers: { origin, "sec-fetch-site": "same-origin", ...headers } }), async () => new Response("safe"))).status;
   try {
     testEnv.NODE_ENV = "development";
     delete testEnv.DABOM_HOSTING;
-    delete testEnv.VERCEL;
     for (const bind of ["0.0.0.0", "[::]", "localhost", "127.0.0.1", "[::1]"]) {
       for (const host of ["localhost", "127.0.0.1", "[::1]"]) check(`local listener ${bind} accepts loopback ${host}`, await originProbe(`http://${bind}:3000/api/profiles`, `http://${host}:3000`) === 200);
     }
@@ -208,11 +207,9 @@ async function main() {
     check("public request URL cannot unlock local origins", await originProbe("https://dabom.test/api/profiles", "http://localhost:3000") === 403);
     check("HTTPS listener allows its exact protocol and port", await originProbe("https://0.0.0.0:3443/api/profiles", "https://localhost:3443") === 200);
     check("HTTPS listener rejects a downgrade", await originProbe("https://0.0.0.0:3443/api/profiles", "http://localhost:3443") === 403);
-    for (const flag of ["DABOM_HOSTING", "VERCEL"]) {
-      testEnv[flag] = "1";
-      check(`${flag} disables local development origins`, await originProbe("http://0.0.0.0:3000/api/profiles", "http://localhost:3000") === 403);
-      delete testEnv[flag];
-    }
+    testEnv.DABOM_HOSTING = "1";
+    check("DABOM_HOSTING disables local development origins", await originProbe("http://0.0.0.0:3000/api/profiles", "http://localhost:3000") === 403);
+    delete testEnv.DABOM_HOSTING;
     testEnv.NODE_ENV = "production";
     check("production does not inherit the loopback exception", await originProbe("http://0.0.0.0:3000/api/profiles", "http://localhost:3000") === 403);
   } finally {
